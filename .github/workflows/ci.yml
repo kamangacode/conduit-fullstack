@@ -41,6 +41,7 @@ jobs:
     outputs:
       code: ${{ steps.filter.outputs.code }}
       deps: ${{ steps.filter.outputs.deps }}
+      adr: ${{ steps.filter.outputs.adr }}
     steps:
       - uses: actions/checkout@v5
       - uses: dorny/paths-filter@v4
@@ -64,6 +65,9 @@ jobs:
               - 'pnpm-lock.yaml'
               - 'apps/**/package.json'
               - 'packages/**/package.json'
+            adr:
+              - 'docs/adr/**'
+              - 'scripts/check-adr-index.sh'
 
   quality:
     name: Quality (lint + knip + boundaries)
@@ -96,6 +100,20 @@ jobs:
         run: pnpm knip
       - name: Frontières hexagonales (dependency-cruiser)
         run: pnpm depcruise
+
+  adr:
+    name: Convention ADR
+    runs-on: ubuntu-latest
+    needs: detect-changes
+    # Job séparé du job `quality` (et non une étape de plus) : une PR qui ne
+    # touche QUE des ADR ne déclenche pas le filtre `code`, donc elle passerait
+    # sous le radar de `quality`. Ici, pas d'installation de dépendances — un
+    # checkout et un script bash, quelques secondes.
+    if: needs.detect-changes.outputs.adr == 'true'
+    steps:
+      - uses: actions/checkout@v5
+      - name: Numérotation, sections et index des ADR
+        run: bash scripts/check-adr-index.sh
 
   typecheck:
     name: Typecheck
@@ -186,12 +204,13 @@ jobs:
     # produire un statut, même si des jobs amont sont skippés (diff sans code).
     if: always()
     runs-on: ubuntu-latest
-    needs: [detect-changes, quality, typecheck, test, build]
+    needs: [detect-changes, quality, adr, typecheck, test, build]
     steps:
       - name: Vérifie qu'aucun job requis n'a échoué
         run: |
           for r in \
             "${{ needs.quality.result }}" \
+            "${{ needs.adr.result }}" \
             "${{ needs.typecheck.result }}" \
             "${{ needs.test.result }}" \
             "${{ needs.build.result }}"; do

@@ -17,6 +17,7 @@
     "lint:fix": "biome check --write .",
     "format": "biome format --write .",
     "typecheck": "turbo run typecheck",
+    "adr:check": "bash scripts/check-adr-index.sh",
     "knip": "knip",
     "depcruise": "cd apps/api && depcruise src --config ../../.dependency-cruiser.cjs",
     "test": "turbo run test",

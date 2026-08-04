@@ -1,4 +1,4 @@
-# 004 — Persistance alignée sur le contrat (identifiant de commentaire, bio nullable)
+# ADR 004 — Persistance alignée sur le contrat (identifiant de commentaire, bio nullable)
 
 ## Status
 
