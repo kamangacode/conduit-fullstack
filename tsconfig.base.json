@@ -1,11 +1,14 @@
 {
   "$schema": "https://json.schemastore.org/tsconfig",
   "display": "Base — options communes à tous les workspaces",
-  "_comment": "Base TypeScript stricte partagée. La strictness maximale (noUncheckedIndexedAccess, exactOptionalPropertyTypes, noImplicitOverride) est ajoutée en Phase 1 (item A8), pas ici : le durcissement progressif est un livrable éditorial à part entière.",
+  "_comment": "Base TypeScript stricte maximale. `strict` ne suffit pas : les trois flags supplémentaires ci-dessous ferment des trous réels — accès indexé non vérifié (undefined silencieux), propriétés optionnelles assignées à undefined, override implicite. Ajoutés en Phase 1 (item A8).",
   "compilerOptions": {
     "target": "ES2022",
     "lib": ["ES2022"],
     "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "exactOptionalPropertyTypes": true,
+    "noImplicitOverride": true,
     "skipLibCheck": true,
     "esModuleInterop": true,
     "forceConsistentCasingInFileNames": true,
