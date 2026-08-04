@@ -1,0 +1,55 @@
+# Stack de développement local Conduit — démarrage en une commande :
+#
+#   docker compose up -d
+#
+# Fournit les dépendances runtime dont l'API a besoin en local, sans rien
+# installer sur la machine hôte :
+#   - postgres : base de données (source de persistance de apps/api via Prisma)
+#   - adminer  : UI web d'inspection de la base (http://localhost:8080)
+#   - mailpit  : catcher SMTP + UI (http://localhost:8025) pour les e-mails de dev
+#
+# Les identifiants ci-dessous sont des valeurs de DÉVELOPPEMENT LOCAL uniquement.
+# La configuration d'environnement validée par Zod et le .env.example commenté
+# arrivent en Phase 3 (item B1). En production, ces secrets viennent de la
+# plateforme (Railway), jamais du dépôt.
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: conduit_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-conduit}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-conduit}
+      POSTGRES_DB: ${POSTGRES_DB:-conduit_dev}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - conduit_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      # Prisma migrate/connect échoue si Postgres n'est pas encore prêt : ce
+      # healthcheck rend le "prêt" observable (utilisé par les hooks/CI plus tard).
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-conduit} -d ${POSTGRES_DB:-conduit_dev}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  adminer:
+    image: adminer:5
+    container_name: conduit_adminer
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "${ADMINER_PORT:-8080}:8080"
+
+  mailpit:
+    image: axllent/mailpit:latest
+    container_name: conduit_mailpit
+    restart: unless-stopped
+    ports:
+      - "${MAILPIT_SMTP_PORT:-1025}:1025"
+      - "${MAILPIT_UI_PORT:-8025}:8025"
+
+volumes:
+  conduit_pgdata:
