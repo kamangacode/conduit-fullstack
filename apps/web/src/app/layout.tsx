@@ -1,10 +1,9 @@
-import type { ReactNode } from "react";
+import type { ReactNode } from 'react'
 
 export const metadata = {
-  title: "Conduit",
-  description:
-    "A place to share your knowledge — clone RealWorld en full-stack TypeScript.",
-};
+  title: 'Conduit',
+  description: 'A place to share your knowledge — clone RealWorld en full-stack TypeScript.',
+}
 
 /**
  * Coquille applicative (Phase 0). Le shell RealWorld complet — navbar
@@ -17,5 +16,5 @@ export default function RootLayout({ children }: { children: ReactNode }) {
     <html lang="en">
       <body>{children}</body>
     </html>
-  );
+  )
 }

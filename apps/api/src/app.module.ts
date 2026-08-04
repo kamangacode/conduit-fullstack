@@ -1,6 +1,6 @@
-import { Module } from "@nestjs/common";
+import { Module } from '@nestjs/common'
 
-import { HealthModule } from "./interface/health/health.module";
+import { HealthModule } from './interface/health/health.module'
 
 /**
  * Module racine de l'API. En Phase 0 il ne câble que la sonde de santé ; les

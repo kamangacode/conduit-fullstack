@@ -6,17 +6,17 @@
  *
  * @type {import('next').NextConfig}
  */
-import path from "node:path";
-import { fileURLToPath } from "node:url";
+import path from 'node:path'
+import { fileURLToPath } from 'node:url'
 
-const currentDir = path.dirname(fileURLToPath(import.meta.url));
+const currentDir = path.dirname(fileURLToPath(import.meta.url))
 
 const nextConfig = {
   reactStrictMode: true,
-  transpilePackages: ["@repo/shared"],
+  transpilePackages: ['@repo/shared'],
   // Ancre le tracing de fichiers à la racine du monorepo : sans cela, Next peut
   // inférer une mauvaise racine en présence d'un lockfile parasite hors repo.
-  outputFileTracingRoot: path.join(currentDir, "../.."),
-};
+  outputFileTracingRoot: path.join(currentDir, '../..'),
+}
 
-export default nextConfig;
+export default nextConfig

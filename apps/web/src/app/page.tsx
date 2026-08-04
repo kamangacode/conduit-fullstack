@@ -1,4 +1,4 @@
-import { SHARED_MODEL_VERSION } from "@repo/shared";
+import { SHARED_MODEL_VERSION } from '@repo/shared'
 
 /**
  * Page d'accueil (Phase 0) — squelette. Le markup suit déjà les classes du
@@ -18,10 +18,8 @@ export default function HomePage() {
         </div>
       </div>
       <div className="container page">
-        <p>
-          Squelette full-stack TypeScript — modèle partagé v{SHARED_MODEL_VERSION}.
-        </p>
+        <p>Squelette full-stack TypeScript — modèle partagé v{SHARED_MODEL_VERSION}.</p>
       </div>
     </main>
-  );
+  )
 }
