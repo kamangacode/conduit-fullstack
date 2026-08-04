@@ -33,6 +33,39 @@ services:
       timeout: 5s
       retries: 10
 
+  # Base dédiée aux tests d'intégration, isolée de la base de dev.
+  #
+  # Sous un profile : `docker compose up -d` ne la démarre pas, seul
+  # `scripts/test-integration.sh` la réclame. Un développeur qui lance la stack
+  # de dev ne paie donc pas ce conteneur.
+  #
+  # `tmpfs` plutôt qu'un volume : les données vivent en mémoire et disparaissent
+  # avec le conteneur. Une suite d'intégration doit partir d'un état connu ; un
+  # volume persistant garderait les résidus d'un run précédemment interrompu, et
+  # ces résidus produisent le pire des symptômes — une suite qui passe ou échoue
+  # selon l'ordre des exécutions passées.
+  #
+  # Le nom de base contient « test » : `scripts/test-integration.sh` refuse de
+  # purger une base dont le nom ne le contient pas (garde anti-TRUNCATE sur la dev).
+  postgres-test:
+    image: postgres:16-alpine
+    container_name: conduit_postgres_test
+    profiles: ["test"]
+    environment:
+      POSTGRES_USER: ${POSTGRES_TEST_USER:-conduit}
+      POSTGRES_PASSWORD: ${POSTGRES_TEST_PASSWORD:-conduit}
+      POSTGRES_DB: ${POSTGRES_TEST_DB:-conduit_test}
+    ports:
+      - "${POSTGRES_TEST_PORT:-55432}:5432"
+    tmpfs:
+      - /var/lib/postgresql/data
+    healthcheck:
+      test:
+        ["CMD-SHELL", "pg_isready -U ${POSTGRES_TEST_USER:-conduit} -d ${POSTGRES_TEST_DB:-conduit_test}"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
   adminer:
     image: adminer:5
     container_name: conduit_adminer
