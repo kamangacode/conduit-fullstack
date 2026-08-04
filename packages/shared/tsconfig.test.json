@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json.schemastore.org/tsconfig",
+  "extends": "./tsconfig.json",
+  "_comment": "Le tsconfig de build exclut les specs — elles n'ont rien à faire dans dist/. Sans ce second projet, `pnpm typecheck` ne les verrait jamais : un test qui ne compile pas passerait la CI tant qu'il ne s'exécute pas, et une assertion écrite contre un type qui n'existe plus resterait verte. Ce projet les réintègre en vérification seule. `composite` et `declaration` sont désactivés car TypeScript interdit d'émettre des déclarations sous `noEmit`.",
+  "compilerOptions": {
+    "noEmit": true,
+    "composite": false,
+    "declaration": false,
+    "declarationMap": false
+  },
+  "include": ["src/**/*.ts"],
+  "exclude": ["dist", "node_modules"]
+}
