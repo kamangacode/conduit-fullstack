@@ -44,7 +44,8 @@ services:
       - "${ADMINER_PORT:-8080}:8080"
 
   mailpit:
-    image: axllent/mailpit:latest
+    # Version épinglée (pas de :latest) : un stack de dev doit être reproductible.
+    image: axllent/mailpit:v1.27
     container_name: conduit_mailpit
     restart: unless-stopped
     ports:
