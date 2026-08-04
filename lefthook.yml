@@ -1,0 +1,89 @@
+# Git hooks via Lefthook.
+#
+# Deux niveaux de garde-fou, du plus rapide au plus complet :
+#   - pre-commit : vérifs rapides sur les fichiers staged (auto-format Biome +
+#     garde secrets/.env). Doit rester quasi instantané.
+#   - pre-push   : lint + typecheck + tests + validation des migrations sur un
+#     Postgres jetable + vérif du verrou Biome. Dernier rempart avant le remote.
+#
+# Les conventional commits (commitlint) et le CHANGELOG sont traités en Phase 6.
+
+pre-commit:
+  parallel: true
+  output:
+    - meta
+    - summary
+    - failure
+  commands:
+    no-env-files:
+      # Bloque tout fichier .env porteur de secrets, mais autorise les variants
+      # documentaires (.env.example/.sample/.template/.test) committés à dessein.
+      run: |
+        if git diff --cached --name-only \
+          | grep -E '^\.env($|\.)' \
+          | grep -vE '\.(example|sample|template|test)$' \
+          | grep -q .; then
+          echo "ERREUR : fichier .env détecté dans le commit. Ajoutez-le à .gitignore."
+          exit 1
+        fi
+    secret-guard:
+      # Rejette tout diff ajoutant un secret à haute confiance : clé privée PEM,
+      # JWT, clé d'accès AWS (AKIA), PAT GitHub (ghp_), clé secrète Stripe (sk_live).
+      # La version durcie + son test canary (scripts/test-secret-guard.sh) arrivent
+      # en Phase 3 (item B2). Exclut les emplacements où des exemples synthétiques
+      # sont légitimes : tests, docs/, .github/workflows/, lefthook.yml, scripts/.
+      run: |
+        set --
+        while IFS= read -r f; do
+          [ -z "$f" ] && continue
+          set -- "$@" "$f"
+        done <<EOF
+        $(git diff --cached --name-only --diff-filter=AM \
+          | grep -vE '\.(spec|test)\.(ts|tsx|js|jsx)$' \
+          | grep -vE '^docs/' \
+          | grep -vE '^\.github/' \
+          | grep -vE '^lefthook\.yml$' \
+          | grep -vE '^scripts/')
+        EOF
+        if [ "$#" -eq 0 ]; then exit 0; fi
+        if git diff --cached -U0 -- "$@" \
+          | grep -E '^\+' \
+          | grep -Eo '(-----BEGIN [A-Z ]*PRIVATE KEY-----|eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}|AKIA[0-9A-Z]{16}|ghp_[A-Za-z0-9]{36}|sk_live_[A-Za-z0-9]{20,})' \
+          | grep -q .; then
+          echo "ERREUR : secret potentiel détecté dans le diff (clé privée / JWT / AWS / GitHub / Stripe)."
+          echo "        Retirez la valeur et utilisez une variable d'environnement."
+          exit 1
+        fi
+    format:
+      # Biome formate + corrige les fichiers staged et re-stage les corrections.
+      # Un seul outil pour api et web (config racine).
+      glob: "*.{ts,tsx,js,jsx,mjs,cjs,json,jsonc}"
+      run: pnpm exec biome check --write --no-errors-on-unmatched --files-ignore-unknown=true {staged_files}
+      stage_fixed: true
+
+pre-push:
+  # Sériel : évite la contention CPU entre lint/typecheck/test (source de flakes
+  # sous les pools de process concurrents).
+  parallel: false
+  output:
+    - meta
+    - summary
+    - failure
+  commands:
+    lint:
+      run: bash .lefthook/run-quiet.sh 'CI=true pnpm lint'
+    typecheck:
+      run: bash .lefthook/run-quiet.sh 'CI=true pnpm typecheck'
+    test:
+      # turbo --concurrency=1 : @repo/api puis @repo/web séquentiels (déterminisme).
+      # Vacant tant que les suites Vitest n'existent pas (Phase 4) — reste vert.
+      run: bash .lefthook/run-quiet.sh 'CI=true pnpm exec turbo run test --concurrency=1'
+    migrations-apply:
+      # Applique les nouvelles migrations Prisma sur un Postgres jetable pour
+      # attraper une erreur SQL avant le push. No-op si aucune migration n'est
+      # poussée. Non-bloquant si docker est absent (voir le script).
+      run: bash .lefthook/check-migrations.sh
+    verify-biome-verrou:
+      # Vérifie en local que le verrou hard-fail Biome est toujours actif
+      # (~5s). Empêche un push qui aurait silencieusement dégradé biome.json.
+      run: bash scripts/verify-biome-hardfail.sh
