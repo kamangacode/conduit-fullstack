@@ -17,7 +17,12 @@
     },
     "test": {
       "dependsOn": ["^build"],
-      "outputs": ["coverage/**"]
+      // outputs reste vide tant qu'aucun workspace ne produit de rapport de
+      // couverture : déclarer `coverage/**` sans le générer fait émettre à Turbo
+      // un avertissement à chaque run, CI comprise, et un avertissement
+      // permanent finit par ne plus être lu. À restaurer avec la mise en place
+      // de la couverture (item C1).
+      "outputs": []
     },
     "test:integration": {
       "dependsOn": ["^build"],

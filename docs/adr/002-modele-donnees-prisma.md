@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted — 2026-08-04.
+Accepted — 2026-08-04. **Amendé le 2026-08-05 par [004 — Persistance alignée sur le contrat](004-persistance-alignee-sur-le-contrat.md)** sur deux points où la confrontation au contrat RealWorld a tranché contre les choix ci-dessous : `Comment.id` (entier et non UUID) et `User.bio` (nullable et non `@default("")`). Les autres décisions restent valides.
 
 ## Context
 
@@ -31,6 +31,7 @@ volontairement (ex : le domaine calcule `favoritesCount`, la base ne le stocke p
 
 - **Identifiants** : UUID (`@db.Uuid`) plutôt qu'auto-increment — pas d'énumérabilité des
   ressources, IDs non devinables (surface anti-IDOR réduite), génération côté application possible.
+  *(Amendé : `Comment.id` fait exception, cf. ADR 004 — le contrat externe le déclare entier.)*
 - **Favoris / Suivi** : tables de jointure explicites (`favorites`, `follows`) à clé
   composite, plutôt que des relations implicites — la clé composite interdit le doublon au
   niveau base (un utilisateur ne peut favoriser deux fois le même article).
