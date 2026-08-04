@@ -226,6 +226,43 @@ jobs:
           retention-days: 14
           if-no-files-found: warn
 
+  integration:
+    name: Integration (PostgreSQL réelle)
+    runs-on: ubuntu-latest
+    needs: detect-changes
+    if: needs.detect-changes.outputs.code == 'true'
+    services:
+      # Base jetable fournie par le runner : le script détecte
+      # `TEST_DATABASE_URL` et ne touche alors pas à Docker (même chemin de code
+      # qu'en local, sans la partie compose).
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: conduit
+          POSTGRES_PASSWORD: conduit
+          POSTGRES_DB: conduit_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U conduit -d conduit_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Client Prisma
+        run: pnpm --filter @repo/api exec prisma generate
+      - name: Tests d'intégration (migrations + Vitest + purge)
+        env:
+          TEST_DATABASE_URL: postgresql://conduit:conduit@localhost:5432/conduit_test?schema=public
+        run: bash scripts/test-integration.sh
+
   build:
     name: Build
     runs-on: ubuntu-latest
@@ -273,7 +310,7 @@ jobs:
     # produire un statut, même si des jobs amont sont skippés (diff sans code).
     if: always()
     runs-on: ubuntu-latest
-    needs: [detect-changes, quality, adr, requirements, typecheck, test, build]
+    needs: [detect-changes, quality, adr, requirements, typecheck, test, integration, build]
     steps:
       - name: Vérifie qu'aucun job requis n'a échoué
         run: |
@@ -281,6 +318,7 @@ jobs:
             "${{ needs.quality.result }}" \
             "${{ needs.adr.result }}" \
             "${{ needs.requirements.result }}" \
+            "${{ needs.integration.result }}" \
             "${{ needs.typecheck.result }}" \
             "${{ needs.test.result }}" \
             "${{ needs.build.result }}"; do

@@ -55,4 +55,6 @@ Pour ne jamais polluer la DB de dev, les tests E2E locaux utilisent un conteneur
 Les tests d'intégration Vitest (vraie PostgreSQL via Prisma) partagent l'isolation de la DB de test, sur le même principe que le E2E. Sans ça, Vitest chargerait le `.env` de dev et les specs pollueraient la base de dev.
 
 - Lane séparée de l'unit : la config Vitest de `apps/api` exclut `**/*.integration.spec.ts`. La lane unit (`pnpm test`) reste DB-free et rapide.
-- `pnpm test:integration` = démarre la DB de test → migrate deploy + seed → Vitest → purge même en échec.
+- `pnpm test:integration` ([`scripts/test-integration.sh`](../../scripts/test-integration.sh)) = démarre la DB de test → `migrate deploy` → Vitest → purge même en échec. Pas de seed global : chaque spec crée les données dont elle a besoin, ce qui évite un jeu de fixtures partagé que les tests finissent par se disputer.
+- **Garde anti-purge (double barrière)** : ces specs vident des tables. Le script et [`apps/api/test/integration/setup.ts`](../../apps/api/test/integration/setup.ts) refusent tous deux de démarrer si le **nom de la base** ne contient pas `test` — jamais de repli sur `DATABASE_URL`, qui traîne dans le shell de n'importe quel développeur. En CI, la base vient d'un service du job via `TEST_DATABASE_URL`.
+- Purge à deux niveaux : `beforeEach` (isolation entre tests) et `globalTeardown` (aucun run ne laisse la base peuplée, succès comme échec). Le trap du script ne couvre que le run tué avant le teardown.
