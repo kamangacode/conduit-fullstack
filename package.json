@@ -16,6 +16,8 @@
     "lint:fix": "biome check --write .",
     "format": "biome format --write .",
     "typecheck": "turbo run typecheck",
+    "knip": "knip",
+    "depcruise": "cd apps/api && depcruise src --config ../../.dependency-cruiser.cjs",
     "test": "turbo run test",
     "test:integration": "turbo run test:integration",
     "test:e2e": "turbo run test:e2e",
@@ -23,6 +25,8 @@
   },
   "devDependencies": {
     "@biomejs/biome": "^2.5.0",
+    "dependency-cruiser": "^16.0.0",
+    "knip": "^6.29.0",
     "turbo": "^2.5.0",
     "typescript": "^5.7.3"
   },
