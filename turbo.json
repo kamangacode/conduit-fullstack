@@ -3,8 +3,24 @@
   "ui": "stream",
   "globalEnv": ["NODE_ENV"],
   "tasks": {
+    // Le client Prisma est généré dans node_modules, hors de tout workspace :
+    // Turbo ne peut donc pas le suivre comme un artefact, d'où `cache: false`.
+    //
+    // Le déclarer comme dépendance de graphe, plutôt que d'ajouter une étape à
+    // chaque job de CI, est ce qui rend le graphe vrai : sans lui, `typecheck`
+    // passe en local (client déjà généré par un run précédent) et échoue sur une
+    // machine fraîche — le patron « câblé sur un chemin, absent de son frère »
+    // que la rule 12 décrit, et qui s'est effectivement produit ici.
+    //
+    // Coût assumé : ~3 s ajoutées à chaque `pnpm test` / `pnpm typecheck`,
+    // puisque la tâche n'est pas cacheable. C'est le prix d'un graphe qui ne
+    // ment pas ; le supprimer de la lane rapide rouvrirait exactement le trou
+    // qu'il ferme. Seul apps/api porte ce script, les autres l'ignorent.
+    "db:generate": {
+      "cache": false
+    },
     "build": {
-      "dependsOn": ["^build"],
+      "dependsOn": ["^build", "db:generate"],
       "outputs": ["dist/**", ".next/**", "!.next/cache/**"]
     },
     "dev": {
@@ -13,10 +29,10 @@
       "persistent": true
     },
     "typecheck": {
-      "dependsOn": ["build"]
+      "dependsOn": ["build", "db:generate"]
     },
     "test": {
-      "dependsOn": ["^build"],
+      "dependsOn": ["^build", "db:generate"],
       // La lane `test` ne produit volontairement aucun artefact : elle doit
       // rester la commande la plus rapide du dépôt (pre-push, boucle de
       // développement). Instrumenter la couverture ralentit l'exécution pour un
@@ -24,11 +40,11 @@
       "outputs": []
     },
     "test:coverage": {
-      "dependsOn": ["^build"],
+      "dependsOn": ["^build", "db:generate"],
       "outputs": ["coverage/**"]
     },
     "test:integration": {
-      "dependsOn": ["^build"],
+      "dependsOn": ["^build", "db:generate"],
       "cache": false
     },
     "test:e2e": {
