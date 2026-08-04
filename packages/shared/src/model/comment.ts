@@ -8,7 +8,7 @@ import { profileSchema } from './profile'
  * `type: integer` (`openapi.yml`) et le format de réponse le montre sérialisé
  * en nombre (`"id": 1`). Le schéma de persistance a été aligné sur le contrat
  * plutôt que l'inverse — décision et conséquences dans
- * `docs/adr/004-identifiant-commentaire-entier-contrat.md`.
+ * `docs/adr/004-persistance-alignee-sur-le-contrat.md`.
  */
 export const commentSchema = z.object({
   id: z.number().int().positive(),
