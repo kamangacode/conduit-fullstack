@@ -17,6 +17,7 @@ elle porte la mécanique : gabarit, numérotation, statuts, vérification.
 | [003](003-mises-a-jour-dependances-dependabot.md) | Mises à jour de dépendances : Dependabot | Accepted | 2026-08-04 |
 | [004](004-persistance-alignee-sur-le-contrat.md) | Persistance alignée sur le contrat (id de commentaire, bio nullable) | Accepted | 2026-08-04 |
 | [005](005-matrice-de-tracabilite-generee.md) | Matrice de traçabilité : artefact généré, non versionné | Accepted | 2026-08-05 |
+| [006](006-couverture-sans-service-externe.md) | Couverture de tests : artefact de CI, sans service externe | Accepted | 2026-08-05 |
 
 ## Écrire un ADR
 
