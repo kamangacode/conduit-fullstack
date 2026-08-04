@@ -52,14 +52,22 @@ docker compose up -d
 # 2. Dépendances du monorepo
 pnpm install
 
-# 3. Base de données : appliquer les migrations
-#    (l'API lit l'URL via la variable d'environnement DATABASE_URL)
-export DATABASE_URL="postgresql://conduit:conduit@localhost:5432/conduit_dev?schema=public"
+# 3. Configuration : partir des gabarits commentés
+cp .env.example .env                    # stack docker (ports, identifiants locaux)
+cp apps/api/.env.example apps/api/.env  # process API
+#    Puis générer le secret JWT : openssl rand -hex 32
+
+# 4. Base de données : appliquer les migrations
 pnpm --filter @repo/api db:migrate:deploy
 
-# 4. Démarrer api + web en parallèle
+# 5. Démarrer api + web en parallèle
 pnpm dev
 ```
+
+L'API **valide son environnement au démarrage** et refuse de booter si une
+variable manque ou est malformée, en nommant les variables fautives
+([`apps/api/src/config/env.ts`](apps/api/src/config/env.ts)). Une configuration
+incomplète produit une erreur immédiate, pas une 500 à la troisième requête.
 
 - API : http://localhost:3001 (sonde : `GET /health`)
 - Web : http://localhost:3000
