@@ -1,0 +1,118 @@
+// Schéma de persistance Conduit (PostgreSQL via Prisma).
+//
+// Ce fichier décrit la couche de PERSISTANCE (infrastructure hexagonale), pas le
+// domaine : les entités du domaine (apps/api/src/domain) restent pures et sont
+// reconstituées depuis ces tables par les adapters Prisma (issues 3 et 4). Le
+// modèle métier partagé front/back vit dans packages/shared.
+//
+// Convention : identifiants UUID, tables en snake_case pluriel (@@map), colonnes
+// camelCase côté Prisma. Toute modification de ce fichier DOIT produire une
+// migration versionnée (voir .claude/rules/12-backend-hexagonal.md).
+//
+// Décision de modèle documentée dans docs/adr/002-modele-donnees-prisma.md.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+/// Utilisateur Conduit. `passwordHash` ne stocke jamais le mot de passe en clair.
+/// Le chiffrement PII at-rest de l'email (AES-256-GCM + blind index) est un
+/// durcissement prévu en Phase 5 (item B5), hors périmètre du schéma initial.
+model User {
+  id           String   @id @default(uuid()) @db.Uuid
+  email        String   @unique
+  username     String   @unique
+  passwordHash String
+  bio          String   @default("")
+  image        String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  articles  Article[]
+  comments  Comment[]
+  favorites Favorite[]
+  following Follow[]   @relation("follower")
+  followers Follow[]   @relation("following")
+
+  @@map("users")
+}
+
+/// Article. Le `slug` est unique et dérivé du titre (value object Slug côté domaine).
+model Article {
+  id          String   @id @default(uuid()) @db.Uuid
+  slug        String   @unique
+  title       String
+  description String
+  body        String
+  authorId    String   @db.Uuid
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  author    User       @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  comments  Comment[]
+  favorites Favorite[]
+  tags      Tag[]      @relation("ArticleTags")
+
+  @@index([authorId])
+  @@map("articles")
+}
+
+/// Commentaire attaché à un article.
+model Comment {
+  id        String   @id @default(uuid()) @db.Uuid
+  body      String
+  articleId String   @db.Uuid
+  authorId  String   @db.Uuid
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  article Article @relation(fields: [articleId], references: [id], onDelete: Cascade)
+  author  User    @relation(fields: [authorId], references: [id], onDelete: Cascade)
+
+  @@index([articleId])
+  @@index([authorId])
+  @@map("comments")
+}
+
+/// Tag global. Relation many-to-many implicite avec Article (table de jointure gérée par Prisma).
+model Tag {
+  id       String    @id @default(uuid()) @db.Uuid
+  name     String    @unique
+  articles Article[] @relation("ArticleTags")
+
+  @@map("tags")
+}
+
+/// Favori (RealWorld) : un utilisateur marque un article. Clé composite = pas de doublon.
+/// `favoritesCount`/`favorited` des réponses API sont dérivés de cette table (pas de dénormalisation).
+model Favorite {
+  userId    String   @db.Uuid
+  articleId String   @db.Uuid
+  createdAt DateTime @default(now())
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  article Article @relation(fields: [articleId], references: [id], onDelete: Cascade)
+
+  @@id([userId, articleId])
+  @@index([articleId])
+  @@map("favorites")
+}
+
+/// Suivi (RealWorld) : `follower` suit `following`. Clé composite = relation unique et orientée.
+model Follow {
+  followerId  String   @db.Uuid
+  followingId String   @db.Uuid
+  createdAt   DateTime @default(now())
+
+  follower  User @relation("follower", fields: [followerId], references: [id], onDelete: Cascade)
+  following User @relation("following", fields: [followingId], references: [id], onDelete: Cascade)
+
+  @@id([followerId, followingId])
+  @@index([followingId])
+  @@map("follows")
+}
