@@ -89,6 +89,9 @@ Les règles se chargent selon le contexte (`.claude/rules/`) :
 | `16-tests-coverage.md` | `apps/**/*.ts(x)`, `packages/shared/**` | Tests obligatoires par couche |
 | `17-qualite-code.md` | `apps/**/src/**` | Verrou qualité (complexité, type safety) |
 | `18-tracabilite-articles.md` | Toujours | 1 outil = 1 fichier réel = 1 article |
+| `19-securite.md` | `apps/api/**` | Sécurité by design : secrets, anti-IDOR, server-side authority |
+| `20-requirements-docs-as-code.md` | `docs/requirements/**` | Exigences versionnées, frontmatter Zod, couverture AC-level |
+| `21-cadre-reproductible.md` | Toujours | Cadre versionné, mémoire des décisions, backlog d'amélioration continue |
 
 ---
 

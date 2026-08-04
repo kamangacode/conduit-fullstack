@@ -15,6 +15,7 @@ docs/
 ├── architecture/          # Architecture technique
 │   ├── hexagonal.md       # Architecture hexagonale apps/api
 │   └── adr/                # Architecture Decision Records
+├── requirements/          # Référentiel REQ docs-as-code (Zod, matrice) : voir rule 20
 ├── guides/                # How-to guides (ajout feature, déploiement, auth…)
 └── standards/             # Standards de code (frontend, backend, tests)
 ```
@@ -30,6 +31,7 @@ docs/
 | Nouvel outil ou intégration | Ajouter un guide dans `docs/guides/` |
 | Changement de modèle de données | Mettre à jour `docs/architecture/hexagonal.md` (ou le guide domaine concerné) + créer un ADR |
 | Migration Prisma (`prisma migrate dev`) | Vérifier que la doc du schema (si elle existe) reflète l'état cible. `schema.prisma` reste la source de vérité pour l'état réel. |
+| Nouveau comportement fonctionnel/NFR | Créer ou mettre à jour un REQ dans `docs/requirements/` + `pnpm requirements:validate` (voir rule 20) |
 | Toute PR | Vérifier : "La documentation est-elle à jour ?" |
 
 ## Règles d'écriture
@@ -47,6 +49,7 @@ docs/
 | Architecture (couches, séparation, diagrammes) | `docs/architecture/` |
 | Comment faire X (guide pas à pas) | `docs/guides/` |
 | Convention de code (nommage, patterns, erreurs) | `docs/standards/` |
+| Exigence versionnée (critère d'acceptation Given/When/Then) | `docs/requirements/{functional\|non-functional}/{domain}/REQ-*.md` (rule 20) |
 
 ## Avant d'écrire du code — lire les standards
 

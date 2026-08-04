@@ -23,8 +23,14 @@ paths:
 |----------|------------|---------|
 | `ci.yml` | PR → main/staging · push sur main/staging | detect-changes → lint → typecheck → test → build → e2e |
 | `pr-title.yml` | PR | Validation titre Conventional Commits |
+| `auto-merge.yml` | label `reviewed` + CI verte | merge automatique de la PR |
+| `release-please.yml` (ou équivalent) | push sur `main` | dérive le semver + le changelog + le tag depuis les commits conventionnels de `main` |
 
 Déploiement déclenché sur CI verte (`apps/web` → Vercel, `apps/api` → Railway). `main` n'est jamais alimenté directement : le flux est `staging → main` via une **promotion** explicite (voir `02-workflow-dev.md`), jamais de push direct sur `main`.
+
+### Promotion staging → main : merge commit obligatoire, jamais squash
+
+Si `auto-merge.yml` squashe toute PR portant le label `reviewed`, la PR de promotion `staging → main` ne doit **pas** recevoir ce label : squasher une promotion aplatit les N commits conventionnels de `staging` en un seul commit, et un outil de release qui dérive le semver depuis les commits sur `main` (`release-please.yml` ou équivalent) **saute la release** — pas de version bump, `main` diverge silencieusement de l'historique conventionnel. La PR de promotion doit toujours être mergée en **merge commit**. Fix d'un squash raté : ré-ouvrir la PR `staging → main` et la merger en merge commit (no-op côté contenu, restaure l'historique).
 
 ### Gate E2E
 

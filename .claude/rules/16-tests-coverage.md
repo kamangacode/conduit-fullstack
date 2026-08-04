@@ -25,6 +25,7 @@ Conséquence : les fichiers couverts uniquement par Playwright n'apparaissent pa
 | `apps/api/src/application/**/*.use-case.ts` | Vitest unit, ports mockés via interface | `*.use-case.spec.ts` | Coordination métier, cible ~90%. |
 | `apps/api/src/infrastructure/**/*.prisma-repository.ts` | Integration (vraie DB) | `apps/api/test/**` | Adapter contre vraie DB. Pas de mock Prisma. |
 | `apps/api/src/interface/**/*.controller.ts` | Integration supertest via NestJS TestingModule | `apps/api/test/**` | Valide guards, Zod, mapping vers use-case. |
+| Use-case avec `@Inject` cross-module | Ligne dans le boot-smoke DI | `apps/api/src/app-module.boot.spec.ts` | Le graphe doit `.compile()` DB-free avec collaborateurs non-null. Attrape le trou de câblage DI, voir [12-backend-hexagonal.md](12-backend-hexagonal.md) section couture DI. |
 | `apps/web/src/stores/**/*.ts` (Zustand) | Vitest unit | colocalisé `*.spec.ts` | État UI logique, testable sans DOM. |
 | `apps/web/src/hooks/**/*.ts` | Vitest, plus `@testing-library/react` si le hook touche le DOM | colocalisé `*.spec.ts` | Hook pur ou hook DOM. |
 | `apps/web/src/components/**/*.tsx` avec **logique** (état, calculs, conditionals) | Vitest + RTL | colocalisé `*.spec.tsx` | Composant fonctionnel non trivial (ex : formulaire d'article, éditeur de commentaire). |
@@ -63,6 +64,13 @@ pnpm --filter @repo/web test --coverage
 # Voir les fichiers du patch
 git diff --name-only origin/staging...HEAD | grep -E '\.(ts|tsx)$' | grep -v -E '\.(spec|test|dto|module|config)\.'
 ```
+
+## Tests comme preuves (anti-tautologie)
+
+Un test qui ne peut pas échouer est pire que pas de test : il donne une fausse confiance (ex : un mock qui accepte un update sans vérifier la valeur persistée).
+
+- Heuristique : **supprime mentalement le guard ou la ligne testée**. Si le test passe encore, il est tautologique. Réécris-le pour qu'il échoue sans l'implémentation.
+- C'est une **convention de revue**, pas un gate exécutable : il n'existe aucun job CI ni hook de vérification automatisé pour ça dans ce repo. Ne pas la présenter comme un contrôle automatisé.
 
 ## Avant une PR
 
