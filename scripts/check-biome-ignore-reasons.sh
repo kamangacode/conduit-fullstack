@@ -18,6 +18,16 @@ set -euo pipefail
 
 BASE_REF="${1:-origin/staging}"
 
+# Échoue bruyamment si la base ref n'est pas résolvable : sinon `git diff` plus
+# bas échouerait en silence (2>/dev/null || true), la liste serait vide, et le
+# script passerait au vert SANS RIEN VÉRIFIER — un garde-fou qui ne garde rien.
+# En CI, cela force un checkout qui fetch bien la branche de base (fetch-depth: 0).
+if ! git rev-parse --verify --quiet "${BASE_REF}^{commit}" > /dev/null; then
+  echo "ERREUR : base ref '${BASE_REF}' introuvable — impossible de calculer le diff."
+  echo "        En CI, vérifier que le checkout récupère la branche de base (fetch-depth: 0)."
+  exit 1
+fi
+
 # Lignes AJOUTÉES (préfixe '+', hors en-tête '+++') portant l'annotation.
 # [+] (classe de caractères) plutôt que \+ pour la portabilité BSD/GNU grep.
 ADDED_LINES=$(

@@ -87,7 +87,11 @@ jobs:
         run: bash scripts/verify-biome-hardfail.sh
       - name: Raisons des biome-ignore (PR uniquement)
         if: github.event_name == 'pull_request'
-        run: bash scripts/check-biome-ignore-reasons.sh "origin/${{ github.base_ref }}"
+        # Garantit que la ref de base est résolvable côté runner : le script
+        # échoue désormais bruyamment si elle ne l'est pas (plus de no-op silencieux).
+        run: |
+          git fetch --no-tags origin "${{ github.base_ref }}"
+          bash scripts/check-biome-ignore-reasons.sh "origin/${{ github.base_ref }}"
       - name: Code mort (knip)
         run: pnpm knip
       - name: Frontières hexagonales (dependency-cruiser)
