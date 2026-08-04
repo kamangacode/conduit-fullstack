@@ -1,0 +1,135 @@
+{
+  "$schema": "https://biomejs.dev/schemas/2.5.7/schema.json",
+  "assist": { "enabled": true },
+  "linter": {
+    "enabled": true,
+    "rules": {
+      "preset": "recommended",
+      "complexity": {
+        "noExcessiveCognitiveComplexity": "error",
+        "noExcessiveLinesPerFunction": "warn",
+        "useSimplifiedLogicExpression": "warn",
+        "noUselessUndefined": "warn"
+      },
+      "correctness": {
+        "noUnusedImports": "error",
+        "noUnusedVariables": "error"
+      },
+      "style": {
+        "noNonNullAssertion": "warn",
+        "useConst": "error",
+        "useImportType": "error",
+        "useFilenamingConvention": {
+          "level": "error",
+          "options": {
+            "filenameCases": ["kebab-case", "camelCase", "PascalCase"],
+            "strictCase": false
+          }
+        },
+        "noExcessiveLinesPerFile": {
+          "level": "error",
+          "options": { "maxLines": 900 }
+        }
+      },
+      "suspicious": {
+        "noExplicitAny": "warn",
+        "noArrayIndexKey": "warn",
+        "noExtraNonNullAssertion": "warn",
+        "noNonNullAssertedOptionalChain": "warn"
+      },
+      "security": {
+        "noDangerouslySetInnerHtml": "warn"
+      }
+    }
+  },
+  "formatter": {
+    "enabled": true,
+    "indentStyle": "space",
+    "indentWidth": 2,
+    "lineWidth": 100
+  },
+  "javascript": {
+    "parser": {
+      "unsafeParameterDecoratorsEnabled": true
+    },
+    "formatter": {
+      "quoteStyle": "single",
+      "semicolons": "asNeeded",
+      "trailingCommas": "es5"
+    }
+  },
+  "overrides": [
+    {
+      "includes": ["apps/api/**"],
+      "linter": {
+        "rules": {
+          "style": { "useImportType": "off" }
+        }
+      }
+    },
+    {
+      "includes": [
+        "**/*.test.ts",
+        "**/*.test.tsx",
+        "**/*.spec.ts",
+        "**/*.spec.tsx",
+        "**/e2e/**",
+        "**/test/**",
+        "**/scripts/**",
+        "**/prisma/seed*/**",
+        "**/prisma/seed*.ts"
+      ],
+      "linter": {
+        "rules": {
+          "complexity": {
+            "noExcessiveLinesPerFunction": "info",
+            "noExcessiveCognitiveComplexity": "info"
+          },
+          "style": {
+            "useFilenamingConvention": "off",
+            "noExcessiveLinesPerFile": "off"
+          }
+        }
+      }
+    },
+    {
+      "includes": ["**/components/**/*.tsx"],
+      "linter": {
+        "rules": {
+          "style": {
+            "useFilenamingConvention": {
+              "level": "error",
+              "options": { "filenameCases": ["PascalCase"], "strictCase": false }
+            }
+          }
+        }
+      }
+    },
+    {
+      "includes": ["apps/web/src/app/**"],
+      "linter": {
+        "rules": {
+          "style": { "useFilenamingConvention": "off" }
+        }
+      }
+    }
+  ],
+  "files": {
+    "includes": [
+      "**",
+      "!**/node_modules",
+      "!**/dist",
+      "!**/build",
+      "!**/.next",
+      "!**/.turbo",
+      "!**/*.min.js",
+      "!**/coverage",
+      "!**/next-env.d.ts",
+      "!**/*.css",
+      "!**/playwright-report",
+      "!**/test-results",
+      "!**/prisma/migrations",
+      "!**/generated"
+    ]
+  }
+}
