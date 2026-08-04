@@ -1,0 +1,2 @@
+# Force le choix d'un gabarit : pas d'issue vide sans contexte.
+blank_issues_enabled: false
