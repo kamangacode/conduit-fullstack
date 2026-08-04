@@ -1,0 +1,17 @@
+{
+  "$schema": "https://unpkg.com/knip@6/schema.json",
+  "workspaces": {
+    ".": {
+      "entry": ["scripts/**/*.sh"]
+    },
+    "apps/api": {
+      "entry": ["src/**/*.module.ts", "src/**/*.controller.ts"],
+      "project": ["src/**/*.ts"],
+      "ignoreDependencies": ["@prisma/client"]
+    },
+    "apps/web": {
+      "project": ["src/**/*.{ts,tsx}"]
+    },
+    "packages/shared": {}
+  }
+}
