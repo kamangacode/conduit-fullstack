@@ -1,0 +1,40 @@
+# Dépendances
+node_modules/
+.pnpm-store/
+
+# Builds
+dist/
+build/
+.next/
+out/
+*.tsbuildinfo
+
+# Turbo
+.turbo/
+
+# Tests & couverture
+coverage/
+.nyc_output/
+playwright-report/
+test-results/
+
+# Secrets & environnement (voir Phase 3 — garde-fous secrets)
+.env
+.env.local
+.env*.local
+!.env.example
+
+# Logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# Journal de build local (mémoire de session, hors historique public)
+/artifacts/build-log.md
+
+# OS / éditeurs
+.DS_Store
+.idea/
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json

@@ -1,0 +1,28 @@
+{
+  "name": "@repo/api",
+  "version": "0.0.0",
+  "private": true,
+  "description": "API Conduit — NestJS, architecture hexagonale (domain/application/infrastructure/interface).",
+  "license": "MIT",
+  "author": "kamangacode <herve@kamanga.fr>",
+  "scripts": {
+    "dev": "node --watch --require ts-node/register src/main.ts",
+    "build": "tsc -p tsconfig.build.json",
+    "start": "node dist/main.js",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "clean": "rm -rf dist *.tsbuildinfo"
+  },
+  "dependencies": {
+    "@nestjs/common": "^11.0.11",
+    "@nestjs/core": "^11.0.11",
+    "@nestjs/platform-express": "^11.0.11",
+    "@repo/shared": "workspace:*",
+    "reflect-metadata": "^0.2.2",
+    "rxjs": "^7.8.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.13.0",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.7.3"
+  }
+}
