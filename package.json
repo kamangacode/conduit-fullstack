@@ -10,6 +10,7 @@
     "node": ">=20"
   },
   "scripts": {
+    "prepare": "lefthook install || true",
     "dev": "turbo run dev",
     "build": "turbo run build",
     "lint": "biome check .",
@@ -27,14 +28,16 @@
     "@biomejs/biome": "^2.5.0",
     "dependency-cruiser": "^16.0.0",
     "knip": "^6.29.0",
+    "lefthook": "^2.1.10",
     "turbo": "^2.5.0",
     "typescript": "^5.7.3"
   },
   "pnpm": {
-    "//": "pnpm 10 bloque par défaut les scripts de build post-install (sécurité supply-chain). On autorise explicitement les seules dépendances qui en ont légitimement besoin : Prisma télécharge ses moteurs de requête, sharp compile ses binaires natifs d'optimisation d'images.",
+    "//": "pnpm 10 bloque par défaut les scripts de build post-install (sécurité supply-chain). On autorise explicitement les seules dépendances qui en ont légitimement besoin : Prisma télécharge ses moteurs de requête, sharp compile ses binaires natifs d'optimisation d'images, lefthook télécharge son binaire de hooks.",
     "onlyBuiltDependencies": [
       "@prisma/client",
       "@prisma/engines",
+      "lefthook",
       "prisma",
       "sharp"
     ]
