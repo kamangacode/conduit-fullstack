@@ -40,6 +40,11 @@
       "lefthook",
       "prisma",
       "sharp"
-    ]
+    ],
+    "overridesComment": "Corrige des vulnérabilités 'high' transitives (via next) signalées par l'audit prod : path traversal PostCSS, failles libvips de sharp. À retirer quand next remontera lui-même ces versions.",
+    "overrides": {
+      "postcss@<8.5.18": ">=8.5.18",
+      "sharp@<0.35.0": ">=0.35.0"
+    }
   }
 }
