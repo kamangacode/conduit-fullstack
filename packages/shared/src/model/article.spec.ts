@@ -27,46 +27,46 @@ const articleFromSpec = {
   },
 }
 
-describe('articleSchema', () => {
-  it("accepte l'article verbatim de la spec", () => {
+describe('REQ-ARTICLE-001 — articleSchema', () => {
+  it("AC-1: accepte l'article verbatim de la spec", () => {
     expect(articleSchema.parse(articleFromSpec)).toEqual(articleFromSpec)
   })
 
-  it('exige le body sur la forme unitaire', () => {
+  it('AC-1: exige le body sur la forme unitaire', () => {
     const { body: _omitted, ...withoutBody } = articleFromSpec
 
     expect(articleSchema.safeParse(withoutBody).success).toBe(false)
   })
 
-  it('refuse une date qui ne soit pas de l’ISO 8601', () => {
+  it('AC-1: refuse une date qui ne soit pas de l’ISO 8601', () => {
     expect(articleSchema.safeParse({ ...articleFromSpec, createdAt: '18/02/2016' }).success).toBe(
       false
     )
   })
 
-  it('refuse un favoritesCount négatif', () => {
+  it('AC-1: refuse un favoritesCount négatif', () => {
     expect(articleSchema.safeParse({ ...articleFromSpec, favoritesCount: -1 }).success).toBe(false)
   })
 
-  it("refuse un auteur incomplet : l'article porte un Profile entier, pas un username", () => {
+  it("AC-1: refuse un auteur incomplet : l'article porte un Profile entier, pas un username", () => {
     expect(articleSchema.safeParse({ ...articleFromSpec, author: 'jake' }).success).toBe(false)
   })
 })
 
-describe('articleSummarySchema (règle R-7)', () => {
-  it('retire le body de la forme de liste', () => {
+describe('REQ-ARTICLE-001 — articleSummarySchema (règle R-7)', () => {
+  it('AC-2: retire le body de la forme de liste', () => {
     const { body: _omitted, ...summary } = articleFromSpec
 
     expect(articleSummarySchema.parse(articleFromSpec)).toEqual(summary)
   })
 
-  it('reste valide quand le body est absent — c’est le cas nominal en liste', () => {
+  it('AC-2: reste valide quand le body est absent — c’est le cas nominal en liste', () => {
     const { body: _omitted, ...summary } = articleFromSpec
 
     expect(articleSummarySchema.safeParse(summary).success).toBe(true)
   })
 
-  it('conserve tous les autres champs du contrat', () => {
+  it('AC-2: conserve tous les autres champs du contrat', () => {
     const parsed = articleSummarySchema.parse(articleFromSpec)
 
     expect(Object.keys(parsed).sort()).toEqual([
@@ -83,8 +83,8 @@ describe('articleSummarySchema (règle R-7)', () => {
   })
 })
 
-describe('articlesResponseSchema', () => {
-  it("valide l'enveloppe de liste de la spec §8", () => {
+describe('REQ-ARTICLE-001 — articlesResponseSchema', () => {
+  it("AC-3: valide l'enveloppe de liste de la spec §8", () => {
     const { body: _omitted, ...summary } = articleFromSpec
 
     expect(articlesResponseSchema.parse({ articles: [summary], articlesCount: 2 })).toEqual({
@@ -93,15 +93,15 @@ describe('articlesResponseSchema', () => {
     })
   })
 
-  it('exige articlesCount : le front en a besoin pour paginer', () => {
+  it('AC-3: exige articlesCount : le front en a besoin pour paginer', () => {
     const { body: _omitted, ...summary } = articleFromSpec
 
     expect(articlesResponseSchema.safeParse({ articles: [summary] }).success).toBe(false)
   })
 })
 
-describe('createArticleDtoSchema', () => {
-  it('accepte la création de la spec §7.3', () => {
+describe('REQ-ARTICLE-001 — createArticleDtoSchema', () => {
+  it('AC-4: accepte la création de la spec §7.3', () => {
     const creation = {
       title: 'How to train your dragon',
       description: 'Ever wonder how?',
@@ -112,7 +112,7 @@ describe('createArticleDtoSchema', () => {
     expect(createArticleDtoSchema.parse(creation)).toEqual(creation)
   })
 
-  it('normalise tagList absent en tableau vide (aucun cas « absent » en aval)', () => {
+  it('AC-4: normalise tagList absent en tableau vide (aucun cas « absent » en aval)', () => {
     const parsed = createArticleDtoSchema.parse({
       title: 'How to train your dragon',
       description: 'Ever wonder how?',
@@ -122,37 +122,37 @@ describe('createArticleDtoSchema', () => {
     expect(parsed.tagList).toEqual([])
   })
 
-  it('refuse un titre qui ne contient que des espaces', () => {
+  it('AC-4: refuse un titre qui ne contient que des espaces', () => {
     expect(
       createArticleDtoSchema.safeParse({ title: '   ', description: 'd', body: 'b' }).success
     ).toBe(false)
   })
 
-  it('exige les trois champs obligatoires de la spec', () => {
+  it('AC-4: exige les trois champs obligatoires de la spec', () => {
     expect(createArticleDtoSchema.safeParse({ title: 'How to train your dragon' }).success).toBe(
       false
     )
   })
 })
 
-describe('updateArticleDtoSchema', () => {
-  it("accepte le patch d'un seul champ, comme dans la spec §7.3", () => {
+describe('REQ-ARTICLE-001 — updateArticleDtoSchema', () => {
+  it("AC-5: accepte le patch d'un seul champ, comme dans la spec §7.3", () => {
     expect(updateArticleDtoSchema.parse({ title: 'Did you train your dragon?' })).toEqual({
       title: 'Did you train your dragon?',
     })
   })
 
-  it('refuse un titre vidé — éditer vers du vide reste une erreur de validation', () => {
+  it('AC-5: refuse un titre vidé — éditer vers du vide reste une erreur de validation', () => {
     expect(updateArticleDtoSchema.safeParse({ title: '' }).success).toBe(false)
   })
 })
 
-describe('listArticlesQuerySchema', () => {
-  it('hérite des défauts de pagination R-10', () => {
+describe('REQ-ARTICLE-001 — listArticlesQuerySchema', () => {
+  it('AC-6: hérite des défauts de pagination R-10', () => {
     expect(listArticlesQuerySchema.parse({})).toEqual({ limit: 20, offset: 0 })
   })
 
-  it('accepte les filtres tag, author et favorited de la spec §7.3', () => {
+  it('AC-6: accepte les filtres tag, author et favorited de la spec §7.3', () => {
     expect(
       listArticlesQuerySchema.parse({
         tag: 'AngularJS',
@@ -163,7 +163,7 @@ describe('listArticlesQuerySchema', () => {
     ).toEqual({ tag: 'AngularJS', author: 'jake', favorited: 'jane', limit: 5, offset: 0 })
   })
 
-  it('refuse un filtre auteur vide plutôt que de lister tous les articles', () => {
+  it('AC-6: refuse un filtre auteur vide plutôt que de lister tous les articles', () => {
     expect(listArticlesQuerySchema.safeParse({ author: '  ' }).success).toBe(false)
   })
 })

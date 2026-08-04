@@ -17,42 +17,42 @@ const userFromSpec = {
   image: null,
 }
 
-describe('userSchema', () => {
-  it("accepte l'utilisateur verbatim de la spec", () => {
+describe('REQ-USER-001 — userSchema', () => {
+  it("AC-1: accepte l'utilisateur verbatim de la spec", () => {
     expect(userSchema.parse(userFromSpec)).toEqual(userFromSpec)
   })
 
-  it('ne laisse pas passer un mot de passe dans la sortie (règle R-9)', () => {
+  it('AC-2: ne laisse pas passer un mot de passe dans la sortie (règle R-9)', () => {
     const withLeak = { ...userFromSpec, password: 'jakejake' }
 
     expect(userSchema.parse(withLeak)).not.toHaveProperty('password')
   })
 
-  it('exige le token : sans lui le client ne peut pas authentifier la suite', () => {
+  it('AC-1: exige le token : sans lui le client ne peut pas authentifier la suite', () => {
     const { token: _omitted, ...withoutToken } = userFromSpec
 
     expect(userSchema.safeParse(withoutToken).success).toBe(false)
   })
 
-  it('accepte une bio nulle (compte fraîchement créé)', () => {
+  it('AC-1: accepte une bio nulle (compte fraîchement créé)', () => {
     expect(userSchema.parse({ ...userFromSpec, bio: null }).bio).toBeNull()
   })
 })
 
-describe('userResponseSchema', () => {
-  it("valide l'enveloppe { user: … }", () => {
+describe('REQ-USER-001 — userResponseSchema', () => {
+  it("AC-1: valide l'enveloppe { user: … }", () => {
     expect(userResponseSchema.parse({ user: userFromSpec })).toEqual({ user: userFromSpec })
   })
 })
 
-describe('loginDtoSchema', () => {
-  it('accepte les identifiants de la spec', () => {
+describe('REQ-USER-001 — loginDtoSchema', () => {
+  it('AC-4: accepte les identifiants de la spec', () => {
     const credentials = { email: 'jake@jake.jake', password: 'jakejake' }
 
     expect(loginDtoSchema.parse(credentials)).toEqual(credentials)
   })
 
-  it("n'impose pas la longueur minimale d'inscription — un compte plus ancien doit pouvoir tenter sa chance", () => {
+  it("AC-4: n'impose pas la longueur minimale d'inscription — un compte plus ancien doit pouvoir tenter sa chance", () => {
     const shortSecret = 'x'.repeat(PASSWORD_MIN_LENGTH - 1)
 
     expect(
@@ -60,23 +60,23 @@ describe('loginDtoSchema', () => {
     ).toBe(true)
   })
 
-  it('refuse un mot de passe vide', () => {
+  it('AC-4: refuse un mot de passe vide', () => {
     expect(loginDtoSchema.safeParse({ email: 'jake@jake.jake', password: '' }).success).toBe(false)
   })
 
-  it('refuse un email malformé', () => {
+  it('AC-4: refuse un email malformé', () => {
     expect(loginDtoSchema.safeParse({ email: 'jake', password: 'jakejake' }).success).toBe(false)
   })
 })
 
-describe('registerDtoSchema', () => {
-  it("accepte l'inscription de la spec", () => {
+describe('REQ-USER-001 — registerDtoSchema', () => {
+  it("AC-3: accepte l'inscription de la spec", () => {
     const registration = { username: 'Jacob', email: 'jake@jake.jake', password: 'jakejake' }
 
     expect(registerDtoSchema.parse(registration)).toEqual(registration)
   })
 
-  it('refuse un mot de passe plus court que PASSWORD_MIN_LENGTH', () => {
+  it('AC-3: refuse un mot de passe plus court que PASSWORD_MIN_LENGTH', () => {
     const tooShort = 'x'.repeat(PASSWORD_MIN_LENGTH - 1)
 
     expect(
@@ -88,7 +88,7 @@ describe('registerDtoSchema', () => {
     ).toBe(false)
   })
 
-  it('refuse un username vide une fois les espaces retirés', () => {
+  it('AC-3: refuse un username vide une fois les espaces retirés', () => {
     expect(
       registerDtoSchema.safeParse({
         username: '   ',
@@ -98,15 +98,15 @@ describe('registerDtoSchema', () => {
     ).toBe(false)
   })
 
-  it('exige les trois champs (§7.1 : username, email, password)', () => {
+  it('AC-3: exige les trois champs (§7.1 : username, email, password)', () => {
     expect(
       registerDtoSchema.safeParse({ email: 'jake@jake.jake', password: 'jakejake' }).success
     ).toBe(false)
   })
 })
 
-describe('updateUserDtoSchema', () => {
-  it('accepte une mise à jour partielle — le corps de la spec §7.1', () => {
+describe('REQ-USER-001 — updateUserDtoSchema', () => {
+  it('AC-5: accepte une mise à jour partielle — le corps de la spec §7.1', () => {
     const patch = {
       email: 'jake@jake.jake',
       bio: 'I like to skateboard',
@@ -116,16 +116,16 @@ describe('updateUserDtoSchema', () => {
     expect(updateUserDtoSchema.parse(patch)).toEqual(patch)
   })
 
-  it("accepte un corps vide : ne rien changer n'est pas une erreur de validation", () => {
+  it("AC-5: accepte un corps vide : ne rien changer n'est pas une erreur de validation", () => {
     expect(updateUserDtoSchema.parse({})).toEqual({})
   })
 
-  it('distingue effacer la bio (null) de ne pas y toucher (absente)', () => {
+  it('AC-5: distingue effacer la bio (null) de ne pas y toucher (absente)', () => {
     expect(updateUserDtoSchema.parse({ bio: null })).toEqual({ bio: null })
     expect(updateUserDtoSchema.parse({})).not.toHaveProperty('bio')
   })
 
-  it('applique la politique de mot de passe quand le champ est fourni', () => {
+  it('AC-5: applique la politique de mot de passe quand le champ est fourni', () => {
     expect(updateUserDtoSchema.safeParse({ password: 'court' }).success).toBe(false)
   })
 })
