@@ -13,4 +13,4 @@
  */
 
 /** Version du contrat de modèle partagé. Incrémentée quand le modèle Conduit évolue. */
-export const SHARED_MODEL_VERSION = "0.0.0" as const;
+export const SHARED_MODEL_VERSION = '0.0.0' as const
