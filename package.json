@@ -18,6 +18,9 @@
     "format": "biome format --write .",
     "typecheck": "turbo run typecheck",
     "adr:check": "bash scripts/check-adr-index.sh",
+    "requirements:validate": "tsx docs/requirements/_scripts/validate.ts",
+    "requirements:typecheck": "tsc -p docs/requirements/_scripts/tsconfig.json",
+    "requirements:verify": "bash scripts/verify-requirements-validator.sh",
     "knip": "knip",
     "depcruise": "cd apps/api && depcruise src --config ../../.dependency-cruiser.cjs",
     "test": "turbo run test",
@@ -27,11 +30,15 @@
   },
   "devDependencies": {
     "@biomejs/biome": "^2.5.0",
+    "@types/node": "^22.20.1",
     "dependency-cruiser": "^16.0.0",
     "knip": "^6.29.0",
     "lefthook": "^2.1.10",
+    "tsx": "^4.23.5",
     "turbo": "^2.5.0",
-    "typescript": "^5.7.3"
+    "typescript": "^5.7.3",
+    "yaml": "^2.9.0",
+    "zod": "^4.4.3"
   },
   "pnpm": {
     "//": "pnpm 10 bloque par défaut les scripts de build post-install (sécurité supply-chain). On autorise explicitement les seules dépendances qui en ont légitimement besoin : Prisma télécharge ses moteurs de requête, sharp compile ses binaires natifs d'optimisation d'images, lefthook télécharge son binaire de hooks.",

@@ -27,11 +27,14 @@ Schéma dans `docs/requirements/_scripts/schema.ts`. Points d'attention :
 
 ```bash
 pnpm requirements:validate    # Zod + intégrité des liens. Bloquant (pre-commit + job CI).
+pnpm requirements:verify      # met le validateur en échec sur des fixtures (pre-push + CI).
 pnpm requirements:matrix      # génère _generated/traceability-matrix.md + orphans.md
 pnpm requirements:coverage    # couverture AC-level.
 ```
 
-- Pre-commit `requirements-validate` (glob `docs/requirements/**`) et job CI `Validate requirements` : **bloquants**.
+Mécanique du dossier (structure, gabarit, comment écrire un REQ) : [`docs/requirements/README.md`](../../docs/requirements/README.md).
+
+- Pre-commit `requirements-validate` (glob `docs/requirements/**`) et job CI `Requirements` : **bloquants**.
 - Job CI `requirements-coverage` : commite `traceability-matrix.md` / `orphans.md` reviewables en PR.
 
 ## Convention de couverture AC-level

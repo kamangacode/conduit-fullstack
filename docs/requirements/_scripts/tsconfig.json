@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json.schemastore.org/tsconfig",
+  "_comment": "Ces scripts vivent hors des workspaces pnpm : `pnpm typecheck` (turbo) ne les voit donc pas. Sans ce tsconfig, le dépôt qui met la sécurité de types en avant hébergerait du TypeScript que rien ne typecheck, exécuté par tsx qui se contente de retirer les annotations. `pnpm requirements:typecheck` comble le trou (pre-push + job CI Requirements).",
+  "extends": "../../../tsconfig.base.json",
+  "compilerOptions": {
+    "module": "nodenext",
+    "moduleResolution": "nodenext",
+    "noEmit": true,
+    "declaration": false,
+    "sourceMap": false,
+    // Les imports internes portent l'extension `.ts` : c'est ce que tsx résout à
+    // l'exécution, et tsc doit accepter la même forme pour vérifier le même code.
+    "allowImportingTsExtensions": true,
+    "types": ["node"]
+  },
+  "include": ["*.ts"]
+}

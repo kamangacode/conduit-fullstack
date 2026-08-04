@@ -64,6 +64,14 @@ pre-commit:
       glob: "docs/adr/*.md"
       run: bash scripts/check-adr-index.sh
 
+    requirements-validate:
+      # Dès qu'une exigence bouge : forme du frontmatter (Zod) et intégrité
+      # (emplacement, unicité des ids, fichiers et ADR référencés). Bloquant :
+      # un REQ mal formé n'a pas à entrer dans l'historique, il fausserait la
+      # matrice de traçabilité dès la génération suivante.
+      glob: "docs/requirements/**/*.{md,ts}"
+      run: pnpm requirements:validate
+
     format:
       # Biome formate + corrige les fichiers staged et re-stage les corrections.
       # Un seul outil pour api et web (config racine).
@@ -93,6 +101,17 @@ pre-push:
       # attraper une erreur SQL avant le push. No-op si aucune migration n'est
       # poussée. Non-bloquant si docker est absent (voir le script).
       run: bash .lefthook/check-migrations.sh
+    requirements-typecheck:
+      # `pnpm typecheck` passe par turbo, qui ne voit que les workspaces : les
+      # scripts d'exigences vivent dans docs/ et y échapperaient.
+      run: bash .lefthook/run-quiet.sh 'CI=true pnpm requirements:typecheck'
+
+    verify-requirements-validator:
+      # Vérifie sur des fixtures que le validateur d'exigences rejette bien ce
+      # qu'il annonce (~9s). Même logique que le verrou Biome ci-dessous : on ne
+      # fait pas confiance à la déclaration, on la met en échec.
+      run: bash .lefthook/run-quiet.sh 'bash scripts/verify-requirements-validator.sh'
+
     verify-biome-verrou:
       # Vérifie en local que le verrou hard-fail Biome est toujours actif
       # (~5s). Empêche un push qui aurait silencieusement dégradé biome.json.
