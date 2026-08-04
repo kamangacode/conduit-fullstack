@@ -200,8 +200,31 @@ jobs:
           path: .turbo
           key: turbo-test-${{ github.sha }}
           restore-keys: turbo-test-
-      # Vacant tant que les suites Vitest n'existent pas (Phase 4) — reste vert.
-      - run: pnpm test
+      # `test:coverage` plutôt que `test` : la CI exécute les mêmes tests, en
+      # instrumentés. Les lancer deux fois pour obtenir le chiffre serait payer
+      # la suite entière pour rien.
+      - run: pnpm test:coverage
+      # Sans service externe (ADR 006) : le rapport détaillé part en artefact
+      # téléchargeable, la synthèse s'affiche dans le résumé du run — lisible
+      # sans quitter la PR, et sans token à faire tourner.
+      - name: Synthèse de couverture
+        if: always()
+        run: |
+          {
+            echo "## Couverture des tests"
+            echo ""
+            bash scripts/coverage-summary.sh
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Rapport de couverture (artefact)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage
+          path: |
+            apps/*/coverage/
+            packages/*/coverage/
+          retention-days: 14
+          if-no-files-found: warn
 
   build:
     name: Build

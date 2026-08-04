@@ -57,9 +57,16 @@ Avant d'ajouter ou de modifier un fichier source dans une des couches ci-dessus 
 ## Commandes
 
 ```bash
-# Couverture locale avant push
-pnpm --filter @repo/api test --coverage
-pnpm --filter @repo/web test --coverage
+# Lane rapide (pre-push, boucle de dev) — sans instrumentation
+pnpm test
+
+# Couverture : mêmes tests, instrumentés, puis synthèse par workspace.
+# Aucun service externe (ADR 006) — le tableau local est celui de la CI.
+pnpm test:coverage
+pnpm coverage:summary
+
+# Couverture d'un seul workspace
+pnpm --filter @repo/api test:coverage
 
 # Voir les fichiers du patch
 git diff --name-only origin/staging...HEAD | grep -E '\.(ts|tsx)$' | grep -v -E '\.(spec|test|dto|module|config)\.'

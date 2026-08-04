@@ -15,6 +15,7 @@
     "declaration": false,
     "resolveJsonModule": true
   },
-  "include": ["src/**/*.ts"],
+  "//include": "Les tests sont typecheckés au même titre que le code : un test qui ne compile pas est un test qu'on découvre cassé au pire moment. tsconfig.build.json les réexclut du bundle émis. `vitest.config.mts` reste hors périmètre : ce workspace compile en CommonJS (contrainte NestJS, voir _comment), et un module ESM explicite n'y a pas sa place — l'extension .mts est ce qui évite l'avertissement de chargement de config de Vite.",
+  "include": ["src/**/*.ts", "test/**/*.ts"],
   "exclude": ["node_modules", "dist"]
 }

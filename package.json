@@ -18,6 +18,8 @@
     "format": "biome format --write .",
     "typecheck": "turbo run typecheck",
     "adr:check": "bash scripts/check-adr-index.sh",
+    "test:coverage": "turbo run test:coverage",
+    "coverage:summary": "bash scripts/coverage-summary.sh",
     "requirements:validate": "tsx docs/requirements/_scripts/validate.ts",
     "requirements:typecheck": "tsc -p docs/requirements/_scripts/tsconfig.json",
     "requirements:matrix": "tsx docs/requirements/_scripts/matrix.ts",
