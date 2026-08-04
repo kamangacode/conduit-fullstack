@@ -1,18 +1,19 @@
-import { existsSync, readdirSync, readFileSync } from 'node:fs'
-import { join, resolve, sep } from 'node:path'
-import { parse as parseYaml } from 'yaml'
-import { type Requirement, requirementSchema } from './schema.ts'
+import { existsSync, readdirSync } from 'node:fs'
+import { join, resolve } from 'node:path'
+import { collectRequirementFiles, loadReferential, parseRequirementFile } from './referential.ts'
+import type { Requirement } from './schema.ts'
 
 /**
  * Validateur du référentiel d'exigences (`pnpm requirements:validate`).
  *
- * Deux niveaux de contrôle, volontairement séparés :
- *   - `schema.ts` : la **forme** du frontmatter (pur, sans I/O, réutilisable) ;
- *   - ce fichier : l'**intégrité**, c'est-à-dire tout ce qui demande de
+ * Trois couches, volontairement séparées :
+ *   - `schema.ts`      : la **forme** du frontmatter (pur, sans I/O) ;
+ *   - `referential.ts` : la **lecture** du dossier (découverte, parsing) ;
+ *   - ce fichier       : l'**intégrité**, c'est-à-dire tout ce qui demande de
  *     confronter le REQ au disque — emplacement, unicité des identifiants,
  *     existence des fichiers et des ADR référencés.
  *
- * Le second niveau est celui qui a de la valeur dans la durée : un frontmatter
+ * La dernière couche est celle qui a de la valeur dans la durée : un frontmatter
  * bien formé qui pointe vers un test supprimé six mois plus tôt affiche une
  * couverture qui n'existe plus. C'est exactement le mensonge qu'un référentiel
  * d'exigences est censé rendre impossible.
@@ -39,66 +40,6 @@ const findings: Finding[] = []
 
 function fail(file: string, message: string): void {
   findings.push({ file, message })
-}
-
-/**
- * Tout `.md` du référentiel, à deux exceptions près : les fichiers et dossiers
- * techniques préfixés `_` (gabarit, scripts) et les `README.md` de
- * documentation. Tout le reste est traité comme un REQ — délibérément, plutôt
- * que de ne ramasser que `REQ-*.md` : un fichier égaré dans
- * `functional/article/` doit produire une erreur, pas être ignoré en silence.
- */
-function collectRequirementFiles(dir: string): string[] {
-  if (!existsSync(dir)) {
-    return []
-  }
-  return readdirSync(dir, { withFileTypes: true, recursive: true })
-    .filter((entry) => entry.isFile() && entry.name.endsWith('.md'))
-    .filter((entry) => entry.name !== 'README.md')
-    .map((entry) => join(entry.parentPath, entry.name))
-    .filter((file) => !file.split(sep).some((segment) => segment.startsWith('_')))
-    .sort()
-}
-
-function splitFrontmatter(raw: string): { frontmatter: string; body: string } | null {
-  if (!raw.startsWith('---\n')) {
-    return null
-  }
-  const end = raw.indexOf('\n---', 3)
-  if (end === -1) {
-    return null
-  }
-  return { frontmatter: raw.slice(4, end + 1), body: raw.slice(end + 4) }
-}
-
-/** Parse + valide la forme. Retourne `null` (en ayant consigné le motif) si le REQ est invalide. */
-function loadRequirement(file: string): Requirement | null {
-  const parts = splitFrontmatter(readFileSync(file, 'utf8'))
-  if (!parts) {
-    fail(file, 'frontmatter YAML absent ou non terminé (délimiteurs `---`)')
-    return null
-  }
-  if (parts.body.trim().length === 0) {
-    fail(file, 'corps vide : le REQ doit porter le contexte que le frontmatter ne peut pas dire')
-    return null
-  }
-
-  let data: unknown
-  try {
-    data = parseYaml(parts.frontmatter)
-  } catch (error) {
-    fail(file, `frontmatter YAML illisible : ${(error as Error).message}`)
-    return null
-  }
-
-  const result = requirementSchema.safeParse(data)
-  if (!result.success) {
-    for (const issue of result.error.issues) {
-      fail(file, `${issue.path.join('.') || '(racine)'} — ${issue.message}`)
-    }
-    return null
-  }
-  return result.data
 }
 
 /**
@@ -154,18 +95,22 @@ function validateTemplate(): void {
   }
   // Forme seulement : les valeurs du gabarit sont des placeholders, ils ne
   // pointent volontairement vers aucun fichier réel.
-  loadRequirement(template)
+  const parsed = parseRequirementFile(template)
+  if (Array.isArray(parsed)) {
+    for (const message of parsed) {
+      fail(template, message)
+    }
+  }
 }
 
-function validateRequirements(files: string[]): void {
-  const idOwners = new Map<string, string>()
-  const parsed: Array<{ file: string; requirement: Requirement }> = []
+function validateRequirements(): void {
+  const load = loadReferential(REQUIREMENTS_DIR)
+  for (const error of load.errors) {
+    fail(error.file, error.message)
+  }
 
-  for (const file of files) {
-    const requirement = loadRequirement(file)
-    if (!requirement) {
-      continue
-    }
+  const idOwners = new Map<string, string>()
+  for (const { file, requirement } of load.requirements) {
     checkLocation(file, requirement)
     const previous = idOwners.get(requirement.id)
     if (previous) {
@@ -173,11 +118,10 @@ function validateRequirements(files: string[]): void {
     } else {
       idOwners.set(requirement.id, file)
     }
-    parsed.push({ file, requirement })
   }
 
   const knownIds = new Set(idOwners.keys())
-  for (const { file, requirement } of parsed) {
+  for (const { file, requirement } of load.requirements) {
     checkReferences(file, requirement, knownIds)
   }
 }
@@ -206,7 +150,7 @@ function report(fileCount: number): void {
   console.log(`ok: gabarit et ${fileCount} REQ valides (forme, emplacement, unicité, références).`)
 }
 
-const requirementFiles = collectRequirementFiles(REQUIREMENTS_DIR)
+const requirementFileCount = collectRequirementFiles(REQUIREMENTS_DIR).length
 validateTemplate()
-validateRequirements(requirementFiles)
-report(requirementFiles.length)
+validateRequirements()
+report(requirementFileCount)

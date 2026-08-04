@@ -106,11 +106,12 @@ pre-push:
       # scripts d'exigences vivent dans docs/ et y échapperaient.
       run: bash .lefthook/run-quiet.sh 'CI=true pnpm requirements:typecheck'
 
-    verify-requirements-validator:
-      # Vérifie sur des fixtures que le validateur d'exigences rejette bien ce
-      # qu'il annonce (~9s). Même logique que le verrou Biome ci-dessous : on ne
-      # fait pas confiance à la déclaration, on la met en échec.
-      run: bash .lefthook/run-quiet.sh 'bash scripts/verify-requirements-validator.sh'
+    verify-requirements:
+      # Vérifie sur des fixtures que le validateur rejette bien ce qu'il annonce
+      # et que la matrice relie réellement les critères aux tests (~10s). Même
+      # logique que le verrou Biome ci-dessous : on ne fait pas confiance à la
+      # déclaration d'un garde-fou, on le met en échec.
+      run: bash .lefthook/run-quiet.sh 'CI=true pnpm requirements:verify'
 
     verify-biome-verrou:
       # Vérifie en local que le verrou hard-fail Biome est toujours actif
