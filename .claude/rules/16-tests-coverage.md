@@ -1,0 +1,73 @@
+---
+paths:
+  - "apps/api/src/**/*.ts"
+  - "apps/web/src/**/*.ts"
+  - "apps/web/src/**/*.tsx"
+  - "packages/shared/**/*.ts"
+---
+
+# Tests : couverture par couche
+
+## Principe
+
+Le projet vise une couverture élevée sur le patch, répartie sur deux canaux :
+
+- **Vitest** (unit + integration) : remonte dans le rapport de couverture.
+- **Playwright** (E2E) : hors couverture par construction (parcours utilisateur, pas de mesure ligne-à-ligne).
+
+Conséquence : les fichiers couverts uniquement par Playwright n'apparaissent pas couverts dans le rapport. Si tu touches un fichier d'une couche du tableau ci-dessous, écris le test associé **dans la même PR**.
+
+## Tableau test-par-couche
+
+| Tu crées ou modifies… | Test obligatoire | Où | Pourquoi |
+|---|---|---|---|
+| `apps/api/src/domain/**/*.ts` (entity, value object, exception) | Vitest unit, zero mock | colocalisé `*.spec.ts` | TypeScript pur, doit être ~100%. Cœur métier (règles Article/Comment/User/Favorite/Follow). |
+| `apps/api/src/application/**/*.use-case.ts` | Vitest unit, ports mockés via interface | `*.use-case.spec.ts` | Coordination métier, cible ~90%. |
+| `apps/api/src/infrastructure/**/*.prisma-repository.ts` | Integration (vraie DB) | `apps/api/test/**` | Adapter contre vraie DB. Pas de mock Prisma. |
+| `apps/api/src/interface/**/*.controller.ts` | Integration supertest via NestJS TestingModule | `apps/api/test/**` | Valide guards, Zod, mapping vers use-case. |
+| `apps/web/src/stores/**/*.ts` (Zustand) | Vitest unit | colocalisé `*.spec.ts` | État UI logique, testable sans DOM. |
+| `apps/web/src/hooks/**/*.ts` | Vitest, plus `@testing-library/react` si le hook touche le DOM | colocalisé `*.spec.ts` | Hook pur ou hook DOM. |
+| `apps/web/src/components/**/*.tsx` avec **logique** (état, calculs, conditionals) | Vitest + RTL | colocalisé `*.spec.tsx` | Composant fonctionnel non trivial (ex : formulaire d'article, éditeur de commentaire). |
+| `apps/web/src/components/**/*.tsx` **dumb** (props in, JSX out) | Aucun test | — | Couvert par Playwright. Peu de lignes, faible impact couverture. |
+| `apps/web/src/app/**/page.tsx` | E2E Playwright | `apps/web/e2e/**` | Parcours utilisateur. Ne compte pas pour la couverture mais reste obligatoire pour la confiance. |
+| `packages/shared/**/*.ts` (types purs) | Aucun test | — | Types compilés, pas de runtime. |
+| `packages/shared/**/*.ts` (fonctions, mappers, validateurs Zod) | Vitest unit | colocalisé `*.spec.ts` | Logique partagée entre `apps/web` et `apps/api`, doit être très couverte — c'est la source de vérité des DTOs Conduit. |
+
+## Décision avant édition
+
+Avant d'ajouter ou de modifier un fichier source dans une des couches ci-dessus :
+
+1. Le fichier est-il dans une couche du tableau ? Non, ignore cette rule.
+2. Existe-t-il déjà un test pour ce fichier ? Oui, ajoute-y les cas nécessaires aux changements. Non, crée-le.
+3. Le test est-il du bon type pour la couche ? Si non, migre (ex : un use-case avec un test integration, bascule en unit avec ports mockés).
+4. Couvres-tu les branches non-happy-path ? Erreur métier, edge cases, validation, permissions (ex : éditer un article qui n'appartient pas à l'utilisateur courant).
+
+## Quoi NE PAS tester (gain zéro)
+
+- DTOs (`*.dto.ts`)
+- Modules NestJS (`*.module.ts`)
+- `apps/api/src/main.ts`
+- Migrations Prisma (`apps/api/prisma/**`)
+- Fichiers de config (`*.config.ts`)
+- Types purs (`*.d.ts`)
+- Composants React purement présentationnels sans état.
+- Re-exports (`index.ts` qui ne fait que `export * from`).
+
+## Commandes
+
+```bash
+# Couverture locale avant push
+pnpm --filter @repo/api test --coverage
+pnpm --filter @repo/web test --coverage
+
+# Voir les fichiers du patch
+git diff --name-only origin/staging...HEAD | grep -E '\.(ts|tsx)$' | grep -v -E '\.(spec|test|dto|module|config)\.'
+```
+
+## Avant une PR
+
+Si tu as touché des fichiers de la couche `application` ou `infrastructure` (api) sans ajouter ou modifier de test correspondant, **pose la question via `AskUserQuestion`** avant de pousser : "Ces fichiers n'ont pas de test associé, est-ce volontaire ?".
+
+## Patterns de fail récurrents
+
+À compléter au fil des incidents de couverture — chaque patch sous le seuil doit laisser une trace ici (fichier, couche, cause) pour éviter la régression.
