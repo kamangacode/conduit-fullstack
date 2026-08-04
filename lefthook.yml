@@ -19,8 +19,10 @@ pre-commit:
       # Bloque tout fichier .env porteur de secrets, mais autorise les variants
       # documentaires (.env.example/.sample/.template/.test) committés à dessein.
       run: |
+        # (^|/) : attrape aussi un .env NIÉ dans un sous-dossier (apps/api/.env),
+        # pas seulement à la racine — sinon un `git add -f apps/api/.env` passe.
         if git diff --cached --name-only \
-          | grep -E '^\.env($|\.)' \
+          | grep -E '(^|/)\.env($|\.)' \
           | grep -vE '\.(example|sample|template|test)$' \
           | grep -q .; then
           echo "ERREUR : fichier .env détecté dans le commit. Ajoutez-le à .gitignore."
