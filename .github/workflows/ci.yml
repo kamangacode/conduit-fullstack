@@ -144,11 +144,22 @@ jobs:
         run: pnpm requirements:typecheck
       - name: Exigences (schéma Zod + intégrité des liens)
         run: pnpm requirements:validate
-      # Le méta-test : sans lui, un validateur qui accepterait tout passerait le
-      # job ci-dessus avec les honneurs. Ici plutôt qu'ailleurs parce qu'il coûte
-      # ~10 s — le prix d'un garde-fou dont on sait qu'il garde.
-      - name: Vérification active du validateur (fixtures)
+      # Le méta-test : sans lui, un validateur qui accepterait tout — ou une
+      # matrice qui afficherait « aucun test » partout — passerait les étapes
+      # précédentes avec les honneurs. ~10 s, le prix d'un garde-fou dont on
+      # sait qu'il garde.
+      - name: Vérification active du validateur et de la matrice (fixtures)
         run: pnpm requirements:verify
+      # Rapport, jamais gate (ADR 005) : la matrice n'est pas committée, donc on
+      # publie le tableau de couverture dans le résumé du run pour qu'il reste
+      # lisible depuis la PR sans permission d'écriture.
+      - name: Couverture AC-level (rapport)
+        run: |
+          {
+            echo "## Couverture des exigences"
+            echo ""
+            pnpm --silent requirements:coverage
+          } >> "$GITHUB_STEP_SUMMARY"
 
   typecheck:
     name: Typecheck

@@ -12,6 +12,10 @@ out/
 # Turbo
 .turbo/
 
+# Artefacts dérivés du référentiel d'exigences : régénérables à tout moment par
+# `pnpm requirements:matrix`, donc jamais committés (ADR 005).
+docs/requirements/_generated/
+
 # Tests & couverture
 coverage/
 .nyc_output/

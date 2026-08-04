@@ -27,15 +27,15 @@ Schéma dans `docs/requirements/_scripts/schema.ts`. Points d'attention :
 
 ```bash
 pnpm requirements:validate    # Zod + intégrité des liens. Bloquant (pre-commit + job CI).
-pnpm requirements:verify      # met le validateur en échec sur des fixtures (pre-push + CI).
+pnpm requirements:verify      # met le validateur ET la matrice en échec sur des fixtures (pre-push + CI).
 pnpm requirements:matrix      # génère _generated/traceability-matrix.md + orphans.md
-pnpm requirements:coverage    # couverture AC-level.
+pnpm requirements:coverage    # couverture AC-level, sur la sortie standard.
 ```
 
 Mécanique du dossier (structure, gabarit, comment écrire un REQ) : [`docs/requirements/README.md`](../../docs/requirements/README.md).
 
 - Pre-commit `requirements-validate` (glob `docs/requirements/**`) et job CI `Requirements` : **bloquants**.
-- Job CI `requirements-coverage` : commite `traceability-matrix.md` / `orphans.md` reviewables en PR.
+- `_generated/` n'est **pas versionné** : la matrice est un artefact dérivé, régénéré à la demande ([ADR 005](../../docs/adr/005-matrice-de-tracabilite-generee.md)). Le job CI publie la couverture dans le résumé du run — c'est un **rapport, jamais un gate** tant qu'aucun seuil n'a été calibré (rule 21).
 
 ## Convention de couverture AC-level
 

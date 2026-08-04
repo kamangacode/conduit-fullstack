@@ -46,7 +46,9 @@ chemin qui n'existe pas sur le disque.
 
 ```bash
 pnpm requirements:validate    # forme (Zod) + intégrité (emplacement, unicité, liens)
-pnpm requirements:verify      # vérifie que le validateur rejette bien ce qu'il annonce
+pnpm requirements:matrix      # matrice exigence → test + rapport d'orphelins
+pnpm requirements:coverage    # couverture AC-level, sur la sortie standard
+pnpm requirements:verify      # vérifie que validateur et matrice disent bien la vérité
 pnpm requirements:typecheck   # tsc sur _scripts/ — hors workspaces, donc hors `pnpm typecheck`
 ```
 
@@ -58,5 +60,15 @@ pnpm requirements:typecheck   # tsc sur _scripts/ — hors workspaces, donc hors
   validateur qui accepterait tout est une panne silencieuse — c'est le seul mode
   de défaillance qu'aucune relecture ne rattrape.
 
-La matrice de traçabilité exigence → test et le rapport d'orphelins (item E3)
-consommeront `schema.ts` tel quel : c'est pourquoi il reste pur, sans I/O.
+## Matrice de traçabilité
+
+`requirements:matrix` déduit le lien exigence → test du **nommage** :
+`describe('REQ-ARTICLE-001 …')` et `it('AC-1: …')`. Une convention de nommage
+que ne lit aucun outil n'est qu'une politesse ; lue par le générateur, elle
+devient une donnée exploitable.
+
+La sortie va dans `_generated/`, **non versionné** : un artefact dérivé ne peut
+pas être périmé s'il n'est jamais stocké ([ADR 005](../adr/005-matrice-de-tracabilite-generee.md)).
+La CI n'en fait pas un gate — elle publie la couverture dans le résumé du run.
+Un seuil de couverture ne deviendra bloquant qu'une fois calibré sur des données
+réelles (rule 21).
