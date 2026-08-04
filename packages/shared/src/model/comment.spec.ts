@@ -20,70 +20,70 @@ const commentFromSpec = {
   },
 }
 
-describe('commentSchema', () => {
-  it('accepte le commentaire verbatim de la spec', () => {
+describe('REQ-COMMENT-001 — commentSchema', () => {
+  it('AC-2: accepte le commentaire verbatim de la spec', () => {
     expect(commentSchema.parse(commentFromSpec)).toEqual(commentFromSpec)
   })
 
-  it('refuse un UUID comme id : le contrat officiel déclare type integer', () => {
+  it('AC-1: refuse un UUID comme id : le contrat officiel déclare type integer', () => {
     const withUuid = { ...commentFromSpec, id: '3f2504e0-4f89-11d3-9a0c-0305e82c3301' }
 
     expect(commentSchema.safeParse(withUuid).success).toBe(false)
   })
 
-  it('refuse un id entier transporté en chaîne', () => {
+  it('AC-1: refuse un id entier transporté en chaîne', () => {
     expect(commentSchema.safeParse({ ...commentFromSpec, id: '1' }).success).toBe(false)
   })
 
-  it('refuse un id décimal', () => {
+  it('AC-1: refuse un id décimal', () => {
     expect(commentSchema.safeParse({ ...commentFromSpec, id: 1.5 }).success).toBe(false)
   })
 
-  it("porte un Profile complet en auteur, comme l'article", () => {
+  it("AC-2: porte un Profile complet en auteur, comme l'article", () => {
     expect(
       commentSchema.safeParse({ ...commentFromSpec, author: { username: 'jake' } }).success
     ).toBe(false)
   })
 })
 
-describe('commentsResponseSchema', () => {
-  it("valide l'enveloppe { comments: [...] } de la spec §8", () => {
+describe('REQ-COMMENT-001 — commentsResponseSchema', () => {
+  it("AC-3: valide l'enveloppe { comments: [...] } de la spec §8", () => {
     expect(commentsResponseSchema.parse({ comments: [commentFromSpec] })).toEqual({
       comments: [commentFromSpec],
     })
   })
 
-  it('accepte un article sans commentaire', () => {
+  it('AC-3: accepte un article sans commentaire', () => {
     expect(commentsResponseSchema.parse({ comments: [] })).toEqual({ comments: [] })
   })
 
-  it("n'expose pas de compteur : la spec ne pagine pas les commentaires", () => {
+  it("AC-3: n'expose pas de compteur : la spec ne pagine pas les commentaires", () => {
     const parsed = commentsResponseSchema.parse({ comments: [] })
 
     expect(Object.keys(parsed)).toEqual(['comments'])
   })
 })
 
-describe('createCommentDtoSchema', () => {
-  it("accepte l'ajout de la spec §7.4", () => {
+describe('REQ-COMMENT-001 — createCommentDtoSchema', () => {
+  it("AC-4: accepte l'ajout de la spec §7.4", () => {
     expect(createCommentDtoSchema.parse({ body: 'His name was my name too.' })).toEqual({
       body: 'His name was my name too.',
     })
   })
 
-  it('refuse un commentaire vide après normalisation', () => {
+  it('AC-4: refuse un commentaire vide après normalisation', () => {
     expect(createCommentDtoSchema.safeParse({ body: '   ' }).success).toBe(false)
   })
 
-  it("ignore un author envoyé par le client — l'auteur vient du JWT, jamais du corps", () => {
+  it("AC-4: ignore un author envoyé par le client — l'auteur vient du JWT, jamais du corps", () => {
     const parsed = createCommentDtoSchema.parse({ body: 'coucou', author: 'quelquun-dautre' })
 
     expect(parsed).not.toHaveProperty('author')
   })
 })
 
-describe('createCommentRequestSchema', () => {
-  it("valide l'enveloppe { comment: … } du corps de requête", () => {
+describe('REQ-COMMENT-001 — createCommentRequestSchema', () => {
+  it("AC-4: valide l'enveloppe { comment: … } du corps de requête", () => {
     expect(
       createCommentRequestSchema.parse({ comment: { body: 'His name was my name too.' } })
     ).toEqual({ comment: { body: 'His name was my name too.' } })
