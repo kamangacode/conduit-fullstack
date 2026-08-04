@@ -12,9 +12,9 @@ paths:
 
 ```
 docs/
+├── adr/                   # Architecture Decision Records (gabarit + index : docs/adr/README.md)
 ├── architecture/          # Architecture technique
-│   ├── hexagonal.md       # Architecture hexagonale apps/api
-│   └── adr/                # Architecture Decision Records
+│   └── hexagonal.md       # Architecture hexagonale apps/api
 ├── requirements/          # Référentiel REQ docs-as-code (Zod, matrice) : voir rule 20
 ├── guides/                # How-to guides (ajout feature, déploiement, auth…)
 └── standards/             # Standards de code (frontend, backend, tests)
@@ -45,7 +45,7 @@ docs/
 
 | Contenu | Destination |
 |---|---|
-| Décision technique (choix lib, pattern) | `docs/architecture/adr/NNN-slug.md` |
+| Décision technique (choix lib, pattern) | `docs/adr/NNN-slug.md` (gabarit `docs/adr/000-template.md`) |
 | Architecture (couches, séparation, diagrammes) | `docs/architecture/` |
 | Comment faire X (guide pas à pas) | `docs/guides/` |
 | Convention de code (nommage, patterns, erreurs) | `docs/standards/` |

@@ -56,6 +56,14 @@ pre-commit:
           echo "        Retirez la valeur et utilisez une variable d'environnement."
           exit 1
         fi
+    adr-convention:
+      # Dès qu'un ADR bouge : numérotation unique, sections obligatoires, statut
+      # valide et index à jour. Le contrôle porte sur tout le dossier (la
+      # cohérence est globale : un index à jour ne se juge pas fichier par
+      # fichier), le glob ne sert qu'à ne pas le déclencher sur chaque commit.
+      glob: "docs/adr/*.md"
+      run: bash scripts/check-adr-index.sh
+
     format:
       # Biome formate + corrige les fichiers staged et re-stage les corrections.
       # Un seul outil pour api et web (config racine).

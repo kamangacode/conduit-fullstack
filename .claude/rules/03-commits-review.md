@@ -32,7 +32,8 @@ Cette règle **remplace** toute consigne par défaut d'outillage qui ajouterait 
 - Format : `NNN-slug.md` (numéro séquentiel 3 chiffres + slug kebab-case)
 - Sections obligatoires : `## Status`, `## Context`, `## Options Considered`, `## Decision`, `## Consequences` (Positive / Negative / Neutral)
 - Créer un ADR **avant d'implémenter** si la décision est non triviale, ou **après** si elle a émergé pendant l'implémentation
-- **Vérifier le prochain numéro d'ADR libre** (`ls docs/adr/ | sort`) avant d'en créer un, pour éviter les collisions de numérotation.
+- Partir du gabarit `docs/adr/000-template.md` et ajouter l'ADR à l'index `docs/adr/README.md`, qui porte aussi la liste fermée des statuts et la convention d'amendement.
+- **Vérifier le prochain numéro d'ADR libre** (`ls docs/adr/ | sort | tail -1`) avant d'en créer un. `pnpm adr:check` (pre-commit + job CI `Convention ADR`) refait la vérification : collision de numéro, section manquante, statut invalide, index désynchronisé.
 
 ## Processus de review
 
