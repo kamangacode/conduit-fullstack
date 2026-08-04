@@ -8,10 +8,13 @@
 #   - adminer  : UI web d'inspection de la base (http://localhost:8080)
 #   - mailpit  : catcher SMTP + UI (http://localhost:8025) pour les e-mails de dev
 #
-# Les identifiants ci-dessous sont des valeurs de DÉVELOPPEMENT LOCAL uniquement.
-# La configuration d'environnement validée par Zod et le .env.example commenté
-# arrivent en Phase 3 (item B1). En production, ces secrets viennent de la
-# plateforme (Railway), jamais du dépôt.
+# Les identifiants ci-dessous sont des valeurs de DÉVELOPPEMENT LOCAL uniquement,
+# et ne servent qu'à ces conteneurs. Pour s'en écarter (port déjà pris, par
+# exemple), copier `.env.example` en `.env` à la racine.
+#
+# La configuration du process API est ailleurs et validée par Zod au démarrage :
+# `apps/api/.env.example` et `apps/api/src/config/env.ts`. En production, ces
+# valeurs viennent de la plateforme (Railway), jamais du dépôt.
 services:
   postgres:
     image: postgres:16-alpine
