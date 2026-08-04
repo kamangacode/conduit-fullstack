@@ -12,6 +12,11 @@ on:
     branches: [main, staging]
   push:
     branches: [main, staging]
+  schedule:
+    # Filet de sécurité hebdomadaire (lundi 03:00 UTC) : rejoue l'audit de
+    # vulnérabilités même sans changement de code, pour attraper une CVE publiée
+    # sur une dépendance déjà installée.
+    - cron: "0 3 * * 1"
   workflow_dispatch:
 
 # Principe du moindre privilège : la CI lit, elle n'écrit pas.
@@ -31,8 +36,11 @@ jobs:
   detect-changes:
     name: Detect changes
     runs-on: ubuntu-latest
+    # Pas de diff à filtrer sur un run planifié (cron) : seul l'audit s'y déclenche.
+    if: github.event_name != 'schedule'
     outputs:
       code: ${{ steps.filter.outputs.code }}
+      deps: ${{ steps.filter.outputs.deps }}
     steps:
       - uses: actions/checkout@v5
       - uses: dorny/paths-filter@v4
@@ -51,6 +59,11 @@ jobs:
               - 'turbo.json'
               - 'scripts/**'
               - '.github/workflows/ci.yml'
+            deps:
+              - 'package.json'
+              - 'pnpm-lock.yaml'
+              - 'apps/**/package.json'
+              - 'packages/**/package.json'
 
   quality:
     name: Quality (lint + knip + boundaries)
@@ -141,6 +154,27 @@ jobs:
           key: turbo-build-${{ github.sha }}
           restore-keys: turbo-build-
       - run: pnpm build
+
+  audit:
+    name: Audit vulnérabilités
+    runs-on: ubuntu-latest
+    needs: detect-changes
+    # Sur le cron hebdomadaire, ou dès qu'un manifeste/lockfile change. always()
+    # pour évaluer la condition même quand detect-changes est skippé (cron).
+    if: always() && (github.event_name == 'schedule' || needs.detect-changes.outputs.deps == 'true')
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      # Vulnérabilités de sévérité 'high' et plus, sur les deps de production.
+      # Hors ci-success à dessein : filet de sécurité, pas un gate bloquant sur
+      # une CVE transitive apparue en dehors du périmètre de la PR.
+      - name: pnpm audit (prod, high+)
+        run: pnpm audit --prod --audit-level=high
 
   ci-success:
     name: CI success

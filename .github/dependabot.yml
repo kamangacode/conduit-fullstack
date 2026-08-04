@@ -1,0 +1,80 @@
+version: 2
+updates:
+  # ─── Dépendances npm du monorepo ────────────────────────────────────────
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 10
+    # Attendre que la version soit publiée depuis N jours avant d'ouvrir la PR :
+    # une version trop fraîche peut contenir une régression retirée quelques
+    # jours plus tard. Le délai croît avec le risque (patch < minor < major).
+    cooldown:
+      default-days: 7
+      semver-patch-days: 7
+      semver-minor-days: 14
+      semver-major-days: 30
+    groups:
+      # Prisma : CLI et client doivent rester à la même version.
+      prisma:
+        patterns: ["prisma", "@prisma/*"]
+      # NestJS : packages du framework, mis à jour ensemble.
+      nestjs:
+        patterns: ["@nestjs/*"]
+      # React et Next.js : couplés (Next impose sa fenêtre de versions React).
+      next-react:
+        patterns: ["next", "react", "react-dom", "@types/react", "@types/react-dom"]
+      # TanStack (Query côté web) — arrive en issue 6.
+      tanstack:
+        patterns: ["@tanstack/*"]
+      # Outillage qualité : regroupé pour éviter le bruit de N petites PRs.
+      tooling:
+        patterns:
+          ["@biomejs/*", "turbo", "knip", "dependency-cruiser", "lefthook", "typescript"]
+      # Tout le reste, en minor/patch groupé.
+      minor-and-patch:
+        update-types: [minor, patch]
+        exclude-patterns:
+          - "prisma"
+          - "@prisma/*"
+          - "@nestjs/*"
+          - "next"
+          - "react"
+          - "react-dom"
+          - "@types/react"
+          - "@types/react-dom"
+          - "@tanstack/*"
+    ignore:
+      # Majeurs bloqués sur les packages critiques : montée manuelle et réfléchie,
+      # jamais une PR automatique qui casserait le runtime.
+      - dependency-name: "prisma"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@prisma/client"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@nestjs/*"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "next"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "react"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "react-dom"
+        update-types: ["version-update:semver-major"]
+    labels:
+      - dependencies
+
+  # ─── Actions GitHub des workflows ───────────────────────────────────────
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    cooldown:
+      default-days: 7
+      semver-patch-days: 7
+      semver-minor-days: 14
+      semver-major-days: 30
+    labels:
+      - dependencies
+      - ci
