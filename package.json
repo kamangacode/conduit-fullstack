@@ -12,7 +12,9 @@
   "scripts": {
     "dev": "turbo run dev",
     "build": "turbo run build",
-    "lint": "turbo run lint",
+    "lint": "biome check .",
+    "lint:fix": "biome check --write .",
+    "format": "biome format --write .",
     "typecheck": "turbo run typecheck",
     "test": "turbo run test",
     "test:integration": "turbo run test:integration",
@@ -20,11 +22,17 @@
     "clean": "turbo run clean"
   },
   "devDependencies": {
+    "@biomejs/biome": "^2.5.0",
     "turbo": "^2.5.0",
     "typescript": "^5.7.3"
   },
   "pnpm": {
     "//": "pnpm 10 bloque par défaut les scripts de build post-install (sécurité supply-chain). On autorise explicitement les seules dépendances qui en ont légitimement besoin : Prisma télécharge ses moteurs de requête, sharp compile ses binaires natifs d'optimisation d'images.",
-    "onlyBuiltDependencies": ["@prisma/client", "@prisma/engines", "prisma", "sharp"]
+    "onlyBuiltDependencies": [
+      "@prisma/client",
+      "@prisma/engines",
+      "prisma",
+      "sharp"
+    ]
   }
 }
