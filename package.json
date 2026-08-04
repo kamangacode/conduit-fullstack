@@ -1,0 +1,26 @@
+{
+  "name": "conduit-fullstack",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Implémentation full-stack TypeScript de l'app Conduit (spec RealWorld) : monorepo api + web + shared.",
+  "license": "MIT",
+  "author": "kamangacode <herve@kamanga.fr>",
+  "packageManager": "pnpm@10.33.0",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "dev": "turbo run dev",
+    "build": "turbo run build",
+    "lint": "turbo run lint",
+    "typecheck": "turbo run typecheck",
+    "test": "turbo run test",
+    "test:integration": "turbo run test:integration",
+    "test:e2e": "turbo run test:e2e",
+    "clean": "turbo run clean"
+  },
+  "devDependencies": {
+    "turbo": "^2.5.0",
+    "typescript": "^5.7.3"
+  }
+}

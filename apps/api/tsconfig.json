@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json.schemastore.org/tsconfig",
+  "extends": "../../tsconfig.base.json",
+  "_comment": "NestJS s'appuie sur la métadonnée de décorateurs (emitDecoratorMetadata) pour l'injection de dépendances par type. C'est pourquoi le dev tourne sous ts-node (compilation tsc) et non sous le stripping TS natif de Node, qui n'émet pas cette métadonnée.",
+  "compilerOptions": {
+    "module": "commonjs",
+    "moduleResolution": "node",
+    "experimentalDecorators": true,
+    "emitDecoratorMetadata": true,
+    "target": "ES2022",
+    "outDir": "dist",
+    "baseUrl": "src",
+    "paths": { "@/*": ["*"] },
+    "types": ["node"],
+    "declaration": false,
+    "resolveJsonModule": true
+  },
+  "include": ["src/**/*.ts"],
+  "exclude": ["node_modules", "dist"]
+}

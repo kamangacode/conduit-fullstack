@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json.schemastore.org/tsconfig",
+  "display": "Base — options communes à tous les workspaces",
+  "_comment": "Base TypeScript stricte partagée. La strictness maximale (noUncheckedIndexedAccess, exactOptionalPropertyTypes, noImplicitOverride) est ajoutée en Phase 1 (item A8), pas ici : le durcissement progressif est un livrable éditorial à part entière.",
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022"],
+    "strict": true,
+    "skipLibCheck": true,
+    "esModuleInterop": true,
+    "forceConsistentCasingInFileNames": true,
+    "resolveJsonModule": true,
+    "declaration": true,
+    "sourceMap": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noFallthroughCasesInSwitch": true,
+    "noImplicitReturns": true
+  }
+}

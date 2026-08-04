@@ -1,0 +1,6 @@
+# Workspaces pnpm — topologie du monorepo Conduit.
+# Voir architecture/architecture.md §2 : `shared` ne dépend de personne ;
+# `api` et `web` en dépendent. Le modèle Conduit n'est écrit qu'une seule fois.
+packages:
+  - "apps/*"
+  - "packages/*"
