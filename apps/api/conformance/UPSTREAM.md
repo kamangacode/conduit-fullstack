@@ -59,8 +59,17 @@ d'un coup sur des assertions qu'on n'a pas écrites :
   équivalente par construction, aucune couverture supplémentaire.
 - L'**`openapi.yml`** officiel : il est le contrat d'entrée du dépôt
   `conduit-api-first`, pas de celui-ci (PRD §15.3).
-- Le script `run-api-tests-hurl.sh` amont : son `HOST` par défaut et l'exemple
-  de son README (`http://localhost:3000/api`) sont incohérents avec les fichiers
-  `.hurl`, qui écrivent déjà `{{host}}/api/…`. Nous appelons `hurl` directement
-  depuis [`scripts/test-conformance.sh`](../../../scripts/test-conformance.sh),
-  avec l'origine seule.
+- Le lanceur `run-hurl-tests.sh`, seul fichier non-`.hurl` du dossier amont : son
+  `HOST` par défaut et l'exemple de son README (`http://localhost:3000/api`) sont
+  incohérents avec les fichiers `.hurl`, qui écrivent déjà `{{host}}/api/…`. Nous
+  appelons `hurl` directement depuis
+  [`scripts/test-conformance.sh`](../../../scripts/test-conformance.sh), avec
+  l'origine seule.
+
+  Cette exclusion est **déclarée** dans `check-conformance-drift.sh` (liste
+  `NOT_VENDORED`) et annoncée à chaque run. Elle ne l'a pas toujours été : tant
+  que le contrôle ne listait que les `*.hurl`, l'omission tombait d'un glob et
+  n'avait été décidée par personne — et la même écriture laissait ajouter en
+  local n'importe quel fichier d'une autre extension sans être vue. Le passage à
+  la comparaison récursive, imposé par la suite e2e et son sous-dossier
+  `helpers/`, a rendu l'omission visible et donc discutable.

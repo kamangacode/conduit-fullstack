@@ -350,6 +350,77 @@ jobs:
         continue-on-error: true
         run: pnpm conformance:verify
 
+  e2e:
+    name: E2E (suite Playwright officielle — rapport)
+    runs-on: ubuntu-latest
+    needs: detect-changes
+    if: needs.detect-changes.outputs.code == 'true'
+    # **Ce job ne bloque pas, et son absence du `needs` de `ci-success` est
+    # délibérée** (REQ-CONF-002 AC-5, ADR 018). La suite pilote un navigateur réel
+    # à travers l'hydratation de Next : ses modes d'échec incluent des situations
+    # qui ne disent rien de la conformité (un `waitForURL` qui expire sur un
+    # runner chargé). Poser le gate avant d'avoir mesuré ce bruit, c'est choisir
+    # un seuil au jour 1 — et six mois plus tard, c'est le job qu'on désactive,
+    # emportant avec lui les échecs qui, eux, disaient quelque chose.
+    #
+    # La bascule en gate est inscrite au plan d'outillage comme item distinct :
+    # elle se fait après quelques runs réels, pas de mémoire.
+    services:
+      # Troisième base dédiée, distincte de `conduit_test` (intégration) et
+      # `conduit_conformance` (Hurl). Son nom doit contenir « e2e » : la garde du
+      # script refuse de vider une base qui ne s'annonce pas jetable.
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: conduit
+          POSTGRES_PASSWORD: conduit
+          POSTGRES_DB: conduit_e2e
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U conduit -d conduit_e2e"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      # `--with-deps` installe les bibliothèques système du navigateur, que le
+      # runner ne porte pas toutes. Le script les réinstallerait sans, et
+      # échouerait au lancement pour une raison sans rapport avec le front.
+      - name: Installer le navigateur Playwright
+        run: pnpm --filter @repo/web exec playwright install --with-deps chromium
+      # Le contrôle du contrôle, et il vient **avant** la suite : il vérifie que
+      # le harnais collecte réellement des tests et qu'il sait rougir. Sans lui,
+      # un `testDir` erroné rendrait « 0 test, code 0 » — le vert le plus creux
+      # qu'un dépôt puisse afficher, et celui qu'on croirait.
+      - name: Modes de défaillance du harnais e2e
+        continue-on-error: true
+        run: bash scripts/verify-e2e-gate.sh
+      - name: Suite e2e RealWorld (rapport)
+        continue-on-error: true
+        env:
+          E2E_DATABASE_URL: postgresql://conduit:conduit@localhost:5432/conduit_e2e?schema=public
+        run: pnpm conformance:e2e
+      # Les traces et captures d'écran sont ce qui rend un échec e2e
+      # diagnosticable sans reproduire le run : sans elles, le rapport se réduit
+      # à un nom de test et une ligne.
+      - name: Rapport Playwright (artefact)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: |
+            apps/web/playwright-report/
+            apps/web/test-results/
+          retention-days: 14
+          if-no-files-found: ignore
+
   build:
     name: Build
     runs-on: ubuntu-latest

@@ -30,6 +30,7 @@ elle porte la mécanique : gabarit, numérotation, statuts, vérification.
 | [015](015-prefetch-serveur-et-hydratation-des-listes.md) | Listes publiques : préchargement serveur et hydratation du cache client | Accepted | 2026-08-05 |
 | [016](016-suite-de-conformite-vendoree.md) | Suite de conformité RealWorld vendorée, avec contrôle de dérive | Accepted | 2026-08-05 |
 | [017](017-messages-du-contrat-dans-shared.md) | Les messages d'erreur du contrat vivent dans `packages/shared` | Accepted (amende 004) | 2026-08-05 |
+| [018](018-conformite-e2e-suite-officielle-vendoree.md) | Conformité e2e du front : suite Playwright officielle vendorée, en rapport avant d'être un gate | Accepted (étend 016) | 2026-08-06 |
 
 ## Écrire un ADR
 

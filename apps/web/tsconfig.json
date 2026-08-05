@@ -17,5 +17,6 @@
     "paths": { "@/*": ["./src/*"] }
   },
   "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts"],
-  "exclude": ["node_modules", ".next"]
+  "_excludeComment": "`conformance` porte la suite e2e officielle vendorée (ADR 018), qui ne s'édite jamais. La typechecker avec les réglages stricts de ce dépôt (noUncheckedIndexedAccess, exactOptionalPropertyTypes) créerait une pression pour corriger un fichier qu'on s'interdit de toucher — et la seule issue serait alors de relâcher les réglages pour tout le workspace. Playwright transpile lui-même ce qu'il exécute. `playwright.config.ts`, lui, est de nous et reste typechecké.",
+  "exclude": ["node_modules", ".next", "conformance"]
 }

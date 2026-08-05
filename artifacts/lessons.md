@@ -270,3 +270,48 @@ correctement (`pnpm clean`, qui supprime les deux), la suite passe.
 d'incrémentalité crée un état que **ni le poste de développement ni la CI ne
 connaissent**, et le diagnostic qu'on en tire porte sur un scénario qui n'existe
 pas. Le temps s'y perd à chercher un trou de graphe imaginaire.
+
+---
+
+## 2026-08-06 — Un filtre par extension fait passer une omission pour une décision
+
+**Contexte.** La suite e2e officielle (F7b) a un sous-dossier `helpers/`, là où la
+suite Hurl est plate. Le contrôle de dérive, écrit en F7a pour la seule suite
+Hurl, listait l'amont à plat et ne retenait que les `*.hurl`. Le généraliser aux
+deux suites imposait de passer à l'arbre git récursif.
+
+**Le symptôme, au premier run de la version récursive.** `DÉFAUT: la liste des
+fichiers diverge de l'amont — manquant en local : run-hurl-tests.sh`. Sur la
+suite API, celle qui était censée être sous contrôle depuis la veille.
+
+**La cause.** Le dossier amont contient 14 fichiers, dont un lanceur shell. Nous
+en avions vendoré 13 — le bon choix, et `UPSTREAM.md` l'explique. Mais ce choix
+n'était **écrit nulle part dans le contrôle** : il tombait du glob `*.hurl`. La
+conséquence est double, et la seconde moitié est la vraie.
+
+1. L'omission avait l'apparence d'une décision sans en être une. Personne ne
+   l'avait prise ; elle était un effet de bord.
+2. Le même glob laissait **ajouter en local n'importe quel fichier d'une autre
+   extension** sans que le contrôle le voie. Or ce contrôle existe pour une
+   seule raison : rendre détectable la retouche de la suite officielle.
+
+**Le corollaire, trouvé en tirant le fil.** `UPSTREAM.md` nommait ce lanceur
+`run-api-tests-hurl.sh`. Le fichier amont s'appelle `run-hurl-tests.sh`. Une
+affirmation fausse dans un document de provenance, écrite de mémoire, et qu'aucun
+contrôle n'était en position de contredire — exactement le motif consigné le
+2026-08-05 au sujet des messages « verbatim » de `user.errors.ts`.
+
+**Règle à appliquer.** Une exclusion se **déclare**, elle ne se déduit pas d'un
+filtre. Quand un contrôle compare un ensemble local à un ensemble amont, la
+comparaison porte sur **tout** l'ensemble, et ce qu'on choisit d'en retirer est
+une liste nommée, relue et annoncée à chaque exécution (`NOT_VENDORED` ici). Un
+glob qui filtre est indiscernable d'un glob qui oublie — et il ne se relit pas,
+puisqu'il n'a rien à dire.
+
+**Piège voisin rencontré dans le même changement.** `sort(1)` suit la locale et
+ignore la casse ; le `.sort()` de JavaScript compare des points de code.
+Comparer deux listes triées par l'un et par l'autre a rapporté `SELECTORS.md`
+simultanément « manquant en local » et « ajouté en local ». Un faux positif de
+cette forme, répété, apprend à ne plus lire la sortie du contrôle — ce qui coûte
+plus cher que l'absence de contrôle. Toute comparaison de listes entre deux
+langages fixe sa collation (`LC_ALL=C`).
