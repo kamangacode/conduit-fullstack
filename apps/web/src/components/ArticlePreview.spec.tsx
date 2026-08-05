@@ -165,6 +165,25 @@ describe('REQ-WEB-011 — aperçu d’article', () => {
     expect(favoriteButton()).toHaveClass('btn-outline-primary')
   })
 
+  it('AC-4: suit les props quand la liste est rafraîchie sans démontage', () => {
+    // Défaut trouvé en revue : l'état venait d'un `useState` initialisé une
+    // seule fois, donc il ne se resynchronisait jamais. Le `key` de la liste
+    // protège du changement de **liste**, pas du rafraîchissement de la
+    // **même** liste — or c'est ce que fait TanStack Query quand un autre
+    // lecteur a favorisé l'article entre-temps.
+    const { rerender, container } = renderPreview()
+    expect(container.querySelector('button')).toHaveTextContent('29')
+
+    rerender(
+      <SessionProvider fetchCurrentUser={async () => jake}>
+        <ArticlePreview article={{ ...article, favorited: true, favoritesCount: 30 }} />
+      </SessionProvider>
+    )
+
+    expect(container.querySelector('button')).toHaveTextContent('30')
+    expect(container.querySelector('button')).toHaveClass('btn-primary')
+  })
+
   it('AC-1: retombe sur l’avatar par défaut quand l’auteur n’a pas d’image', () => {
     const { container } = renderPreview()
 

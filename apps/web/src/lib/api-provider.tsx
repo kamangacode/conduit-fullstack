@@ -64,6 +64,24 @@ export function ApiProvider({ children }: { children: ReactNode }) {
             // refetch systématique au focus produirait surtout du bruit réseau.
             refetchOnWindowFocus: false,
             retry: 1,
+            /**
+             * **Sans ce réglage, le préchargement de l'ADR 015 ne sert à rien.**
+             *
+             * Le défaut de TanStack Query est `staleTime: 0` : les données
+             * transmises par `HydrationBoundary` sont donc considérées comme
+             * périmées à l'instant même où le composant monte, et `useQuery`
+             * refait aussitôt la requête que le serveur venait d'épargner. Le
+             * HTML initial restait complet — c'est pourquoi le défaut ne se
+             * voyait pas — mais l'économie d'aller-retour annoncée par l'ADR
+             * était fausse, et trois commentaires du dépôt l'affirmaient.
+             *
+             * Trente secondes : assez pour couvrir l'hydratation et une
+             * navigation immédiate, assez court pour qu'un retour sur la page
+             * quelques minutes plus tard revalide. Ce n'est pas un cache de
+             * fraîcheur — les mutations mettent l'affichage à jour depuis la
+             * réponse de l'API, sans attendre un refetch.
+             */
+            staleTime: 30_000,
           },
         },
       })

@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation'
 import { useState } from 'react'
 import { useApi } from '../lib/api-provider'
 import { avatarUrl } from '../lib/avatar'
+import { formatDate } from '../lib/format-date'
 import { useSession } from '../lib/session'
 
 /**
@@ -28,9 +29,31 @@ export interface ArticlePreviewProps {
   readonly article: ArticleSummary
 }
 
+/** Ce qu'une bascule de favori vient de changer, en attendant la liste à jour. */
+interface FavoriteOverride {
+  readonly slug: string
+  readonly favorited: boolean
+  readonly favoritesCount: number
+}
+
 export function ArticlePreview({ article }: ArticlePreviewProps) {
-  const [favorited, setFavorited] = useState(article.favorited)
-  const [favoritesCount, setFavoritesCount] = useState(article.favoritesCount)
+  // L'état de favori **dérive des props**, avec un écart local qui ne survit
+  // qu'à la mutation qui l'a produit.
+  //
+  // La version précédente copiait `article.favorited` dans un `useState` : elle
+  // ne se resynchronisait donc jamais quand la liste était rechargée avec des
+  // valeurs fraîches (un autre lecteur ayant favorisé entre-temps). Le
+  // `key={article.slug}` de la liste protège du changement de *liste*, pas du
+  // rafraîchissement de la *même* liste. Le remède est celui déjà appliqué au
+  // bouton de suivi : ne garder en local que ce que le serveur ne sait pas
+  // encore, et laisser les props gouverner le reste.
+  //
+  // L'écart porte le slug pour être invalidé si le composant est réutilisé pour
+  // un autre article sans démontage.
+  const [override, setOverride] = useState<FavoriteOverride | null>(null)
+  const applied = override?.slug === article.slug ? override : null
+  const favorited = applied?.favorited ?? article.favorited
+  const favoritesCount = applied?.favoritesCount ?? article.favoritesCount
 
   return (
     <div className="article-preview">
@@ -49,10 +72,7 @@ export function ArticlePreview({ article }: ArticlePreviewProps) {
           slug={article.slug}
           favorited={favorited}
           favoritesCount={favoritesCount}
-          onToggled={(next) => {
-            setFavorited(next.favorited)
-            setFavoritesCount(next.favoritesCount)
-          }}
+          onToggled={(next) => setOverride({ slug: article.slug, ...next })}
         />
       </div>
       <Link className="preview-link" href={`/article/${article.slug}`}>
@@ -69,23 +89,6 @@ export function ArticlePreview({ article }: ArticlePreviewProps) {
       </Link>
     </div>
   )
-}
-
-/**
- * Date affichée dans la méta.
- *
- * Le contrat transporte une chaîne ISO 8601 et non un `Date` : c'est la seule
- * forme sur laquelle l'API et le front s'accordent sans sérialiseur
- * intermédiaire. `en-US` est figé plutôt que déduit du navigateur — le rendu
- * serveur ne connaît pas la locale du lecteur, et laisser le format flotter
- * produirait une divergence d'hydratation à chaque visiteur non anglophone.
- */
-function formatDate(iso: string): string {
-  return new Date(iso).toLocaleDateString('en-US', {
-    month: 'long',
-    day: 'numeric',
-    year: 'numeric',
-  })
 }
 
 interface FavoriteButtonProps {

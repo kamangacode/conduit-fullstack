@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { type FormEvent, useState } from 'react'
 import { useApi } from '../lib/api-provider'
 import { avatarUrl } from '../lib/avatar'
+import { formatDate } from '../lib/format-date'
 import { useSession } from '../lib/session'
 import { ErrorMessages } from './ErrorMessages'
 
@@ -194,13 +195,4 @@ function CommentCard({
       </div>
     </div>
   )
-}
-
-/** Voir `ArticlePreview` : locale figée pour ne pas faire diverger l'hydratation. */
-function formatDate(iso: string): string {
-  return new Date(iso).toLocaleDateString('en-US', {
-    month: 'long',
-    day: 'numeric',
-    year: 'numeric',
-  })
 }

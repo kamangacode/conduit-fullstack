@@ -3,8 +3,8 @@ import { notFound } from 'next/navigation'
 import { ArticleBody } from '../../../components/ArticleBody'
 import { ArticleMeta } from '../../../components/ArticleMeta'
 import { CommentSection } from '../../../components/CommentSection'
-import { ApiError, createApiClient } from '../../../lib/api-client'
-import { API_BASE_URL } from '../../../lib/env'
+import { ApiError } from '../../../lib/api-client'
+import { createServerApiClient } from '../../../lib/server-api-client'
 
 /**
  * Page article (REQ-WEB-012, route `/article/:slug`).
@@ -27,14 +27,8 @@ import { API_BASE_URL } from '../../../lib/env'
  * un message faux, au moment où il coûte le plus cher au lecteur (AC-8).
  */
 async function fetchArticle(slug: string): Promise<Article | null> {
-  const client = createApiClient({
-    baseUrl: API_BASE_URL,
-    getToken: () => null,
-    fetchImpl: (input, init) => fetch(input, { ...init, cache: 'no-store' }),
-  })
-
   try {
-    return await client.getArticle(slug)
+    return await createServerApiClient().getArticle(slug)
   } catch (error) {
     if (error instanceof ApiError && error.status === 404) {
       return null
@@ -59,14 +53,8 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
  * l'essentiel. Le composant client reprendra la main pour toute évolution.
  */
 async function fetchComments(slug: string): Promise<Comment[]> {
-  const client = createApiClient({
-    baseUrl: API_BASE_URL,
-    getToken: () => null,
-    fetchImpl: (input, init) => fetch(input, { ...init, cache: 'no-store' }),
-  })
-
   try {
-    return await client.getComments(slug)
+    return await createServerApiClient().getComments(slug)
   } catch {
     return []
   }
@@ -120,7 +108,13 @@ export default async function Page({ params }: { params: Promise<{ slug: string 
         {/* Les commentaires sont chargés côté serveur — ils sont publics — puis
             confiés à un composant client qui les fait évoluer sans quitter la
             page (REQ-WEB-013). */}
-        <CommentSection slug={article.slug} initialComments={comments} />
+        {/* `key` sur le slug : la section copie ses commentaires dans un état
+            local, et App Router peut réconcilier la même instance en naviguant
+            d'un article à l'autre sur cette route dynamique. Sans elle, les
+            commentaires du précédent resteraient affichés. Aucun lien
+            article-à-article n'existe aujourd'hui — c'est justement le moment
+            de la poser, avant que le premier ne rende le défaut atteignable. */}
+        <CommentSection key={article.slug} slug={article.slug} initialComments={comments} />
       </div>
     </div>
   )

@@ -42,7 +42,16 @@ export function Pagination({
     <ul className="pagination">
       {Array.from({ length: pages }, (_, index) => index + 1).map((page) => (
         <li className={`page-item${page === currentPage ? ' active' : ''}`} key={page}>
-          <Link className="page-link" href={pageHref(pathname, searchParams, page)}>
+          {/* `aria-current` : la classe `active` marque la page courante pour
+              l'œil et pour le contrat de sélecteurs, mais elle ne dit rien à un
+              lecteur d'écran. L'écart au gabarit est de ceux que la rule 11
+              autorise — il n'ajoute ni classe ni nœud, donc la suite E2E n'y
+              voit rien. */}
+          <Link
+            aria-current={page === currentPage ? 'page' : undefined}
+            className="page-link"
+            href={pageHref(pathname, searchParams, page)}
+          >
             {page}
           </Link>
         </li>

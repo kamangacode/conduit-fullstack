@@ -4,11 +4,11 @@ import { notFound } from 'next/navigation'
 import { ArticlesToggle } from '../components/ArticlesToggle'
 import { FeedList } from '../components/FeedList'
 import { FollowButton } from '../components/FollowButton'
-import { ApiError, createApiClient } from '../lib/api-client'
+import { ApiError } from '../lib/api-client'
 import { avatarUrl } from '../lib/avatar'
-import { API_BASE_URL } from '../lib/env'
-import { type FeedKind, feedQueryKey, fetchFeed } from '../lib/feed-query'
+import { type FeedKind, prefetchFeed } from '../lib/feed-query'
 import { pageFromParam } from '../lib/pagination'
+import { createServerApiClient } from '../lib/server-api-client'
 
 /**
  * Page de profil (REQ-WEB-005 et REQ-WEB-015), partagée par
@@ -44,7 +44,7 @@ export async function ProfilePage({ username, tab, searchParams }: ProfilePagePr
   const feed: FeedKind = { kind: tab, username: profile.username }
 
   const queryClient = new QueryClient()
-  await prefetchArticles(queryClient, feed, page)
+  await prefetchFeed(queryClient, createServerApiClient(), { feed, page })
 
   return (
     <div className="profile-page">
@@ -89,40 +89,13 @@ export async function ProfilePage({ username, tab, searchParams }: ProfilePagePr
  */
 async function fetchProfile(username: string): Promise<Profile | null> {
   try {
-    return await client().getProfile(username)
+    return await createServerApiClient().getProfile(username)
   } catch (error) {
     if (error instanceof ApiError && error.status === 404) {
       return null
     }
     throw error
   }
-}
-
-/** Précharge la liste sans faire échouer la page si l'API est en rade (ADR 015). */
-async function prefetchArticles(
-  queryClient: QueryClient,
-  feed: FeedKind,
-  page: number
-): Promise<void> {
-  const api = client()
-
-  try {
-    await queryClient.prefetchQuery({
-      queryKey: feedQueryKey({ feed, page }),
-      queryFn: () => fetchFeed(api, { feed, page }),
-    })
-  } catch {
-    // Le client reprendra la requête et dira l'échec s'il persiste.
-  }
-}
-
-/** Client anonyme : le serveur n'a pas la session (ADR 012). */
-function client() {
-  return createApiClient({
-    baseUrl: API_BASE_URL,
-    getToken: () => null,
-    fetchImpl: (input, init) => fetch(input, { ...init, cache: 'no-store' }),
-  })
 }
 
 /** Chemin courant, que la pagination doit conserver — l'onglet en fait partie. */

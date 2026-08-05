@@ -1,6 +1,5 @@
 import Link from 'next/link'
-import { createApiClient } from '../lib/api-client'
-import { API_BASE_URL } from '../lib/env'
+import { createServerApiClient } from '../lib/server-api-client'
 
 /**
  * Barre latérale des tags populaires (REQ-WEB-009 AC-6), markup RealWorld.
@@ -41,18 +40,13 @@ export async function PopularTags() {
  * est accessoire et que le coût de l'échec — une page d'accueil entièrement
  * indisponible — est sans commune mesure avec celui de son absence.
  *
- * `cache: 'no-store'` : la liste bouge à chaque publication d'article, et une
- * version figée proposerait des tags qui ne mènent nulle part.
+ * L'anonymat du serveur et l'absence de cache HTTP viennent de
+ * `createServerApiClient` : la liste bouge à chaque publication d'article, et
+ * une version figée proposerait des tags qui ne mènent nulle part.
  */
 async function fetchTags(): Promise<readonly string[]> {
-  const client = createApiClient({
-    baseUrl: API_BASE_URL,
-    getToken: () => null,
-    fetchImpl: (input, init) => fetch(input, { ...init, cache: 'no-store' }),
-  })
-
   try {
-    return await client.getTags()
+    return await createServerApiClient().getTags()
   } catch {
     return []
   }

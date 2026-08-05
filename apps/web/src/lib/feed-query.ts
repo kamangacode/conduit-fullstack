@@ -1,4 +1,5 @@
 import type { ArticlesResponse } from '@repo/shared'
+import type { QueryClient } from '@tanstack/react-query'
 import type { ApiClient } from './api-client'
 import { offsetForPage } from './pagination'
 
@@ -113,5 +114,35 @@ function filterFor(feed: FeedKind): { tag?: string; author?: string; favorited?:
       return { favorited: feed.username }
     default:
       return {}
+  }
+}
+
+/**
+ * Précharge un flux dans le cache d'un `QueryClient` serveur ([ADR 015]).
+ *
+ * Écrit une fois plutôt que dans chaque page : la clé, la fonction de
+ * chargement **et** la politique d'échec sont les trois choses qui doivent
+ * rester identiques entre les pages pour que l'hydratation fonctionne. Deux
+ * copies suffisent à les faire diverger — un `staleTime` ajouté d'un côté, un
+ * log de l'autre — et le symptôme serait un cache manqué sur une page
+ * seulement, donc quasi indétectable en revue.
+ *
+ * L'erreur est **avalée délibérément** : le préchargement est une optimisation,
+ * pas une dépendance. Si l'API est en rade, la page se rend quand même et le
+ * composant client reprend la requête, puis affiche son propre message d'échec.
+ * La laisser remonter transformerait une lenteur d'API en page indisponible.
+ */
+export async function prefetchFeed(
+  queryClient: QueryClient,
+  client: ApiClient,
+  request: FeedRequest
+): Promise<void> {
+  try {
+    await queryClient.prefetchQuery({
+      queryKey: feedQueryKey(request),
+      queryFn: () => fetchFeed(client, request),
+    })
+  } catch {
+    // Le client reprendra la requête et dira l'échec s'il persiste.
   }
 }

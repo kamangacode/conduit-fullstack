@@ -2,10 +2,9 @@ import { dehydrate, HydrationBoundary, QueryClient } from '@tanstack/react-query
 import { FeedList } from '../components/FeedList'
 import { FeedToggle } from '../components/FeedToggle'
 import { PopularTags } from '../components/PopularTags'
-import { createApiClient } from '../lib/api-client'
-import { API_BASE_URL } from '../lib/env'
-import { feedQueryKey, fetchFeed, resolveFeed } from '../lib/feed-query'
+import { prefetchFeed, resolveFeed } from '../lib/feed-query'
 import { pageFromParam } from '../lib/pagination'
+import { createServerApiClient } from '../lib/server-api-client'
 
 /**
  * Page d'accueil (REQ-WEB-009), partagée par `/` et `/tag/:tag`.
@@ -36,7 +35,7 @@ export async function HomePage({ tag, searchParams }: HomePageProps) {
   const feed = resolveFeed({ tag, feedParam, isAuthenticated: false })
 
   const queryClient = new QueryClient()
-  await prefetchFeed(queryClient, feed, page)
+  await prefetchFeed(queryClient, createServerApiClient(), { feed, page })
 
   return (
     <div className="home-page">
@@ -68,35 +67,6 @@ export async function HomePage({ tag, searchParams }: HomePageProps) {
       </div>
     </div>
   )
-}
-
-/**
- * Précharge le flux, sans faire échouer la page si l'API est en rade.
- *
- * `prefetchQuery` n'émet volontairement pas d'erreur, mais l'appel réseau
- * sous-jacent peut lever : l'avaler ici laisse `FeedList` retomber sur son
- * propre chargement côté client et afficher son message d'échec, plutôt que de
- * rendre la page entièrement indisponible.
- */
-async function prefetchFeed(
-  queryClient: QueryClient,
-  feed: ReturnType<typeof resolveFeed>,
-  page: number
-): Promise<void> {
-  const client = createApiClient({
-    baseUrl: API_BASE_URL,
-    getToken: () => null,
-    fetchImpl: (input, init) => fetch(input, { ...init, cache: 'no-store' }),
-  })
-
-  try {
-    await queryClient.prefetchQuery({
-      queryKey: feedQueryKey({ feed, page }),
-      queryFn: () => fetchFeed(client, { feed, page }),
-    })
-  } catch {
-    // Le client reprendra la requête et dira l'échec s'il persiste.
-  }
 }
 
 /**

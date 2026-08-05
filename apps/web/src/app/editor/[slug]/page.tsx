@@ -1,7 +1,7 @@
 import { notFound } from 'next/navigation'
 import { ArticleEditor } from '../../../components/ArticleEditor'
-import { ApiError, createApiClient } from '../../../lib/api-client'
-import { API_BASE_URL } from '../../../lib/env'
+import { ApiError } from '../../../lib/api-client'
+import { createServerApiClient } from '../../../lib/server-api-client'
 
 /**
  * Route `/editor/:slug` — modification d'un article existant.
@@ -23,14 +23,8 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
 export default async function Page({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params
 
-  const client = createApiClient({
-    baseUrl: API_BASE_URL,
-    getToken: () => null,
-    fetchImpl: (input, init) => fetch(input, { ...init, cache: 'no-store' }),
-  })
-
   try {
-    const article = await client.getArticle(decodeURIComponent(slug))
+    const article = await createServerApiClient().getArticle(decodeURIComponent(slug))
     return <ArticleEditor article={article} />
   } catch (error) {
     // Un slug inconnu produit une vraie page introuvable ; toute autre erreur

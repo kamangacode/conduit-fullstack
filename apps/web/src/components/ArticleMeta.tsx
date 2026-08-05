@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation'
 import { useState } from 'react'
 import { useApi } from '../lib/api-provider'
 import { avatarUrl } from '../lib/avatar'
+import { formatDate } from '../lib/format-date'
 import { useSession } from '../lib/session'
 import { ErrorMessages } from './ErrorMessages'
 import { FollowButton } from './FollowButton'
@@ -57,15 +58,6 @@ export function ArticleMeta({ article }: ArticleMetaProps) {
       )}
     </div>
   )
-}
-
-/** Voir `ArticlePreview` : locale figée pour ne pas faire diverger l'hydratation. */
-function formatDate(iso: string): string {
-  return new Date(iso).toLocaleDateString('en-US', {
-    month: 'long',
-    day: 'numeric',
-    year: 'numeric',
-  })
 }
 
 /**
