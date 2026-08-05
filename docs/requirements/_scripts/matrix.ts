@@ -50,8 +50,17 @@ const IGNORED_DIRS = new Set(['node_modules', 'dist', '.next', '.turbo', 'covera
 const DESCRIBE_REQ = /describe\(\s*['"`](REQ-[A-Z]+-\d{3})/
 const IT_AC = /\bit\(\s*['"`](AC-\d+)\s*:/
 
-const SHELL_DESCRIBE_REQ = /#\s*describe\s+(REQ-[A-Z]+-\d{3})/
-const SHELL_IT_AC = /#\s*it\s+(AC-\d+)\s*:/
+/**
+ * Ancrées en début de ligne, et c'est ce qui les distingue d'une prose.
+ *
+ * Sans `^\s*`, un commentaire qui **mentionne** la convention — « ne pas
+ * confondre avec le marqueur `# describe REQ-ARCH-001` plus bas » — serait
+ * enregistré comme un marqueur réel. Le risque est latent tant qu'un seul
+ * script l'utilise ; il grandit à chaque script qui l'adopte, et un faux
+ * rattachement se lit dans la matrice comme une couverture acquise.
+ */
+const SHELL_DESCRIBE_REQ = /^\s*#\s*describe\s+(REQ-[A-Z]+-\d{3})/
+const SHELL_IT_AC = /^\s*#\s*it\s+(AC-\d+)\s*:/
 
 /**
  * Chaque forme ne s'applique qu'à son type de fichier, et ce cloisonnement est

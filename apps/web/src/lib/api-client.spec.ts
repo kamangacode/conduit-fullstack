@@ -388,7 +388,11 @@ describe('REQ-WEB-008 — client API des articles, commentaires et tags', () => 
     })
   })
 
-  it('AC-8: rend la liste des tags, déballée', async () => {
+  // Sans préfixe `AC-n:` : REQ-WEB-008 ne porte aucun critère sur `GET /tags`.
+  // Ce test empruntait `AC-8`, qui appartient aux commentaires — il s'ajoutait
+  // donc aux preuves de ce critère sans rien prouver de son `then:`. Même
+  // convention que les tests d'URL et d'enveloppe plus haut dans ce fichier.
+  it('rend la liste des tags, déballée', async () => {
     const fetchImpl = vi
       .fn()
       .mockResolvedValue(jsonResponse(200, { tags: ['dragons', 'training'] }))

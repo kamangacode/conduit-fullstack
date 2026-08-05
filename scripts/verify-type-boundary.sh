@@ -41,29 +41,86 @@ MODEL_REL="packages/shared/src/model/article.ts"
 MODEL_ABS="$REPO_ROOT/$MODEL_REL"
 BACKUP="$(mktemp -t verify-type-boundary-article-XXXXXX.ts)"
 TYPECHECK_LOG="$(mktemp -t verify-type-boundary-typecheck-XXXXXX.log)"
+LOCK_DIR="${TMPDIR:-/tmp}/verify-type-boundary.lock"
+
+# `mktemp` **crée** le fichier immédiatement, vide. Tester `[ -f "$BACKUP" ]`
+# dans le cleanup était donc vrai avant même que la sauvegarde n'existe : un
+# signal reçu entre la création du nom et la copie réelle faisait écraser le
+# modèle partagé par un fichier de zéro octet — une perte de données sur la
+# source de vérité du dépôt, provoquée par la vérification censée la protéger.
+# Le drapeau ne passe à `true` qu'après une copie réussie.
+BACKUP_READY=false
+LOCK_HELD=false
 
 # Champ réellement consommé des deux côtés, et son remplaçant incompatible.
 FIELD="favoritesCount"
 BROKEN_FIELD="favoritesCountRenamedByVerification"
 
 cleanup() {
-  # Restaure le modèle quoi qu'il arrive — succès, échec ou interruption.
-  #
-  # Le `dist/` de `shared` est reconstruit ensuite : les deux applications
-  # consomment le paquet compilé, pas ses sources. Restaurer la source sans
-  # reconstruire laisserait des déclarations cassées dans `node_modules`, et le
-  # dépôt échouerait au typecheck suivant pour une raison invisible dans `git
-  # status` — le pire état dans lequel abandonner une machine.
-  if [ -f "$BACKUP" ]; then
-    cp "$BACKUP" "$MODEL_ABS"
-    rm -f "$BACKUP"
-    pnpm --filter @repo/shared build > /dev/null 2>&1 || true
-  fi
+  # Le log part **en premier** : le rebuild ci-dessous peut être long, et un
+  # `SIGKILL` après le délai de grâce d'un runner tuerait le trap avant la
+  # dernière ligne, laissant le fichier orphelin.
   rm -f "$TYPECHECK_LOG"
+
+  if [ "$BACKUP_READY" = true ]; then
+    cp "$BACKUP" "$MODEL_ABS"
+
+    # Le `dist/` de `shared` est reconstruit : les deux applications consomment
+    # le paquet compilé, pas ses sources. Restaurer la source sans reconstruire
+    # laisse des déclarations cassées dans `node_modules`, invisibles dans `git
+    # status` puisque `dist/` est ignoré — le pire état dans lequel abandonner
+    # une machine, et il a été observé en conditions réelles.
+    #
+    # L'échec n'est plus avalé. Il ne fait pas échouer le trap — on est peut-être
+    # déjà en train de mourir d'un signal — mais il **se voit**, avec la commande
+    # exacte pour réparer. Un `|| true` nu rendait les deux cas (pas eu le temps,
+    # a échoué) indiscernables et silencieux.
+    if ! pnpm --filter @repo/shared build > /dev/null 2>&1; then
+      echo "ERREUR: dist/ de @repo/shared non reconstruit — le dépôt peut être cassé" >&2
+      echo "        sans que git status ne le montre. Réparer avec :" >&2
+      echo "        pnpm --filter @repo/shared build" >&2
+    fi
+  fi
+
+  rm -f "$BACKUP"
+  if [ "$LOCK_HELD" = true ]; then
+    rm -rf "$LOCK_DIR"
+  fi
 }
 trap cleanup EXIT
 
 cd "$REPO_ROOT"
+
+# `mkdir` est atomique sur POSIX : c'est le verrou le plus simple qui ferme la
+# course. Deux exécutions simultanées — un `git push` relancé pendant qu'un
+# pre-push tourne encore — muteraient le même fichier en place, et la
+# restauration de l'une écraserait le sabotage de l'autre.
+#
+# L'auto-test de la phase 0 se réinvoque : il saute le verrou, sinon il se
+# bloquerait lui-même.
+if [ -z "${VERIFY_TYPE_BOUNDARY_FORCE_FAILURE:-}" ]; then
+  if ! mkdir "$LOCK_DIR" 2>/dev/null; then
+    # Verrou **périmé** : un run tué par `SIGKILL` n'exécute aucun trap, donc
+    # ne libère rien. Sans cette reprise, un seul crash bloquerait tous les
+    # pushs suivants et le premier réflexe serait de retirer le verrou du
+    # script — c'est-à-dire de supprimer la protection à cause de sa gêne.
+    # Le PID écrit dedans permet de distinguer « un autre run travaille » de
+    # « un run est mort en route ».
+    stale_pid="$(cat "$LOCK_DIR/pid" 2>/dev/null || true)"
+    if [ -n "$stale_pid" ] && kill -0 "$stale_pid" 2>/dev/null; then
+      echo "ERROR: une autre exécution de cette vérification est en cours (PID $stale_pid)." >&2
+      exit 1
+    fi
+    echo "note: verrou périmé (PID ${stale_pid:-inconnu} absent) — reprise." >&2
+    rm -rf "$LOCK_DIR"
+    if ! mkdir "$LOCK_DIR" 2>/dev/null; then
+      echo "ERROR: impossible de prendre le verrou : $LOCK_DIR" >&2
+      exit 1
+    fi
+  fi
+  echo "$$" > "$LOCK_DIR/pid"
+  LOCK_HELD=true
+fi
 
 if [ ! -f "$MODEL_ABS" ]; then
   echo "ERROR: modèle partagé introuvable : $MODEL_REL" >&2
@@ -71,6 +128,7 @@ if [ ! -f "$MODEL_ABS" ]; then
 fi
 
 cp "$MODEL_ABS" "$BACKUP"
+BACKUP_READY=true
 
 # Garde-fou : si le champ n'existe plus (renommé légitimement), le script ne doit
 # pas passer au vert en ne cassant rien. Il doit dire que sa cible a bougé.
@@ -79,6 +137,31 @@ if ! grep -q "  $FIELD:" "$MODEL_ABS"; then
   echo "       Choisir un autre champ consommé par apps/api ET apps/web." >&2
   exit 1
 fi
+
+# Chemin d'auto-test : sabote puis meurt, pour que l'appelant vérifie que le
+# `trap` a bien restauré. Placé après la sauvegarde et avant toute assertion,
+# c'est-à-dire exactement là où une interruption réelle serait la plus
+# destructrice.
+if [ -n "${VERIFY_TYPE_BOUNDARY_FORCE_FAILURE:-}" ]; then
+  sed "s/  $FIELD:/  $BROKEN_FIELD:/" "$BACKUP" > "$MODEL_ABS"
+  exit 1
+fi
+
+# it AC-4: la restauration tient même quand la vérification échoue en cours de route
+echo "phase 0 — résilience : un échec en cours de route doit laisser le dépôt intact"
+# Le `trap` est le mécanisme qui répond à AC-4, et il n'était éprouvé par rien :
+# les phases suivantes ne passent jamais par un chemin d'échec, donc supprimer le
+# trap ne faisait rougir aucune assertion. On force donc un vrai échec, dans une
+# vraie invocation, sur le vrai fichier.
+BOUNDARY_BEFORE="$(cat "$MODEL_ABS")"
+VERIFY_TYPE_BOUNDARY_FORCE_FAILURE=1 bash "$0" > /dev/null 2>&1 || true
+
+if [ "$(cat "$MODEL_ABS")" != "$BOUNDARY_BEFORE" ]; then
+  echo "ERROR: après un échec en cours de route, le modèle partagé n'a PAS été restauré." >&2
+  echo "       Le trap de nettoyage ne tient pas sa promesse (REQ-ARCH-001 AC-4)." >&2
+  exit 1
+fi
+echo "ok phase 0 : le modèle est intact après un échec provoqué."
 
 # it AC-3: le modèle intact laisse compiler les trois workspaces
 echo "phase 1 — état sain : le typecheck doit passer"
@@ -157,7 +240,6 @@ assert_fails "@repo/web" "apps/web"
 
 echo "ok phase 2 : les deux applications échouent, chacune en citant ses propres fichiers."
 
-# it AC-4: la vérification restaure le dépôt, sans résidu
 echo "phase 3 — restauration : le typecheck doit repasser"
 cp "$BACKUP" "$MODEL_ABS"
 pnpm --filter @repo/shared build > /dev/null 2>&1

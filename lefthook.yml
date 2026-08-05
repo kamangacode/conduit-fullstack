@@ -129,4 +129,15 @@ pre-push:
       # compris en cas d'échec : les applications consomment le paquet compilé,
       # et le laisser cassé rendrait le dépôt inutilisable sans que `git status`
       # ne montre quoi que ce soit.
+      #
+      # `glob` restreint la tâche aux workspaces qu'elle peut prouver, comme le
+      # filtre `code` de `detect-changes` le fait en CI. Sans lui, le local
+      # était plus large que le distant — un push qui ne touche qu'un ADR payait
+      # une vérification qui n'avait rien à vérifier, et l'en-tête de `ci.yml`
+      # revendique pourtant que la CI est le miroir des garde-fous locaux.
+      glob:
+        - 'packages/shared/**'
+        - 'apps/api/**'
+        - 'apps/web/**'
+        - 'scripts/verify-type-boundary.sh'
       run: bash scripts/verify-type-boundary.sh
