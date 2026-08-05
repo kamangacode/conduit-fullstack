@@ -1,4 +1,6 @@
 import type { ReactNode } from 'react'
+import { Navbar } from '../components/Navbar'
+import { ApiProvider } from '../lib/api-provider'
 
 export const metadata = {
   title: 'Conduit',
@@ -6,15 +8,33 @@ export const metadata = {
 }
 
 /**
- * Coquille applicative (Phase 0). Le shell RealWorld complet — navbar
- * (.navbar/.navbar-brand/.nav-link) et footer — arrive avec l'auth (issue 5)
- * et les pages articles (issue 6), conformément au markup de référence
- * RealWorld (voir .claude/rules/11-design-realworld.md).
+ * Coquille applicative, markup RealWorld (rule 11).
+ *
+ * Le layout reste un **Server Component** : seuls les fournisseurs et la barre
+ * de navigation sont clients. C'est la frontière de l'ADR 012 appliquée à la
+ * racine — le squelette de page est rendu côté serveur, et seul ce qui dépend
+ * du lecteur bascule côté client.
  */
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="en">
-      <body>{children}</body>
+      <body>
+        <ApiProvider>
+          <Navbar />
+          {children}
+          <footer>
+            <div className="container">
+              <a href="/" className="logo-font">
+                conduit
+              </a>
+              <span className="attribution">
+                An interactive learning project from <a href="https://thinkster.io">Thinkster</a>.
+                Code &amp; design licensed under MIT.
+              </span>
+            </div>
+          </footer>
+        </ApiProvider>
+      </body>
     </html>
   )
 }
