@@ -54,7 +54,7 @@ implementation:
     - apps/web/src/components/AuthForm.spec.tsx
     - apps/web/src/components/SettingsForm.spec.tsx
     - apps/web/src/components/Navbar.spec.tsx
-    - "apps/web/src/app/profile/[username]/page.spec.tsx"
+    - apps/web/src/app/profile-page.spec.tsx
 related:
   issues: [5]
   requirements:

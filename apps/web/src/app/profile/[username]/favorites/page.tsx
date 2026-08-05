@@ -1,14 +1,15 @@
-import { ProfilePage } from '../../profile-page'
+import { ProfilePage } from '../../../profile-page'
 
 /**
- * Route `/profile/:username` — articles publiés par ce compte.
+ * Route `/profile/:username/favorites` — articles favorisés par ce compte.
  *
- * L'écran vit dans `profile-page.tsx`, partagé avec l'onglet des favoris : les
- * deux routes n'en diffèrent que par le filtre envoyé à l'API.
+ * Même écran que `/profile/:username`, au filtre près. Le contrat de sélecteurs
+ * E2E décrit cette route explicitement : elle doit exister comme URL, pas
+ * seulement comme état d'un onglet.
  */
 export async function generateMetadata({ params }: { params: Promise<{ username: string }> }) {
   const { username } = await params
-  return { title: `@${decodeURIComponent(username)} — Conduit` }
+  return { title: `@${decodeURIComponent(username)} — Favorited — Conduit` }
 }
 
 export default async function Page({
@@ -23,7 +24,7 @@ export default async function Page({
   return (
     <ProfilePage
       username={decodeURIComponent(username)}
-      tab="author"
+      tab="favorited"
       searchParams={await searchParams}
     />
   )

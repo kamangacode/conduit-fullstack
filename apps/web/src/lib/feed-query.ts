@@ -13,8 +13,20 @@ import { offsetForPage } from './pagination'
  * pour l'expliquer.
  */
 
-/** Les trois flux que la page d'accueil sait afficher (templates.md §Home). */
-export type FeedKind = { kind: 'global' } | { kind: 'following' } | { kind: 'tag'; tag: string }
+/**
+ * Les flux d'articles que l'application sait afficher.
+ *
+ * Les trois premiers sont ceux de l'accueil (templates.md §Home) ; les deux
+ * derniers ceux du profil. Un seul type pour les cinq, parce qu'ils ne diffèrent
+ * que par le filtre envoyé — en faire deux familles justifierait deux
+ * implémentations de liste, ce que l'ADR 015 a écarté.
+ */
+export type FeedKind =
+  | { kind: 'global' }
+  | { kind: 'following' }
+  | { kind: 'tag'; tag: string }
+  | { kind: 'author'; username: string }
+  | { kind: 'favorited'; username: string }
 
 export interface FeedRequest {
   readonly feed: FeedKind
@@ -78,8 +90,28 @@ export function fetchFeed(
     return client.getFeed({ offset })
   }
 
-  return client.listArticles({
-    offset,
-    ...(feed.kind === 'tag' ? { tag: feed.tag } : {}),
-  })
+  return client.listArticles({ offset, ...filterFor(feed) })
+}
+
+/**
+ * Filtre de liste correspondant au flux.
+ *
+ * `author` et `favorited` prennent tous deux un **username** : ils sont donc
+ * interchangeables sans erreur de type, et les intervertir produirait une
+ * réponse parfaitement bien formée — la page « mes articles » afficherait ceux
+ * que le compte a favorisés, c'est-à-dire ceux d'autres personnes. Rien ne
+ * planterait ; l'erreur ne se verrait qu'en lisant le contenu. D'où cette
+ * correspondance écrite une seule fois, à un seul endroit.
+ */
+function filterFor(feed: FeedKind): { tag?: string; author?: string; favorited?: string } {
+  switch (feed.kind) {
+    case 'tag':
+      return { tag: feed.tag }
+    case 'author':
+      return { author: feed.username }
+    case 'favorited':
+      return { favorited: feed.username }
+    default:
+      return {}
+  }
 }

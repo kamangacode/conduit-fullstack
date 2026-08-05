@@ -37,7 +37,7 @@ implementation:
     - apps/web/src/app/profile/[username]/page.tsx
   tests:
     - apps/web/src/components/FollowButton.spec.tsx
-    - "apps/web/src/app/profile/[username]/page.spec.tsx"
+    - apps/web/src/app/profile-page.spec.tsx
 related:
   issues: [5]
   requirements:
