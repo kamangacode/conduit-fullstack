@@ -3,7 +3,7 @@ id: REQ-WEB-011
 title: Rendre un aperçu d'article et sa bascule de favori dans une liste
 type: functional
 domain: web
-status: approved
+status: implemented
 priority: must
 source: "PRD §7.3 (favoris), §8 (format d'article), règle R-5 ; templates.md §Home (`.article-preview`) ; contrat de sélecteurs E2E (états de bouton)"
 acceptance_criteria:
@@ -36,8 +36,11 @@ acceptance_criteria:
     when: "il est rendu"
     then: "la liste de tags est simplement vide, sans élément résiduel ni erreur"
 implementation:
-  files: []
-  tests: []
+  files:
+    - apps/web/src/components/ArticlePreview.tsx
+    - apps/web/src/lib/avatar.ts
+  tests:
+    - apps/web/src/components/ArticlePreview.spec.tsx
 related:
   issues: [6]
   requirements:
