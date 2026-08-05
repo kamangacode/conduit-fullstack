@@ -68,8 +68,15 @@ model Article {
 }
 
 /// Commentaire attaché à un article.
+///
+/// Seule entité du modèle dont l'identifiant n'est pas un UUID : le contrat
+/// officiel le déclare `type: integer` et l'expose dans l'URL de suppression
+/// (`DELETE /api/articles/:slug/comments/:id`). La persistance s'aligne donc sur
+/// le contrat plutôt que l'inverse (ADR 004). Les identifiants deviennent
+/// énumérables, ce qui est sans conséquence ici : les commentaires sont publics
+/// en lecture, et l'écriture reste gardée par la règle R-6.
 model Comment {
-  id        String   @id @default(uuid()) @db.Uuid
+  id        Int      @id @default(autoincrement())
   body      String
   articleId String   @db.Uuid
   authorId  String   @db.Uuid
