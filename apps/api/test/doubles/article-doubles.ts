@@ -1,5 +1,5 @@
 import type { Article, ArticleSummary } from '@repo/shared'
-import { type ArticleChanges, ArticleEntity, type ArticleProps } from '@/domain/article/article'
+import { ArticleEntity, type ArticleProps } from '@/domain/article/article'
 import { ArticleNotFoundError } from '@/domain/article/article.errors'
 import type {
   ArticleFilters,
@@ -96,25 +96,26 @@ export class InMemoryArticleRepository implements ArticleRepository {
     return ArticleEntity.fromProps(props)
   }
 
-  async update(id: string, authorId: string, changes: ArticleChanges): Promise<ArticleEntity> {
-    const current = this.articles.get(id)
+  async update(authorId: string, article: ArticleEntity): Promise<ArticleEntity> {
+    const current = this.articles.get(article.id)
     if (!current || current.authorId !== authorId) {
       throw new ArticleNotFoundError()
     }
 
-    const updated = ArticleEntity.fromProps(current).withChanges(changes)
     const props: ArticleProps = {
-      id: updated.id,
-      slug: updated.slug.equals(current.slug) ? current.slug : this.resolveFreeSlug(updated.slug),
-      title: updated.title,
-      description: updated.description,
-      body: updated.body,
-      tagList: updated.tagList,
-      authorId: updated.authorId,
-      createdAt: updated.createdAt,
+      id: article.id,
+      // Le slug vient de l'entité — c'est elle qui a décidé s'il devait changer.
+      // La doublure ne fait que reproduire la résolution d'unicité de la base.
+      slug: article.slug.equals(current.slug) ? current.slug : this.resolveFreeSlug(article.slug),
+      title: article.title,
+      description: article.description,
+      body: article.body,
+      tagList: article.tagList,
+      authorId: current.authorId,
+      createdAt: current.createdAt,
       updatedAt: new Date('2016-02-18T04:00:00.000Z'),
     }
-    this.articles.set(id, props)
+    this.articles.set(article.id, props)
     return ArticleEntity.fromProps(props)
   }
 

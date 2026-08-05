@@ -1,4 +1,4 @@
-import type { ArticleChanges, ArticleEntity } from '../article'
+import type { ArticleEntity } from '../article'
 import type { Slug } from '../slug'
 
 /**
@@ -47,15 +47,25 @@ export interface ArticleRepository {
   create(article: NewArticle): Promise<ArticleEntity>
 
   /**
-   * Applique une modification déjà validée par le domaine.
+   * Persiste l'**état déjà calculé par le domaine**, `slug` compris.
    *
-   * L'`authorId` est un **paramètre de la requête**, pas un contrôle applicatif
-   * préalable : l'adapter filtre par propriétaire dans le `WHERE` (rule 19,
-   * anti-IDOR), ce qui ne laisse aucune fenêtre entre la lecture et l'écriture.
+   * La signature prend une entité et non un `ArticleChanges`, et c'est la
+   * correction d'un défaut réel : avec un jeu de modifications, l'adapter
+   * n'écrivait que les colonnes transmises par le client et le **slug régénéré
+   * restait à terre**. Un article renommé gardait son ancienne URL, en
+   * contradiction avec R-1 et la spec. Le slug n'étant jamais un champ client,
+   * il ne pouvait pas voyager dans `ArticleChanges` ; il voyage donc dans
+   * l'entité, seule à savoir s'il devait changer.
+   *
+   * L'`authorId` reste un **paramètre distinct** de l'entité : c'est l'identité
+   * de l'appelant, qui alimente le filtrage par propriétaire dans le `WHERE`
+   * (rule 19, anti-IDOR). Lire l'auteur depuis l'entité — donc depuis la ligne
+   * relue — reviendrait à comparer une valeur avec elle-même, et le filtre ne
+   * protégerait plus rien.
    *
    * @throws ArticleNotFoundError si aucun article ne correspond au couple.
    */
-  update(id: string, authorId: string, changes: ArticleChanges): Promise<ArticleEntity>
+  update(authorId: string, article: ArticleEntity): Promise<ArticleEntity>
 
   /**
    * Supprime l'article et, par cascade, ses commentaires et ses favoris

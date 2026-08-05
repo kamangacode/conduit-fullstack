@@ -51,10 +51,16 @@ export class UpdateArticleUseCase {
     }
     current.assertEditableBy(input.userId)
 
-    const updated = await this.articles.update(current.id, input.userId, {
+    // C'est l'**entité** qui décide du nouveau slug : elle seule sait si le
+    // titre a réellement changé (REQ-ARTICLE-005 AC-2 et AC-3). Le repository
+    // reçoit donc l'état calculé, pas le jeu de modifications — sans quoi le
+    // slug régénéré ne serait jamais persisté.
+    const next = current.withChanges({
       ...input.changes,
       ...(input.changes.tagList ? { tagList: [...new Set(input.changes.tagList)] } : {}),
     })
+
+    const updated = await this.articles.update(input.userId, next)
 
     const article = await this.query.findBySlug(updated.slug, input.userId)
     if (!article) {

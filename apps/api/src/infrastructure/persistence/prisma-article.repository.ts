@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common'
 import { Prisma } from '@prisma/client'
-import { type ArticleChanges, ArticleEntity } from '../../domain/article/article'
+import { ArticleEntity } from '../../domain/article/article'
 import { ArticleNotFoundError } from '../../domain/article/article.errors'
 import type {
   ArticleRepository,
@@ -98,37 +98,49 @@ export class PrismaArticleRepository implements ArticleRepository {
     throw new Error(`slug resolution exhausted after ${MAX_SLUG_ATTEMPTS} attempts`)
   }
 
-  async update(id: string, authorId: string, changes: ArticleChanges): Promise<ArticleEntity> {
-    try {
-      const row = await this.prisma.article.update({
-        // `authorId` dans le `where`, jamais dans un contrôle applicatif après
-        // lecture (rule 19). Une ligne qui n'appartient pas à l'appelant ne
-        // correspond simplement à rien, et Prisma lève P2025.
-        where: { id, authorId },
-        data: {
-          ...(changes.title === undefined ? {} : { title: changes.title }),
-          ...(changes.description === undefined ? {} : { description: changes.description }),
-          ...(changes.body === undefined ? {} : { body: changes.body }),
-          ...(changes.tagList === undefined
-            ? {}
-            : {
-                // `set: []` d'abord : la liste transmise **remplace** la
-                // précédente, elle ne s'y ajoute pas.
-                tags: {
-                  set: [],
-                  connectOrCreate: changes.tagList.map((name) => ({
-                    where: { name },
-                    create: { name },
-                  })),
-                },
-              }),
-        },
-        include: articleInclude,
-      })
-      return toEntity(row)
-    } catch (error) {
-      throw translateMissingArticle(error)
+  async update(authorId: string, article: ArticleEntity): Promise<ArticleEntity> {
+    // Le slug fait partie de l'état écrit : c'est l'entité qui l'a régénéré si
+    // le titre a changé (R-1). L'omettre laissait l'article renommé sous son
+    // ancienne URL — le défaut que la lane d'intégration a révélé.
+    //
+    // Il peut donc entrer en collision, exactement comme à la création, et se
+    // résout par la même mécanique : tenter, puis suffixer sur refus (ADR 010).
+    for (let attempt = 1; attempt <= MAX_SLUG_ATTEMPTS; attempt += 1) {
+      const candidate = attempt === 1 ? article.slug : article.slug.withSuffix(attempt)
+
+      try {
+        const row = await this.prisma.article.update({
+          // `authorId` dans le `where`, jamais dans un contrôle applicatif après
+          // lecture (rule 19). Une ligne qui n'appartient pas à l'appelant ne
+          // correspond simplement à rien, et Prisma lève P2025.
+          where: { id: article.id, authorId },
+          data: {
+            slug: candidate.value,
+            title: article.title,
+            description: article.description,
+            body: article.body,
+            // `set: []` d'abord : la liste **remplace** la précédente, elle ne
+            // s'y ajoute pas.
+            tags: {
+              set: [],
+              connectOrCreate: article.tagList.map((name) => ({
+                where: { name },
+                create: { name },
+              })),
+            },
+          },
+          include: articleInclude,
+        })
+        return toEntity(row)
+      } catch (error) {
+        if (isSlugConflict(error)) {
+          continue
+        }
+        throw translateMissingArticle(error)
+      }
     }
+
+    throw new Error(`slug resolution exhausted after ${MAX_SLUG_ATTEMPTS} attempts`)
   }
 
   async delete(id: string, authorId: string): Promise<void> {
