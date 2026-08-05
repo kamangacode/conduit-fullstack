@@ -256,12 +256,24 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - name: Client Prisma
-        run: pnpm --filter @repo/api exec prisma generate
+      # Passe par turbo, et non par `bash scripts/test-integration.sh` : c'est le
+      # graphe qui doit fournir les prérequis. `test:integration` y déclare
+      # `dependsOn: ["^build", "db:generate"]`, donc le client Prisma ET le build
+      # de `@repo/shared` sont produits avant la suite.
+      #
+      # Appeler le script directement les contournait tous les deux. Le client
+      # Prisma était compensé par une étape manuelle ; le build de `@repo/shared`
+      # ne l'était par rien, et la panne est restée invisible tant qu'aucune spec
+      # d'intégration n'importait ce paquet. La première qui l'a fait a échoué sur
+      # `Failed to resolve entry for package "@repo/shared"` — alors que tout
+      # passait en local, où `dist/` traînait d'un build antérieur.
+      #
+      # Même leçon que pour `db:generate` : une étape ajoutée au job répare un
+      # chemin et laisse ses frères ouverts, le graphe les répare tous.
       - name: Tests d'intégration (migrations + Vitest + purge)
         env:
           TEST_DATABASE_URL: postgresql://conduit:conduit@localhost:5432/conduit_test?schema=public
-        run: bash scripts/test-integration.sh
+        run: pnpm test:integration
 
   build:
     name: Build

@@ -3,8 +3,13 @@ import type { INestApplication } from '@nestjs/common'
 /**
  * Préfixe de toutes les routes du contrat Conduit (PRD §7 : « Base URL :
  * `/api` »).
+ *
+ * Non exporté : `applyHttpConventions` est le seul point d'entrée, et c'est
+ * volontaire — un appelant qui lirait la constante pour reconstruire les chemins
+ * de son côté recréerait exactement la divergence que cette fonction existe pour
+ * fermer.
  */
-export const API_PREFIX = 'api'
+const API_PREFIX = 'api'
 
 /**
  * Chemins servis **hors** préfixe.

@@ -15,8 +15,13 @@ import type { ZodType } from 'zod'
  * La conséquence qui compte : **les règles de validation ne sont écrites qu'une
  * fois**, dans `packages/shared`, et le front applique les mêmes. Un message
  * affiché sous un champ de formulaire est le message que l'API aurait produit.
+ *
+ * Non exportée : tous les corps du contrat sont enveloppés (`{ user: … }`), donc
+ * les contrôleurs passent par `zodEnvelope`. Exporter cette classe offrirait un
+ * second chemin, qui produirait des clés d'erreur préfixées (`user.email`) sans
+ * que rien ne le signale.
  */
-export class ZodValidationPipe<T> implements PipeTransform<unknown, T> {
+class ZodValidationPipe<T> implements PipeTransform<unknown, T> {
   constructor(private readonly schema: ZodType<T>) {}
 
   transform(value: unknown): T {
