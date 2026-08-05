@@ -1,4 +1,4 @@
-import type { Profile } from '@repo/shared'
+import type { Profile, User } from '@repo/shared'
 
 /**
  * État persisté d'un compte, tel que le domaine le manipule.
@@ -127,6 +127,30 @@ export class UserEntity {
       bio: this.props.bio,
       image: this.props.image,
       following,
+    }
+  }
+
+  /**
+   * Projection **privée** du compte, renvoyée par les seuls endpoints
+   * d'authentification (PRD §8, §9).
+   *
+   * Contrairement à `toProfile`, elle porte l'email — c'est sa raison d'être. Elle
+   * ne porte en revanche **jamais** `passwordHash` (règle R-9), et l'énumération
+   * champ par champ est ici encore ce qui le garantit : c'est la projection la
+   * plus proche de l'état complet, donc celle où un étalement serait le plus
+   * tentant et le plus coûteux.
+   *
+   * Le jeton est un paramètre parce qu'il n'appartient pas au compte : il est
+   * émis par un service d'infrastructure, a une durée de vie propre, et deux
+   * réponses successives pour le même compte en portent deux différents.
+   */
+  toUser(token: string): User {
+    return {
+      email: this.props.email,
+      token,
+      username: this.props.username,
+      bio: this.props.bio,
+      image: this.props.image,
     }
   }
 }

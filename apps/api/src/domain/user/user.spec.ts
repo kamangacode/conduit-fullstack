@@ -63,6 +63,30 @@ describe('REQ-PROFILE-002 — projection publique du compte', () => {
   })
 })
 
+describe('REQ-USER-001 — projection privée du compte authentifié', () => {
+  it('AC-1: porte email, token, username, bio et image sous la forme du contrat', () => {
+    const user = aUser().toUser('jwt.token.here')
+
+    expect(Object.keys(user).sort()).toEqual(['bio', 'email', 'image', 'token', 'username'])
+    expect(user.token).toBe('jwt.token.here')
+    expect(user.email).toBe(baseProps.email)
+  })
+
+  it('AC-2: ne transporte jamais le condensat du mot de passe (R-9)', () => {
+    // La projection privée est la plus proche de l'état complet, donc celle où
+    // un `...this.props` serait le plus tentant — et le plus coûteux.
+    const serialized = JSON.stringify(aUser().toUser('jwt.token.here'))
+
+    expect(serialized).not.toContain(baseProps.passwordHash)
+    expect(serialized).not.toContain('passwordHash')
+  })
+
+  it('AC-1: n’expose pas l’identifiant interne du compte', () => {
+    // L'identité publique est le username (PRD §7.2) ; l'UUID reste interne.
+    expect(JSON.stringify(aUser().toUser('jwt'))).not.toContain(baseProps.id)
+  })
+})
+
 describe('REQ-USER-004 — mise à jour partielle du compte', () => {
   it('AC-3: ne modifie que les champs présents dans la demande', () => {
     const updated = aUser().withChanges({ bio: 'I like to skateboard' })
