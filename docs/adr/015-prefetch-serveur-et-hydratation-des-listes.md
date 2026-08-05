@@ -42,7 +42,15 @@ un cache hydraté.
    avec la même clé que le composant client, et enveloppe l'arbre dans un
    `HydrationBoundary`.
 2. Le composant client interroge `useQuery` avec cette clé. Le cache étant déjà
-   rempli, il n'émet **aucune requête** au chargement initial.
+   rempli **et considéré comme frais**, il n'émet aucune requête au chargement
+   initial.
+
+   *Précision ajoutée le 2026-08-05, après revue.* La fraîcheur n'est pas
+   acquise : le défaut de TanStack Query est `staleTime: 0`, qui rend périmées
+   les données à l'instant du montage et déclenche un refetch immédiat. La
+   première implémentation avait ce défaut, et cette section affirmait pourtant
+   le contraire — le bénéfice décrit ci-dessous n'était donc pas réalisé.
+   `staleTime` est désormais posé dans la configuration du `QueryClient` client.
 3. La **clé de requête et la fonction de récupération sont écrites une fois** et
    importées des deux côtés. Une clé recopiée qui diverge d'un caractère
    produirait un cache manqué — donc un rechargement silencieux, symptôme qui ne
@@ -82,8 +90,18 @@ l'arbre React.
 - Cette décision **précise** l'ADR 012, elle ne l'amende pas : la frontière reste
   « public au serveur, relatif au lecteur au client ». Elle dit seulement
   comment le résultat du serveur parvient au cache client.
-- Elle s'appliquera telle quelle aux autres listes publiques (page d'un tag,
-  onglets du profil) et à la page article.
+- Elle s'applique aux autres **listes paginées** publiques : page d'un tag,
+  onglets du profil, et le flux de la page article.
+
+  *Correction du 2026-08-05, après revue.* La rédaction initiale annonçait une
+  application « telle quelle à la page article », ce que le code ne fait pas :
+  les **commentaires** y sont chargés côté serveur puis confiés à un état local,
+  sans clé de cache ni `HydrationBoundary`. C'est délibéré et ce mécanisme leur
+  suffit — ils ne sont ni paginés ni filtrés, et leurs deux mutations mettent la
+  liste à jour depuis la réponse de l'API, donc il n'y a aucun cache à
+  invalider. Ce qui ne l'était pas, c'est de laisser l'ADR promettre davantage
+  que ce que le code tient : un ADR plus ambitieux que son implémentation
+  devient un piège pour le prochain lecteur, qui cherchera un mécanisme absent.
 - Le rafraîchissement au focus reste désactivé (configuration posée en F4) : le
   contenu Conduit change peu à l'échelle d'une navigation, et un refetch
   systématique produirait surtout du bruit réseau.
