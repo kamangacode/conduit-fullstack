@@ -5,6 +5,7 @@ import request from 'supertest'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { AppModule } from '@/app.module'
 import { applyHttpConventions } from '@/interface/http-prefix'
+import { prismaTestClient } from './setup'
 
 /**
  * Le contrat HTTP, vérifié de bout en bout : application NestJS **réelle**,
@@ -191,6 +192,70 @@ describe('REQ-AUTH-001 — vérification du jeton', () => {
     await http().get('/api/user').expect(401)
   })
 
+  it('AC-4: renvoie le corps d’erreur du contrat, pas celui de NestJS', async () => {
+    // Les assertions de statut seules laissaient passer un retour au
+    // `UnauthorizedException` nu de NestJS, qui produit
+    // `{"statusCode":401,"message":"Unauthorized"}` — un corps dépourvu de clé
+    // `errors`, sur lequel un front RealWorld affiche une liste vide.
+    const response = await http().get('/api/user').expect(401)
+
+    expect(response.body).toEqual({ errors: { authorization: ['is invalid or missing'] } })
+  })
+
+  it('AC-6: refuse un jeton valide dont le compte a été supprimé', async () => {
+    const { token } = await registerAndLogin()
+    await prismaTestClient.user.deleteMany({ where: { username: 'jake' } })
+
+    const response = await http()
+      .get('/api/user')
+      .set('Authorization', `Token ${token}`)
+      .expect(401)
+
+    // Corps STRICTEMENT identique à celui d'un jeton forgé : un 404 porteur d'un
+    // `errors.profile` apprendrait au porteur d'un jeton périmé que le compte a
+    // existé, ce qui est l'oracle d'existence que tout le design d'erreurs ferme.
+    expect(response.body).toEqual({ errors: { authorization: ['is invalid or missing'] } })
+  })
+
+  it('AC-6: refuse aussi sur une route qui ne relit pas le compte elle-même', async () => {
+    // Le test précédent ne prouve PAS la résolution du guard : `GET /api/user`
+    // relit le compte dans son propre use-case, donc il répond 401 même si le
+    // guard laissait passer une identité non résolue. Constaté en supprimant les
+    // deux lignes de résolution du guard — la suite restait verte.
+    //
+    // `POST /profiles/:username/follow` est la vraie sonde : rien en aval ne
+    // vérifie l'existence du suiveur. Sans la résolution du guard, l'écriture
+    // partirait avec un `followerId` fantôme et PostgreSQL lèverait une violation
+    // de clé étrangère là où le contrat attend un 401.
+    const jake = await registerAndLogin()
+    const jacob = await registerAndLogin({ username: 'jacob', email: 'jacob@jake.jake' })
+    await prismaTestClient.user.deleteMany({ where: { username: 'jacob' } })
+
+    const response = await http()
+      .post(`/api/profiles/${jake.username}/follow`)
+      .set('Authorization', `Token ${jacob.token}`)
+      .expect(401)
+
+    expect(response.body).toEqual({ errors: { authorization: ['is invalid or missing'] } })
+    expect(await prismaTestClient.follow.count()).toBe(0)
+  })
+
+  it('AC-6: la mise à jour du compte supprimé répond 401, pas 500', async () => {
+    // Le pendant en écriture : la ligne peut disparaître entre la résolution du
+    // guard et l'UPDATE. Sans traduction du P2025 de Prisma, l'erreur n'étant pas
+    // un `DomainError`, le filtre l'ignorait et le client recevait un 500.
+    const { token } = await registerAndLogin()
+    await prismaTestClient.user.deleteMany({ where: { username: 'jake' } })
+
+    const response = await http()
+      .put('/api/user')
+      .set('Authorization', `Token ${token}`)
+      .send({ user: { bio: 'peu importe' } })
+      .expect(401)
+
+    expect(response.body.errors).toBeDefined()
+  })
+
   it('AC-5: sert une route à authentification optionnelle en anonyme', async () => {
     await registerAndLogin()
 
@@ -232,6 +297,50 @@ describe('REQ-USER-004 — GET et PUT /user', () => {
 
     expect(response.body.user.bio).toBe('I like to skateboard')
     expect(response.body.user.email).toBe('jake@jake.jake')
+  })
+
+  it('AC-3: efface un champ envoyé à null, à travers toute la chaîne HTTP', async () => {
+    // La sémantique absent-vs-null était testée au domaine, au use-case et au
+    // repository — jamais à travers corps JSON → zodEnvelope → contrôleur → use
+    // case. Retirer le `.nullable()` du schéma, ou omettre `bio` dans le mapping
+    // du contrôleur, laissait toutes les autres assertions vertes.
+    const { token } = await registerAndLogin()
+    const auth = `Token ${token}`
+
+    await http()
+      .put('/api/user')
+      .set('Authorization', auth)
+      .send({ user: { bio: 'I work at statefarm' } })
+      .expect(200)
+
+    const cleared = await http()
+      .put('/api/user')
+      .set('Authorization', auth)
+      .send({ user: { bio: null } })
+      .expect(200)
+
+    expect(cleared.body.user.bio).toBeNull()
+  })
+
+  it('AC-3: un champ absent du corps n’est pas effacé', async () => {
+    // Le pendant indispensable : sans lui, une implémentation qui effacerait
+    // TOUT à chaque requête satisferait le test précédent.
+    const { token } = await registerAndLogin()
+    const auth = `Token ${token}`
+
+    await http()
+      .put('/api/user')
+      .set('Authorization', auth)
+      .send({ user: { bio: 'I work at statefarm' } })
+      .expect(200)
+
+    const untouched = await http()
+      .put('/api/user')
+      .set('Authorization', auth)
+      .send({ user: { username: 'jake' } })
+      .expect(200)
+
+    expect(untouched.body.user.bio).toBe('I work at statefarm')
   })
 
   it('AC-4: la rotation du mot de passe invalide l’ancien', async () => {

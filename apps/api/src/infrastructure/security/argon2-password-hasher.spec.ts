@@ -1,5 +1,7 @@
+import { verify as argon2Verify } from '@node-rs/argon2'
 import { describe, expect, it } from 'vitest'
-import { Argon2PasswordHasher } from './argon2-password-hasher'
+import { DUMMY_PASSWORD_HASH } from '../../application/user/login-user.use-case'
+import { ARGON2_PARAMS, Argon2PasswordHasher } from './argon2-password-hasher'
 
 /**
  * Testé contre la **vraie** bibliothèque, jamais un mock : ce qu'on veut prouver
@@ -63,6 +65,34 @@ describe('REQ-USER-003 — vérification du mot de passe', () => {
 
   it('AC-2: renvoie false sur un condensat vide', async () => {
     await expect(hasher.verify('', 'jakejake')).resolves.toBe(false)
+  })
+
+  it('AC-3: le condensat leurre de la connexion est décodable par argon2', async () => {
+    // Le seul test qui donne sa valeur à `DUMMY_PASSWORD_HASH`.
+    //
+    // La parade anti-énumération repose sur le fait qu'un email inconnu coûte
+    // une vérification argon2 complète. Or `Argon2PasswordHasher.verify` avale
+    // l'erreur de décodage et renvoie `false` en microsecondes : un leurre
+    // malformé rendrait donc le chemin « email inconnu » instantané face à un
+    // chemin « mot de passe erroné » à ~40 ms, ce qui rouvre l'oracle par le
+    // temps de réponse — et AUCUNE assertion sur la réponse ne bougerait.
+    //
+    // On appelle donc la bibliothèque SANS l'enrobage qui masque : si la chaîne
+    // n'est pas décodable, `argon2Verify` lève, et ce test échoue. C'est ce que
+    // le compteur d'appels de `login-user.use-case.spec.ts` ne peut pas prouver,
+    // puisqu'il tourne contre une doublure qui ne parse jamais rien.
+    await expect(argon2Verify(DUMMY_PASSWORD_HASH, 'un mot de passe quelconque')).resolves.toBe(
+      false
+    )
+  })
+
+  it('AC-3: le condensat leurre porte les mêmes paramètres de coût que la production', async () => {
+    // Décodable ne suffit pas : un leurre calculé avec un coût moindre
+    // répondrait plus vite qu'une vérification réelle et rétablirait l'écart de
+    // temps, en restant parfaitement valide.
+    const { memoryCost, timeCost, parallelism } = ARGON2_PARAMS
+
+    expect(DUMMY_PASSWORD_HASH).toContain(`$m=${memoryCost},t=${timeCost},p=${parallelism}$`)
   })
 
   it('AC-1: n’ampute pas les mots de passe longs', async () => {

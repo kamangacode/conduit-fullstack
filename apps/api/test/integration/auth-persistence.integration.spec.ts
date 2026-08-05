@@ -71,8 +71,17 @@ describe('REQ-USER-002 — persistance de l’inscription', () => {
 
   it('AC-2: n’insère pas de second compte quand la contrainte a rejeté', async () => {
     await users.create(newUser())
-    await users.create(newUser({ email: 'autre@jake.jake', username: 'autre' })).catch(() => {})
-    await users.create(newUser({ username: 'troisieme' })).catch(() => {})
+    // Ce second compte n'entre en conflit avec rien : il doit RÉUSSIR, et son
+    // insertion est donc attendue sans `catch`. Une version antérieure
+    // l'enveloppait dans un `.catch(() => {})` inutile, ce qui donnait à lire que
+    // le test exerçait deux rejets là où il n'en exerce qu'un — et aurait masqué
+    // une régression rendant cette ligne levante.
+    await users.create(newUser({ email: 'autre@jake.jake', username: 'autre' }))
+
+    // Seule celle-ci viole une contrainte (email déjà pris).
+    await expect(users.create(newUser({ username: 'troisieme' }))).rejects.toBeInstanceOf(
+      EmailAlreadyTakenError
+    )
 
     expect(await prismaTestClient.user.count()).toBe(2)
   })

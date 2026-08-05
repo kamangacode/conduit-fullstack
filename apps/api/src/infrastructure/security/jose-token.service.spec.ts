@@ -61,17 +61,52 @@ describe('REQ-AUTH-001 — émission et vérification du jeton', () => {
   })
 
   it('AC-3: refuse un jeton expiré', async () => {
-    const expiring = new JoseTokenService(anEnv({ JWT_EXPIRES_IN: '1s' }))
+    // Le jeton est signé à la main avec une expiration dans le passé : plus
+    // fiable qu'une attente réelle, qui rendrait le test lent et sensible à la
+    // charge de la machine. `service` suffit — `verify` ne consulte pas
+    // `JWT_EXPIRES_IN`, qui ne concerne que l'émission. Une version antérieure
+    // instanciait ici un service à `'1s'`, ce qui donnait à lire que la durée
+    // configurée était sous test alors que le paramètre n'était jamais lu.
     const token = await new SignJWT()
       .setProtectedHeader({ alg: 'HS256' })
       .setSubject('compte-a')
       .setIssuedAt(0)
-      // Expiration dans le passé : plus fiable qu'une attente réelle, qui
-      // rendrait le test lent et sensible à la charge de la machine.
       .setExpirationTime(1)
       .sign(new TextEncoder().encode(SECRET))
 
-    expect(await expiring.verify(token)).toBeNull()
+    expect(await service.verify(token)).toBeNull()
+  })
+
+  it('AC-1: émet le jeton avec la durée de vie configurée', async () => {
+    // La couverture qui manquait réellement : rien n'assertait qu'`issue()`
+    // honore `JWT_EXPIRES_IN`. Un `'365d'` écrit en dur dans l'adapter laissait
+    // toute la suite verte, et les jetons survivaient en silence à leur fenêtre.
+    const shortLived = new JoseTokenService(anEnv({ JWT_EXPIRES_IN: '60s' }))
+
+    const token = await shortLived.issue('compte-a')
+    const [, payloadSegment] = token.split('.')
+    const { iat, exp } = JSON.parse(Buffer.from(payloadSegment ?? '', 'base64url').toString())
+
+    expect(exp - iat).toBe(60)
+  })
+
+  it('AC-1: une durée différente produit une expiration différente', async () => {
+    // Le contrôle qui empêche le test précédent d'être satisfait par une
+    // constante : deux configurations doivent donner deux fenêtres.
+    const [short, long] = await Promise.all([
+      new JoseTokenService(anEnv({ JWT_EXPIRES_IN: '60s' })).issue('compte-a'),
+      new JoseTokenService(anEnv({ JWT_EXPIRES_IN: '2h' })).issue('compte-a'),
+    ])
+
+    const lifetime = (token: string): number => {
+      const { iat, exp } = JSON.parse(
+        Buffer.from(token.split('.')[1] ?? '', 'base64url').toString()
+      )
+      return exp - iat
+    }
+
+    expect(lifetime(short)).toBe(60)
+    expect(lifetime(long)).toBe(7200)
   })
 
   it('AC-3: refuse un jeton présentant un algorithme non attendu', async () => {
@@ -89,7 +124,13 @@ describe('REQ-AUTH-001 — émission et vérification du jeton', () => {
     expect(await service.verify('')).toBeNull()
   })
 
-  it('AC-6: refuse un jeton correctement signé mais dépourvu de sujet', async () => {
+  it('AC-3: refuse un jeton correctement signé mais dépourvu de sujet', async () => {
+    // Étiqueté AC-3 (jeton invalide) et non AC-6. AC-6 porte sur un jeton dont
+    // le sujet **ne résout vers aucun compte**, ce qui se joue dans le guard,
+    // contre la base — pas ici. Sous l'ancienne étiquette, ce test créditait un
+    // critère qu'il ne vérifiait pas, et la résolution en base du guard passait
+    // pour couverte alors qu'on pouvait la supprimer sans faire rougir la suite.
+    //
     // `jwtVerify` accepte un tel jeton : sans le contrôle explicite du `sub`, le
     // guard recevrait une identité vide et la propagerait.
     const token = await new SignJWT({ role: 'admin' })

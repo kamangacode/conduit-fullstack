@@ -4,7 +4,7 @@ import {
   FakeTokenService,
   InMemoryUserRepository,
 } from '../../../test/doubles/auth-doubles'
-import { UserNotFoundError } from '../../domain/user/user.errors'
+import { AuthenticatedUserNotFoundError } from '../../domain/user/user.errors'
 import { GetCurrentUserUseCase } from './get-current-user.use-case'
 
 // DEUX comptes en base, délibérément. Avec un seul, une implémentation qui
@@ -48,11 +48,26 @@ describe('REQ-USER-004 — lecture du compte courant', () => {
 
   it('AC-2: refuse une identité qui ne se résout plus en compte', async () => {
     // REQ-AUTH-001 AC-6 : un jeton parfaitement signé peut désigner un compte
-    // supprimé depuis. L'interface traduira cette erreur en 401.
+    // supprimé depuis.
     const { useCase } = buildUseCase()
 
     await expect(
       useCase.execute({ userId: '00000000-0000-4000-8000-999999999999' })
-    ).rejects.toBeInstanceOf(UserNotFoundError)
+    ).rejects.toBeInstanceOf(AuthenticatedUserNotFoundError)
+  })
+
+  it('AC-2: porte le code 401 et le corps du refus d’authentification', async () => {
+    // L'assertion de type seule ne suffisait pas : c'est le `errorCode` qui
+    // décide du statut HTTP, et une erreur `not_found` produirait un 404 doublé
+    // d'un `errors.profile` — donc un oracle d'existence de compte. Ce test rend
+    // impossible de revenir en arrière sans le voir.
+    const { useCase } = buildUseCase()
+
+    await expect(
+      useCase.execute({ userId: '00000000-0000-4000-8000-999999999999' })
+    ).rejects.toMatchObject({
+      errorCode: 'unauthorized',
+      response: { errors: { authorization: ['is invalid or missing'] } },
+    })
   })
 })

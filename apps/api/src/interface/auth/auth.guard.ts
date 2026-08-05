@@ -52,6 +52,12 @@ async function resolveUserId(
 
   // Résolution en base : la signature prouve que NOUS avons émis ce jeton, pas
   // que le compte existe encore.
+  //
+  // Cette étape n'est pas redondante avec la relecture que fait
+  // `GetCurrentUserUseCase` : elle protège les routes qui, elles, ne relisent
+  // jamais le compte — `follow`/`unfollow` en tête, où un identifiant fantôme
+  // partirait directement en écriture. Un test d'intégration dédié la rend
+  // obligatoire (REQ-AUTH-001 AC-6).
   const user = await users.findById(userId)
   return user === null ? null : user.id
 }

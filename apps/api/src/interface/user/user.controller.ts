@@ -40,7 +40,17 @@ export class UsersController {
   async register(
     @Body(zodEnvelope('user', registerDtoSchema)) dto: RegisterDto
   ): Promise<UserResponse> {
-    const user = await this.registerUser.execute(dto)
+    // Mapping champ par champ, et non `execute(dto)`. Le contrôle de propriétés
+    // excédentaires de TypeScript ne s'applique pas au passage d'une variable :
+    // transmettre l'objet tel quel ferait entrer dans le use-case, au runtime et
+    // sans erreur de compilation, tout champ ajouté un jour au schéma HTTP. La
+    // frontière « input owned par le use-case » (rule 12) n'existe que si elle
+    // est écrite ici.
+    const user = await this.registerUser.execute({
+      username: dto.username,
+      email: dto.email,
+      password: dto.password,
+    })
     return { user }
   }
 
@@ -51,7 +61,7 @@ export class UsersController {
   @Post('login')
   @HttpCode(200)
   async login(@Body(zodEnvelope('user', loginDtoSchema)) dto: LoginDto): Promise<UserResponse> {
-    const user = await this.loginUser.execute(dto)
+    const user = await this.loginUser.execute({ email: dto.email, password: dto.password })
     return { user }
   }
 }
@@ -76,17 +86,29 @@ export class UserController {
   /**
    * Mise à jour partielle.
    *
-   * `userId` vient du jeton vérifié et est posé **après** le DTO dans l'objet
-   * d'input : même si le corps portait un `userId`, le schéma Zod l'aurait déjà
-   * rejeté, et cet ordre garantit qu'aucune valeur du client ne peut l'emporter
-   * sur l'identité serveur (rule 19).
+   * Mapping explicite plutôt qu'un `{ ...dto, userId }` : outre la frontière
+   * d'input (voir `register`), l'étalement rendait l'identité serveur dépendante
+   * de l'ordre des clés — `userId` n'était protégé que parce qu'il était écrit en
+   * dernier. Ici, `userId` vient du jeton vérifié et aucune valeur du corps ne
+   * peut l'atteindre, quel que soit l'ordre (rule 19).
+   *
+   * Les champs optionnels sont recopiés tels quels, `undefined` compris : c'est
+   * ce qui préserve la distinction entre « absent » (ne pas toucher) et `null`
+   * (effacer), que le use-case tranche ensuite.
    */
   @Put()
   async update(
     @CurrentUserId() userId: string,
     @Body(zodEnvelope('user', updateUserDtoSchema)) dto: UpdateUserDto
   ): Promise<UserResponse> {
-    const user = await this.updateUser.execute({ ...dto, userId })
+    const user = await this.updateUser.execute({
+      userId,
+      email: dto.email,
+      username: dto.username,
+      password: dto.password,
+      bio: dto.bio,
+      image: dto.image,
+    })
     return { user }
   }
 }

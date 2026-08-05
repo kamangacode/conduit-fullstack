@@ -3,7 +3,11 @@ import type { PasswordHasher } from '@/domain/user/ports/password-hasher.port'
 import type { TokenService } from '@/domain/user/ports/token-service.port'
 import type { NewUser, UserRepository } from '@/domain/user/ports/user-repository.port'
 import { type UserChanges, UserEntity, type UserProps } from '@/domain/user/user'
-import { EmailAlreadyTakenError, UsernameAlreadyTakenError } from '@/domain/user/user.errors'
+import {
+  AuthenticatedUserNotFoundError,
+  EmailAlreadyTakenError,
+  UsernameAlreadyTakenError,
+} from '@/domain/user/user.errors'
 
 /**
  * Doublures des ports du domaine, pour la lane **unit** des use-cases (rule 16).
@@ -79,7 +83,11 @@ export class InMemoryUserRepository implements UserRepository {
   async update(id: string, changes: UserChanges): Promise<UserEntity> {
     const current = this.users.get(id)
     if (!current) {
-      throw new Error(`compte ${id} absent du dépôt de test`)
+      // La même erreur de domaine que l'adapter Prisma produit sur un P2025.
+      // Lever une `Error` nue ferait diverger la doublure de la vraie
+      // implémentation précisément sur un chemin d'erreur — et laisserait la
+      // lane unit incapable de voir qu'un 500 remonte au client.
+      throw new AuthenticatedUserNotFoundError()
     }
 
     // `id` exclu de la comparaison : reprendre sa propre valeur n'est pas un

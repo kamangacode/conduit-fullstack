@@ -2,11 +2,18 @@ import { Injectable } from '@nestjs/common'
 import { Prisma, type User as PrismaUser } from '@prisma/client'
 import type { NewUser, UserRepository } from '../../domain/user/ports/user-repository.port'
 import { type UserChanges, UserEntity } from '../../domain/user/user'
-import { EmailAlreadyTakenError, UsernameAlreadyTakenError } from '../../domain/user/user.errors'
+import {
+  AuthenticatedUserNotFoundError,
+  EmailAlreadyTakenError,
+  UsernameAlreadyTakenError,
+} from '../../domain/user/user.errors'
 import { PrismaService } from '../prisma/prisma.service'
 
 /** Code Prisma d'une violation de contrainte d'unicité. */
 const UNIQUE_CONSTRAINT_VIOLATION = 'P2002'
+
+/** Code Prisma d'un enregistrement absent lors d'un `update` ou d'un `delete`. */
+const RECORD_NOT_FOUND = 'P2025'
 
 /**
  * Adapter Prisma du port `UserRepository`.
@@ -47,7 +54,7 @@ export class PrismaUserRepository implements UserRepository {
       })
       return toEntity(row)
     } catch (error) {
-      throw translateUniqueViolation(error)
+      throw translatePrismaError(error)
     }
   }
 
@@ -59,7 +66,7 @@ export class PrismaUserRepository implements UserRepository {
       const row = await this.prisma.user.update({ where: { id }, data: changes })
       return toEntity(row)
     } catch (error) {
-      throw translateUniqueViolation(error)
+      throw translatePrismaError(error)
     }
   }
 }
@@ -83,23 +90,39 @@ function toEntity(row: PrismaUser): UserEntity {
 }
 
 /**
- * Traduit une violation de contrainte d'unicité en erreur de domaine.
+ * Traduit les erreurs Prisma que ce dépôt sait nommer en erreurs de domaine.
  *
- * C'est ici que se tient la promesse de l'ADR 009 : l'unicité est arbitrée par
- * PostgreSQL, pas par un `SELECT` préalable qui laisserait une fenêtre de course
- * entre la lecture et l'écriture. L'adapter est le seul à voir l'échec de
- * contrainte, donc le seul à pouvoir le nommer.
+ * Ce que l'adapter ne traduit pas ressort tel quel, donc **sans** être un
+ * `DomainError` — et `DomainExceptionFilter`, déclaré `@Catch(DomainError)`, ne
+ * le voit alors pas : le client reçoit un 500 au corps illisible pour un front
+ * RealWorld. C'est pourquoi la couverture de cette fonction est un enjeu de
+ * contrat, pas de confort.
  *
+ * **P2002 — violation d'unicité.** C'est ici que se tient la promesse de
+ * l'ADR 009 : l'unicité est arbitrée par PostgreSQL, pas par un `SELECT`
+ * préalable qui laisserait une fenêtre de course entre la lecture et l'écriture.
  * Le champ fautif est lu dans `meta.target`, que Prisma renseigne avec les
  * colonnes de l'index violé. Un conflit dont on ne saurait pas nommer le champ
- * est **relancé tel quel** plutôt que rangé arbitrairement sous « email » : une
+ * est relancé tel quel plutôt que rangé arbitrairement sous « email » : une
  * erreur mal étiquetée enverrait le client corriger un champ qui n'a rien fait.
+ *
+ * **P2025 — enregistrement absent.** Le seul appelant d'`update` est le
+ * use-case de mise à jour du compte courant, dont l'identifiant vient d'un jeton
+ * vérifié : si la ligne manque, c'est que le compte a disparu entre la
+ * résolution du guard et l'écriture. D'où `AuthenticatedUserNotFoundError`
+ * (401), et non un 404 qui apprendrait au porteur d'un jeton périmé que le
+ * compte a existé (REQ-AUTH-001 AC-6).
  */
-function translateUniqueViolation(error: unknown): unknown {
-  if (
-    !(error instanceof Prisma.PrismaClientKnownRequestError) ||
-    error.code !== UNIQUE_CONSTRAINT_VIOLATION
-  ) {
+function translatePrismaError(error: unknown): unknown {
+  if (!(error instanceof Prisma.PrismaClientKnownRequestError)) {
+    return error
+  }
+
+  if (error.code === RECORD_NOT_FOUND) {
+    return new AuthenticatedUserNotFoundError()
+  }
+
+  if (error.code !== UNIQUE_CONSTRAINT_VIOLATION) {
     return error
   }
 

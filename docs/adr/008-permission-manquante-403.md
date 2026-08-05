@@ -2,8 +2,10 @@
 
 ## Status
 
-Accepted — 2026-08-05. Amende [`.claude/rules/19-securite.md`](../../.claude/rules/19-securite.md)
-(section « Anti-IDOR ») sur le code de retour, sans toucher au reste de la règle.
+Accepted — 2026-08-05. Amende `.claude/rules/19-securite.md` (section
+« Anti-IDOR ») sur le code de retour, sans toucher au reste de la règle. Ce
+fichier appartient au cadre de développement local, non publié — voir la note de
+[`docs/adr/README.md`](README.md).
 
 ## Context
 
