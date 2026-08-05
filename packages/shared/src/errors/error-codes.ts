@@ -1,7 +1,8 @@
 import { z } from 'zod'
 
 /**
- * Les quatre situations d'erreur du contrat Conduit (PRD §10).
+ * Les situations d'erreur du contrat Conduit (PRD §10, plus le conflit
+ * d'unicité déclaré par `openapi.yml`).
  *
  * Ce sont des codes **métier**, pas des statuts HTTP. La distinction porte
  * l'architecture hexagonale (`.claude/rules/12-backend-hexagonal.md`) : le
@@ -9,12 +10,18 @@ import { z } from 'zod'
  * connaître HTTP, et seule la couche `interface` traduit en statut via
  * `CONDUIT_ERROR_STATUS`. Un `404` écrit dans un use case, c'est du transport
  * qui a fui dans le métier.
+ *
+ * `conflict` mérite un code distinct de `validation_failed`, et la frontière
+ * entre les deux est mécanique (voir `docs/adr/009-conflit-unicite-409.md`) :
+ * ce qu'un schéma Zod peut refuser seul est une validation, ce qui exige
+ * d'interroger la base est un conflit d'état.
  */
 export const CONDUIT_ERROR_CODES = [
   'validation_failed',
   'unauthorized',
   'forbidden',
   'not_found',
+  'conflict',
 ] as const
 
 export type ConduitErrorCode = (typeof CONDUIT_ERROR_CODES)[number]
@@ -34,4 +41,5 @@ export const CONDUIT_ERROR_STATUS = {
   unauthorized: 401,
   forbidden: 403,
   not_found: 404,
+  conflict: 409,
 } as const satisfies Record<ConduitErrorCode, number>

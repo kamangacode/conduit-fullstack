@@ -8,7 +8,15 @@ describe('REQ-ERROR-001 — CONDUIT_ERROR_STATUS', () => {
       unauthorized: 401,
       forbidden: 403,
       not_found: 404,
+      conflict: 409,
     })
+  })
+
+  it('AC-1: distingue le conflit d’unicité (409) de l’échec de validation (422)', () => {
+    // Frontière posée par l'ADR 009 : ce qu'un schéma peut refuser seul est un
+    // 422, ce qui exige d'interroger la base est un 409. Les confondre ferait
+    // passer un email déjà pris pour une charge utile malformée.
+    expect(CONDUIT_ERROR_STATUS.conflict).not.toBe(CONDUIT_ERROR_STATUS.validation_failed)
   })
 
   it('AC-1: couvre exhaustivement les codes déclarés — aucun code sans statut', () => {

@@ -35,10 +35,11 @@ implementation:
     - packages/shared/src/errors/error-codes.spec.ts
     - packages/shared/src/errors/validation-errors.spec.ts
 related:
-  issues: [2]
+  issues: [2, 3]
   requirements:
     - REQ-USER-001
-  adrs: []
+    - REQ-USER-002
+  adrs: ["009"]
 ---
 
 # REQ-ERROR-001 — Produire un contrat d'erreur uniforme
@@ -64,7 +65,10 @@ statut donnerait un 500 là où la spec attend un 422.
 - Format d'erreur : PRD §10, verbatim.
 - Chaque code métier déclaré a un statut HTTP associé — vérifié exhaustivement.
 - **R-8** : l'unicité de l'email et du username produit une erreur de champ, pas
-  une erreur générique.
+  une erreur générique, et porte le code `conflict` (409) plutôt que
+  `validation_failed` — voir [ADR 009](../../../adr/009-conflit-unicite-409.md).
+  La frontière est mécanique : ce qu'un schéma Zod peut refuser seul est une
+  validation, ce qui exige d'interroger la base est un conflit d'état.
 - Un chemin Zod imbriqué est aplati en clé pointée : le client reçoit une clé
   qu'il peut rapprocher d'un champ de formulaire.
 
