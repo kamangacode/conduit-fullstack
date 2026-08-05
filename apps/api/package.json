@@ -23,8 +23,10 @@
     "@nestjs/common": "^11.0.11",
     "@nestjs/core": "^11.0.11",
     "@nestjs/platform-express": "^11.0.11",
+    "@node-rs/argon2": "^2.0.2",
     "@prisma/client": "^6.14.0",
     "@repo/shared": "workspace:*",
+    "jose": "^6.2.8",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.1",
     "zod": "^4.4.3"
