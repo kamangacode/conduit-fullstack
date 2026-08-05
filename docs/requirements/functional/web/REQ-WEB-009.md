@@ -3,7 +3,7 @@ id: REQ-WEB-009
 title: Présenter la page d'accueil avec ses onglets de flux et ses tags populaires
 type: functional
 domain: web
-status: approved
+status: implemented
 priority: must
 source: "PRD §5 (routes) et §7.3 ; templates.md §Home ; contrat de sélecteurs E2E (routes `/`, `/?feed=following`, `/tag/:tag`)"
 acceptance_criteria:
@@ -32,8 +32,19 @@ acceptance_criteria:
     when: "l'API des tags échoue ou n'en renvoie aucun"
     then: "la page reste utilisable et le flux s'affiche — la barre latérale ne fait pas échouer la page"
 implementation:
-  files: []
-  tests: []
+  files:
+    - apps/web/src/lib/feed-query.ts
+    - apps/web/src/components/FeedToggle.tsx
+    - apps/web/src/components/FeedList.tsx
+    - apps/web/src/components/PopularTags.tsx
+    - apps/web/src/app/home-page.tsx
+    - apps/web/src/app/page.tsx
+    - "apps/web/src/app/tag/[tag]/page.tsx"
+  tests:
+    - apps/web/src/lib/feed-query.spec.ts
+    - apps/web/src/components/FeedToggle.spec.tsx
+    - apps/web/src/components/FeedList.spec.tsx
+    - apps/web/src/components/PopularTags.spec.tsx
 related:
   issues: [6]
   requirements:
@@ -43,6 +54,7 @@ related:
     - REQ-TAG-001
   adrs:
     - "012"
+    - "015"
 ---
 
 # REQ-WEB-009 — Présenter la page d'accueil avec ses onglets de flux et ses tags populaires
