@@ -1,9 +1,24 @@
 import { Injectable, Module } from '@nestjs/common'
 import { Test } from '@nestjs/testing'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-
 import { AppModule } from './app.module'
+import { FollowUserUseCase } from './application/profile/follow-user.use-case'
+import { GetProfileUseCase } from './application/profile/get-profile.use-case'
+import { UnfollowUserUseCase } from './application/profile/unfollow-user.use-case'
+import { GetCurrentUserUseCase } from './application/user/get-current-user.use-case'
+import { LoginUserUseCase } from './application/user/login-user.use-case'
+import { RegisterUserUseCase } from './application/user/register-user.use-case'
+import { UpdateUserUseCase } from './application/user/update-user.use-case'
 import { ENV } from './config/config.module'
+import { FOLLOW_REPOSITORY } from './domain/profile/ports/follow-repository.port'
+import { PASSWORD_HASHER } from './domain/user/ports/password-hasher.port'
+import { TOKEN_SERVICE } from './domain/user/ports/token-service.port'
+import { USER_REPOSITORY } from './domain/user/ports/user-repository.port'
+import { PrismaFollowRepository } from './infrastructure/persistence/prisma-follow.repository'
+import { PrismaUserRepository } from './infrastructure/persistence/prisma-user.repository'
+import { Argon2PasswordHasher } from './infrastructure/security/argon2-password-hasher'
+import { JoseTokenService } from './infrastructure/security/jose-token.service'
+import { AuthGuard, OptionalAuthGuard } from './interface/auth/auth.guard'
 import { HealthController } from './interface/health/health.controller'
 
 /**
@@ -48,6 +63,69 @@ describe('AppModule — boot smoke DI', () => {
     // La configuration validée est injectable depuis le graphe : c'est ce qui
     // permettra aux use-cases de la recevoir plutôt que de lire `process.env`.
     expect(moduleRef.get(ENV)).toMatchObject({ NODE_ENV: expect.any(String), PORT: 3001 })
+
+    await moduleRef.close()
+  })
+
+  it('résout les sept use-cases de la slice auth et profils', async () => {
+    const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile()
+
+    // Chaque use-case injecte ses ports par symbole : NestJS ne peut pas le
+    // vérifier à la compilation TypeScript, et un token non fourni ne se
+    // manifesterait qu'au premier appel HTTP en production.
+    expect(moduleRef.get(RegisterUserUseCase)).toBeInstanceOf(RegisterUserUseCase)
+    expect(moduleRef.get(LoginUserUseCase)).toBeInstanceOf(LoginUserUseCase)
+    expect(moduleRef.get(GetCurrentUserUseCase)).toBeInstanceOf(GetCurrentUserUseCase)
+    expect(moduleRef.get(UpdateUserUseCase)).toBeInstanceOf(UpdateUserUseCase)
+    expect(moduleRef.get(GetProfileUseCase)).toBeInstanceOf(GetProfileUseCase)
+    expect(moduleRef.get(FollowUserUseCase)).toBeInstanceOf(FollowUserUseCase)
+    expect(moduleRef.get(UnfollowUserUseCase)).toBeInstanceOf(UnfollowUserUseCase)
+
+    await moduleRef.close()
+  })
+
+  it('câble les ports sur leurs adapters concrets, non-null', async () => {
+    const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile()
+
+    // `toBeInstanceOf` seul passerait avec une dépendance `null` injectée en
+    // silence (rule 12, anti-pattern `@Optional()`), d'où la double assertion.
+    const userRepository = moduleRef.get(USER_REPOSITORY)
+    const passwordHasher = moduleRef.get(PASSWORD_HASHER)
+    const tokenService = moduleRef.get(TOKEN_SERVICE)
+    const followRepository = moduleRef.get(FOLLOW_REPOSITORY)
+
+    expect(userRepository).not.toBeNull()
+    expect(userRepository).toBeInstanceOf(PrismaUserRepository)
+    expect(passwordHasher).toBeInstanceOf(Argon2PasswordHasher)
+    expect(tokenService).toBeInstanceOf(JoseTokenService)
+    expect(followRepository).toBeInstanceOf(PrismaFollowRepository)
+
+    await moduleRef.close()
+  })
+
+  it('partage une seule instance de PrismaService entre les deux contextes', async () => {
+    const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile()
+
+    // `ProfileModule` importe `UserModule` au lieu de redéclarer ses providers.
+    // Redéclarer produirait un second `PrismaService`, donc un second pool de
+    // connexions — un doublon invisible en test et coûteux en production. Cette
+    // assertion est le seul endroit où ce choix se vérifie.
+    const fromUserContext = moduleRef.get(USER_REPOSITORY) as PrismaUserRepository
+    const fromProfileContext = moduleRef.get(FOLLOW_REPOSITORY) as PrismaFollowRepository
+
+    expect(Reflect.get(fromUserContext, 'prisma')).toBe(Reflect.get(fromProfileContext, 'prisma'))
+
+    await moduleRef.close()
+  })
+
+  it('résout les deux guards d’authentification', async () => {
+    const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile()
+
+    // Les guards sont instanciés par NestJS à partir des tokens exportés par
+    // `UserModule` : un oubli d'export ne casse pas la compilation TypeScript,
+    // il casse le boot.
+    await expect(moduleRef.resolve(AuthGuard)).resolves.toBeInstanceOf(AuthGuard)
+    await expect(moduleRef.resolve(OptionalAuthGuard)).resolves.toBeInstanceOf(OptionalAuthGuard)
 
     await moduleRef.close()
   })

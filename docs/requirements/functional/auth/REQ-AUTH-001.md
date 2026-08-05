@@ -3,7 +3,7 @@ id: REQ-AUTH-001
 title: Authentifier les requêtes par jeton préfixé Token
 type: functional
 domain: auth
-status: approved
+status: implemented
 priority: must
 source: "PRD §9, §10 ; openapi.yml securityScheme « Token »"
 acceptance_criteria:
@@ -32,8 +32,14 @@ acceptance_criteria:
     when: "une route protégée est appelée"
     then: "l'API répond 401 — une signature valide ne vaut pas existence du compte"
 implementation:
-  files: []
-  tests: []
+  files:
+    - apps/api/src/domain/user/ports/token-service.port.ts
+    - apps/api/src/infrastructure/security/jose-token.service.ts
+    - apps/api/src/interface/auth/auth.guard.ts
+    - apps/api/src/interface/auth/current-user.decorator.ts
+  tests:
+    - apps/api/src/infrastructure/security/jose-token.service.spec.ts
+    - apps/api/test/integration/auth-http.integration.spec.ts
 related:
   issues: [3]
   requirements:

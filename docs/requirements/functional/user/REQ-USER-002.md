@@ -3,7 +3,7 @@ id: REQ-USER-002
 title: Inscrire un nouvel utilisateur
 type: functional
 domain: user
-status: approved
+status: implemented
 priority: must
 source: "PRD §7.1, §8 (format « User »), règles R-8 et R-9 ; openapi.yml POST /users"
 acceptance_criteria:
@@ -28,8 +28,16 @@ acceptance_criteria:
     when: "on lit la ligne persistée"
     then: "le mot de passe n'y figure sous aucune forme lisible : seul un condensat argon2id est stocké (R-9)"
 implementation:
-  files: []
-  tests: []
+  files:
+    - apps/api/src/application/user/register-user.use-case.ts
+    - apps/api/src/infrastructure/persistence/prisma-user.repository.ts
+    - apps/api/src/infrastructure/security/argon2-password-hasher.ts
+    - apps/api/src/interface/user/user.controller.ts
+  tests:
+    - apps/api/src/application/user/register-user.use-case.spec.ts
+    - apps/api/src/infrastructure/security/argon2-password-hasher.spec.ts
+    - apps/api/test/integration/auth-persistence.integration.spec.ts
+    - apps/api/test/integration/auth-http.integration.spec.ts
 related:
   issues: [3]
   requirements:

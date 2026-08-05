@@ -9,14 +9,22 @@ import type { UserChanges } from '../../domain/user/user'
  * Champs modifiables. Chacun est optionnel, et `bio`/`image` acceptent `null` :
  * le contrat distingue « ne pas toucher » (clé absente) de « effacer » (`null`),
  * et cette signature est le premier endroit où la distinction doit survivre.
+ *
+ * Le `| undefined` explicite est requis par `exactOptionalPropertyTypes`, et il
+ * dit quelque chose de vrai : à cette frontière, **clé absente et clé à
+ * `undefined` valent la même chose** — ne pas toucher. C'est nécessaire parce
+ * qu'un DTO validé par Zod se transmet naturellement par étalement, ce qui
+ * matérialise les clés absentes en `undefined`. La distinction qui compte, elle,
+ * est ailleurs : entre `undefined` (ne pas toucher) et `null` (effacer), et c'est
+ * `execute` qui la fait valoir en testant `!== undefined`.
  */
 export interface UpdateUserInput {
   readonly userId: string
-  readonly email?: string
-  readonly username?: string
-  readonly password?: string
-  readonly bio?: string | null
-  readonly image?: string | null
+  readonly email?: string | undefined
+  readonly username?: string | undefined
+  readonly password?: string | undefined
+  readonly bio?: string | null | undefined
+  readonly image?: string | null | undefined
 }
 
 /**

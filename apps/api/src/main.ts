@@ -4,6 +4,7 @@ import { NestFactory } from '@nestjs/core'
 
 import { AppModule } from './app.module'
 import { type Env, parseEnv } from './config/env'
+import { applyHttpConventions } from './interface/http-prefix'
 
 /**
  * Point d'entrée de l'API.
@@ -29,6 +30,10 @@ function loadEnvOrExit(): Env {
 async function bootstrap(): Promise<void> {
   const env = loadEnvOrExit()
   const app = await NestFactory.create(AppModule)
+  // Les conventions HTTP sont posées par une fonction partagée avec les tests
+  // d'intégration : les écrire ici seulement les rendrait invisibles à une suite
+  // qui construit sa propre application (voir `applyHttpConventions`).
+  applyHttpConventions(app)
   await app.listen(env.PORT)
 }
 

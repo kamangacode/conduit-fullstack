@@ -3,7 +3,7 @@ id: REQ-USER-003
 title: Authentifier un utilisateur par mot de passe
 type: functional
 domain: user
-status: approved
+status: implemented
 priority: must
 source: "PRD §7.1, §9 ; openapi.yml POST /users/login"
 acceptance_criteria:
@@ -24,8 +24,14 @@ acceptance_criteria:
     when: "la connexion est soumise"
     then: "l'API répond 422 en nommant le champ fautif"
 implementation:
-  files: []
-  tests: []
+  files:
+    - apps/api/src/application/user/login-user.use-case.ts
+    - apps/api/src/infrastructure/security/argon2-password-hasher.ts
+    - apps/api/src/interface/user/user.controller.ts
+  tests:
+    - apps/api/src/application/user/login-user.use-case.spec.ts
+    - apps/api/src/infrastructure/security/argon2-password-hasher.spec.ts
+    - apps/api/test/integration/auth-http.integration.spec.ts
 related:
   issues: [3]
   requirements:
