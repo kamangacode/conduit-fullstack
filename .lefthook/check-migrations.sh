@@ -68,16 +68,35 @@ if [[ -z "$PORT" ]]; then
   exit 1
 fi
 
+# L'image Postgres démarre un serveur **temporaire** pendant `initdb`, l'arrête,
+# puis démarre le serveur définitif. `pg_isready` répond donc « prêt » une
+# première fois sur un serveur qui va disparaître : se fier au premier succès
+# fait échouer l'étape suivante, au hasard de la fenêtre de redémarrage.
+#
+# On exige donc STABLE_CHECKS succès **consécutifs**. Le symptôme sans cette
+# garde est trompeur — « pas prêt après 30s » alors que le script a rendu la main
+# en 2 secondes — et il n'apparaît que sous charge, c'est-à-dire quand les autres
+# jobs pre-push tournent en parallèle et ralentissent l'initialisation.
+STABLE_CHECKS=3
+READY_STREAK=0
+
 echo "⏳ Attente de Postgres..."
 for _ in $(seq 1 60); do
   if docker exec "$CONTAINER_ID" pg_isready -U postgres >/dev/null 2>&1; then
-    break
+    READY_STREAK=$((READY_STREAK + 1))
+    if [[ "$READY_STREAK" -ge "$STABLE_CHECKS" ]]; then
+      break
+    fi
+  else
+    # Un échec après des succès signale le redémarrage post-initdb : on repart
+    # de zéro plutôt que de cumuler des succès qui ne se suivent pas.
+    READY_STREAK=0
   fi
   sleep 0.5
 done
 
-if ! docker exec "$CONTAINER_ID" pg_isready -U postgres >/dev/null 2>&1; then
-  echo "❌ Postgres n'est pas prêt après 30s."
+if [[ "$READY_STREAK" -lt "$STABLE_CHECKS" ]]; then
+  echo "❌ Postgres n'est pas resté prêt ($READY_STREAK/$STABLE_CHECKS vérifications consécutives en 30s)."
   exit 1
 fi
 
