@@ -22,6 +22,21 @@ export default defineConfig({
   plugins: [react()],
   test: {
     environment: 'jsdom',
+    /**
+     * Origine explicite, sans laquelle **`localStorage` n'existe pas**.
+     *
+     * jsdom refuse le stockage aux origines opaques (`about:blank`, son défaut).
+     * Le symptôme n'est pas une erreur claire mais un `window.localStorage` qui
+     * vaut `{}` : le premier appel échoue sur « clear is not a function », ce
+     * qui désigne le test plutôt que l'environnement.
+     *
+     * L'alternative — simuler `localStorage` dans le setup — ferait passer les
+     * tests de session sans jamais éprouver la persistance réelle, c'est-à-dire
+     * précisément ce qu'ils existent pour vérifier (REQ-WEB-002).
+     */
+    environmentOptions: {
+      jsdom: { url: 'http://localhost:3000' },
+    },
     globals: true,
     setupFiles: ['./vitest.setup.ts'],
     include: ['src/**/*.spec.{ts,tsx}', 'test/**/*.spec.{ts,tsx}'],
