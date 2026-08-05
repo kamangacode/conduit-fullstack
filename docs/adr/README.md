@@ -28,6 +28,8 @@ elle porte la mécanique : gabarit, numérotation, statuts, vérification.
 | [013](013-rendu-markdown-sur-par-construction.md) | Rendu Markdown sûr par construction, sans assainissement à appeler | Accepted | 2026-08-05 |
 | [014](014-conformite-au-contrat-de-selecteurs-e2e.md) | Conformité au contrat de sélecteurs E2E : jeton seul persisté, session réhydratée par l'API | Accepted | 2026-08-05 |
 | [015](015-prefetch-serveur-et-hydratation-des-listes.md) | Listes publiques : préchargement serveur et hydratation du cache client | Accepted | 2026-08-05 |
+| [016](016-suite-de-conformite-vendoree.md) | Suite de conformité RealWorld vendorée, avec contrôle de dérive | Accepted | 2026-08-05 |
+| [017](017-messages-du-contrat-dans-shared.md) | Les messages d'erreur du contrat vivent dans `packages/shared` | Accepted (amende 004) | 2026-08-05 |
 
 ## Écrire un ADR
 
