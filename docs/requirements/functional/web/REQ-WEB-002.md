@@ -5,7 +5,7 @@ type: functional
 domain: web
 status: implemented
 priority: must
-source: "PRD §9 (jeton en localStorage côté front de référence) ; ADR 012"
+source: "PRD §9 (jeton en localStorage côté front de référence) ; ADR 012, amendé par ADR 014"
 acceptance_criteria:
   - id: AC-1
     given: "une connexion ou une inscription réussie"
@@ -14,7 +14,7 @@ acceptance_criteria:
   - id: AC-2
     given: "un jeton conservé lors d'une visite précédente"
     when: "l'application démarre"
-    then: "la session est réhydratée depuis le stockage local, sans redemander les identifiants"
+    then: "le compte courant est redemandé à l'API avec ce jeton et la session s'ouvre, sans ressaisie des identifiants"
   - id: AC-3
     given: "une session ouverte"
     when: "l'utilisateur se déconnecte"
@@ -27,6 +27,14 @@ acceptance_criteria:
     given: "un rendu serveur, où le stockage local n'existe pas"
     when: "un composant lit la session"
     then: "il obtient l'état anonyme sans erreur — l'accès au stockage n'a lieu qu'après montage côté client"
+  - id: AC-6
+    given: "un jeton conservé mais refusé par l'API"
+    when: "la réhydratation du démarrage répond 401"
+    then: "le jeton est effacé du stockage et la visite se poursuit en anonyme"
+  - id: AC-7
+    given: "un jeton conservé et une API momentanément injoignable"
+    when: "la réhydratation du démarrage échoue sans réponse d'autorité"
+    then: "le jeton est conservé — la visite se poursuit en anonyme, mais un rechargement ultérieur retrouve la session"
 implementation:
   files:
     - apps/web/src/lib/session.tsx
@@ -41,8 +49,10 @@ related:
     - REQ-WEB-001
     - REQ-WEB-004
     - REQ-WEB-006
+    - REQ-WEB-007
   adrs:
     - "012"
+    - "014"
 ---
 
 # REQ-WEB-002 — Porter la session côté client et la réhydrater au démarrage
@@ -62,6 +72,17 @@ divergence d'hydratation — React rend un arbre côté serveur, un autre côté
 client, et signale une incohérence. La lecture doit donc avoir lieu **après
 montage**. Le prix est l'état anonyme transitoire que l'ADR assume.
 
+AC-2, AC-6 et AC-7 portent l'amendement de
+l'[ADR 014](../../../adr/014-conformite-au-contrat-de-selecteurs-e2e.md) : le
+stockage ne contient plus que **le jeton**, sous la clé que le contrat E2E
+impose, et le compte courant est redemandé à l'API au démarrage. La réhydratation
+devient donc un appel réseau, avec les deux échecs qu'un appel réseau connaît — et
+ils n'appellent pas la même réponse. Un **401** est une réponse d'autorité : le
+jeton est refusé, le garder ne sert personne. Une **panne réseau** n'en est pas
+une, et purger sur ce signal transformerait une coupure de trente secondes en
+déconnexion de tous les visiteurs. C'est la distinction que AC-6 et AC-7 rendent
+opposable.
+
 AC-4 ferme une situation qui, sans elle, se règle par un rechargement manuel :
 un jeton expiré reste dans le stockage, l'interface affiche la barre de
 navigation connectée, et chaque action échoue en 401 sans que rien n'explique
@@ -72,7 +93,8 @@ lui-même.
 ## Règles
 
 - Le jeton est conservé dans le stockage local du navigateur (PRD §9, front de
-  référence).
+  référence), sous la clé `jwtToken` et **seul** — le contrat de sélecteurs E2E
+  fixe la clé et la valeur ([REQ-WEB-007](REQ-WEB-007.md) AC-5).
 - Il n'est **jamais** lu directement par un composant : il transite par la
   session, et de là vers `api-client.ts` ([REQ-WEB-001](REQ-WEB-001.md) AC-2).
 - `apps/web` ne vérifie pas la signature du jeton : seule l'API fait autorité.

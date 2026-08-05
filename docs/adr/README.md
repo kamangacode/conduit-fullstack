@@ -26,6 +26,7 @@ elle porte la mécanique : gabarit, numérotation, statuts, vérification.
 | [011](011-lecture-des-listes-port-dedie.md) | Lecture des listes d'articles : port de lecture dédié, séparé de l'écriture | Accepted | 2026-08-05 |
 | [012](012-rendu-hybride-et-session-client.md) | Rendu hybride et session portée par le client | Accepted | 2026-08-05 |
 | [013](013-rendu-markdown-sur-par-construction.md) | Rendu Markdown sûr par construction, sans assainissement à appeler | Accepted | 2026-08-05 |
+| [014](014-conformite-au-contrat-de-selecteurs-e2e.md) | Conformité au contrat de sélecteurs E2E : jeton seul persisté, session réhydratée par l'API | Accepted | 2026-08-05 |
 
 ## Écrire un ADR
 
