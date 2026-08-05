@@ -3,7 +3,7 @@ id: REQ-WEB-006
 title: Refléter la session dans la barre de navigation
 type: functional
 domain: web
-status: approved
+status: implemented
 priority: must
 source: "PRD §5 (navigation) ; markup RealWorld `.navbar`, `.nav-link`"
 acceptance_criteria:
@@ -28,8 +28,11 @@ acceptance_criteria:
     when: "la page est servie"
     then: "la barre est rendue en anonyme et bascule après hydratation, sans divergence d'hydratation signalée par React"
 implementation:
-  files: []
-  tests: []
+  files:
+    - apps/web/src/components/Navbar.tsx
+    - apps/web/src/app/layout.tsx
+  tests:
+    - apps/web/src/components/Navbar.spec.tsx
 related:
   issues: [5]
   requirements:

@@ -1,8 +1,8 @@
 import type { User } from '@repo/shared'
-import { render, screen, waitFor } from '@testing-library/react'
+import { act, render, screen, waitFor } from '@testing-library/react'
 import { renderToString } from 'react-dom/server'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { SESSION_STORAGE_KEY, SessionProvider } from '../lib/session'
+import { SESSION_STORAGE_KEY, SessionProvider, useSession } from '../lib/session'
 import { Navbar } from './Navbar'
 
 /** Tests écrits depuis les critères de REQ-WEB-006, avant l'implémentation. */
@@ -64,6 +64,38 @@ describe('REQ-WEB-006 — barre de navigation', () => {
 
     const profileLink = await screen.findByRole('link', { name: /jake/ })
     expect(profileLink).toHaveAttribute('href', '/profile/jake')
+  })
+
+  it('AC-4: repasse aux liens anonymes à la déconnexion, sans rechargement', async () => {
+    window.localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(jake))
+
+    // La déconnexion est déclenchée depuis la page de paramètres, pas depuis la
+    // navbar : on monte donc une sonde qui appelle `signOut`, pour éprouver que
+    // la barre réagit au changement de session et non à un rechargement.
+    function SignOutProbe() {
+      const { signOut } = useSession()
+      return (
+        <button type="button" onClick={signOut}>
+          déconnexion
+        </button>
+      )
+    }
+
+    render(
+      <SessionProvider>
+        <Navbar />
+        <SignOutProbe />
+      </SessionProvider>
+    )
+
+    await waitFor(() => expect(screen.getByRole('link', { name: /jake/ })).toBeInTheDocument())
+
+    await act(async () => {
+      screen.getByRole('button', { name: 'déconnexion' }).click()
+    })
+
+    expect(screen.getByRole('link', { name: 'Sign in' })).toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: /Settings/ })).not.toBeInTheDocument()
   })
 
   it('AC-3: marque le lien de la page courante comme actif', async () => {

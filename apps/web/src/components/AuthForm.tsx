@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { type FormEvent, useState } from 'react'
 import { ApiError } from '../lib/api-client'
+import { ErrorMessages } from './ErrorMessages'
 
 /**
  * Formulaire d'authentification (REQ-WEB-003), markup RealWorld (rule 11).
@@ -151,21 +152,6 @@ function TextField({
         onChange={(event) => onChange(event.target.value)}
       />
     </fieldset>
-  )
-}
-
-/** Liste d'erreurs `.error-messages`, telle que le front de référence l'affiche. */
-function ErrorMessages({ messages }: { messages: readonly string[] }) {
-  if (messages.length === 0) {
-    return null
-  }
-
-  return (
-    <ul className="error-messages">
-      {messages.map((message) => (
-        <li key={message}>{message}</li>
-      ))}
-    </ul>
   )
 }
 

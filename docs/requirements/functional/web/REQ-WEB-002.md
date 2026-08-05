@@ -3,7 +3,7 @@ id: REQ-WEB-002
 title: Porter la session côté client et la réhydrater au démarrage
 type: functional
 domain: web
-status: approved
+status: implemented
 priority: must
 source: "PRD §9 (jeton en localStorage côté front de référence) ; ADR 012"
 acceptance_criteria:
@@ -28,8 +28,11 @@ acceptance_criteria:
     when: "un composant lit la session"
     then: "il obtient l'état anonyme sans erreur — l'accès au stockage n'a lieu qu'après montage côté client"
 implementation:
-  files: []
-  tests: []
+  files:
+    - apps/web/src/lib/session.tsx
+    - apps/web/src/lib/api-provider.tsx
+  tests:
+    - apps/web/src/lib/session.spec.tsx
 related:
   issues: [5]
   requirements:

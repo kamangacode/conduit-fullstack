@@ -3,7 +3,7 @@ id: REQ-WEB-004
 title: Mettre à jour son compte depuis la page de paramètres
 type: functional
 domain: web
-status: approved
+status: implemented
 priority: must
 source: "PRD §5 (route /settings), §7.1 (PUT /user) ; markup RealWorld `.settings-page`"
 acceptance_criteria:
@@ -32,8 +32,11 @@ acceptance_criteria:
     when: "il actionne la déconnexion depuis cette page"
     then: "la session est fermée et il repasse en anonyme"
 implementation:
-  files: []
-  tests: []
+  files:
+    - apps/web/src/components/SettingsForm.tsx
+    - apps/web/src/app/settings/page.tsx
+  tests:
+    - apps/web/src/components/SettingsForm.spec.tsx
 related:
   issues: [5]
   requirements:

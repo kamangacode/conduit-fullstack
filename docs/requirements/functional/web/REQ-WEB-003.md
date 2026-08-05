@@ -3,7 +3,7 @@ id: REQ-WEB-003
 title: S'inscrire et se connecter depuis les pages d'authentification
 type: functional
 domain: web
-status: approved
+status: implemented
 priority: must
 source: "PRD §5 (routes /register et /login), §7.1, §10 ; markup RealWorld `.auth-page`"
 acceptance_criteria:
@@ -32,8 +32,13 @@ acceptance_criteria:
     when: "leur markup est rendu"
     then: "il suit la structure RealWorld — `.auth-page`, `.form-control.form-control-lg`, bouton `.btn-primary`, et un lien croisé vers l'autre page"
 implementation:
-  files: []
-  tests: []
+  files:
+    - apps/web/src/components/AuthForm.tsx
+    - apps/web/src/components/ErrorMessages.tsx
+    - apps/web/src/app/login/page.tsx
+    - apps/web/src/app/register/page.tsx
+  tests:
+    - apps/web/src/components/AuthForm.spec.tsx
 related:
   issues: [5]
   requirements:

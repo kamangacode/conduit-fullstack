@@ -3,7 +3,7 @@ id: REQ-WEB-001
 title: Consommer l'API par un client typé par le modèle partagé
 type: functional
 domain: web
-status: approved
+status: implemented
 priority: must
 source: "PRD §7, §9, §10 ; architecture §5 et §6 (frontière de type)"
 acceptance_criteria:
@@ -28,8 +28,11 @@ acceptance_criteria:
     when: "le client la reçoit"
     then: "il rend la main sans tenter de désérialiser du JSON"
 implementation:
-  files: []
-  tests: []
+  files:
+    - apps/web/src/lib/api-client.ts
+    - apps/web/src/lib/api-provider.tsx
+  tests:
+    - apps/web/src/lib/api-client.spec.ts
 related:
   issues: [5]
   requirements:

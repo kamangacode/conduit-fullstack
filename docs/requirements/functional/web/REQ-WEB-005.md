@@ -3,7 +3,7 @@ id: REQ-WEB-005
 title: Consulter un profil public et suivre son auteur
 type: functional
 domain: web
-status: approved
+status: implemented
 priority: must
 source: "PRD §5 (route /profile/:username), §7.2, règle R-5 ; markup RealWorld `.profile-page`"
 acceptance_criteria:
@@ -32,8 +32,11 @@ acceptance_criteria:
     when: "la page est demandée"
     then: "une page 404 est rendue, et non un profil vide"
 implementation:
-  files: []
-  tests: []
+  files:
+    - apps/web/src/components/FollowButton.tsx
+    - apps/web/src/app/profile/[username]/page.tsx
+  tests:
+    - apps/web/src/components/FollowButton.spec.tsx
 related:
   issues: [5]
   requirements:
