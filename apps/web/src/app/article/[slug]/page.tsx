@@ -1,7 +1,8 @@
-import type { Article } from '@repo/shared'
+import type { Article, Comment } from '@repo/shared'
 import { notFound } from 'next/navigation'
 import { ArticleBody } from '../../../components/ArticleBody'
 import { ArticleMeta } from '../../../components/ArticleMeta'
+import { CommentSection } from '../../../components/CommentSection'
 import { ApiError, createApiClient } from '../../../lib/api-client'
 import { API_BASE_URL } from '../../../lib/env'
 
@@ -49,6 +50,28 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
   return { title: article ? `${article.title} — Conduit` : 'Article introuvable — Conduit' }
 }
 
+/**
+ * Charge les commentaires, ou rend une liste vide.
+ *
+ * Même arbitrage que la barre des tags, et pour la même raison : une erreur non
+ * rattrapée dans un Server Component fait échouer le rendu de **toute la page**,
+ * et l'indisponibilité des commentaires emporterait l'article, qui est
+ * l'essentiel. Le composant client reprendra la main pour toute évolution.
+ */
+async function fetchComments(slug: string): Promise<Comment[]> {
+  const client = createApiClient({
+    baseUrl: API_BASE_URL,
+    getToken: () => null,
+    fetchImpl: (input, init) => fetch(input, { ...init, cache: 'no-store' }),
+  })
+
+  try {
+    return await client.getComments(slug)
+  } catch {
+    return []
+  }
+}
+
 export default async function Page({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params
   const article = await fetchArticle(slug)
@@ -56,6 +79,10 @@ export default async function Page({ params }: { params: Promise<{ slug: string 
   if (!article) {
     notFound()
   }
+
+  // Après le `notFound` : inutile de charger les commentaires d'un article qui
+  // n'existe pas.
+  const comments = await fetchComments(article.slug)
 
   return (
     <div className="article-page">
@@ -90,9 +117,10 @@ export default async function Page({ params }: { params: Promise<{ slug: string 
           <ArticleMeta article={article} />
         </div>
 
-        {/* Les commentaires occupent la fin de cette page et font l'objet d'une
-            exigence propre : cycle de vie, autorisations et section de template
-            distincts. */}
+        {/* Les commentaires sont chargés côté serveur — ils sont publics — puis
+            confiés à un composant client qui les fait évoluer sans quitter la
+            page (REQ-WEB-013). */}
+        <CommentSection slug={article.slug} initialComments={comments} />
       </div>
     </div>
   )
