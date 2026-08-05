@@ -25,6 +25,7 @@ elle porte la mécanique : gabarit, numérotation, statuts, vérification.
 | [010](010-unicite-du-slug-article.md) | Unicité du slug d'article : suffixe incrémental résolu par la contrainte | Accepted | 2026-08-05 |
 | [011](011-lecture-des-listes-port-dedie.md) | Lecture des listes d'articles : port de lecture dédié, séparé de l'écriture | Accepted | 2026-08-05 |
 | [012](012-rendu-hybride-et-session-client.md) | Rendu hybride et session portée par le client | Accepted | 2026-08-05 |
+| [013](013-rendu-markdown-sur-par-construction.md) | Rendu Markdown sûr par construction, sans assainissement à appeler | Accepted | 2026-08-05 |
 
 ## Écrire un ADR
 
