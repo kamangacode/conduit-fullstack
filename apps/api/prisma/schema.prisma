@@ -28,7 +28,12 @@ model User {
   email        String   @unique
   username     String   @unique
   passwordHash String
-  bio          String   @default("")
+  /// Nullable et sans valeur par défaut, par alignement sur le contrat (ADR 004) :
+  /// `null` est l'absence de biographie, `""` une biographie délibérément vide.
+  /// Les confondre rendrait impossible de distinguer « jamais remplie » de
+  /// « effacée » — or `PUT /api/user` accepte `bio: null` comme instruction
+  /// d'effacement, donc la distinction est demandée par le contrat lui-même.
+  bio          String?
   image        String?
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
