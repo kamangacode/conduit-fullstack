@@ -113,3 +113,45 @@ describe('parseEnv — qualité du diagnostic', () => {
     expect(() => parseEnv({})).toThrow(/\.env\.example/)
   })
 })
+
+/**
+ * `CORS_ORIGIN` est le seul champ du schéma qui **transforme** sa valeur plutôt
+ * que de la valider seulement. Il était arrivé sans test, et ce que sa
+ * transformation produit finit directement dans la liste d'origines autorisées
+ * du serveur — une entrée parasite y serait une origine acceptée.
+ */
+describe('parseEnv — origines CORS', () => {
+  it('applique l’origine de développement par défaut', () => {
+    expect(parseEnv(validEnv).CORS_ORIGIN).toEqual(['http://localhost:3000'])
+  })
+
+  it('découpe une liste séparée par des virgules', () => {
+    const env = parseEnv({
+      ...validEnv,
+      CORS_ORIGIN: 'https://app.example.com,https://admin.example.com',
+    })
+
+    expect(env.CORS_ORIGIN).toEqual(['https://app.example.com', 'https://admin.example.com'])
+  })
+
+  it('retire les espaces autour de chaque origine', () => {
+    // Une origine avec espace de tête ne correspondrait à aucun en-tête `Origin`
+    // réel : le navigateur serait bloqué par une configuration qui a pourtant
+    // l'air juste dans le fichier `.env`.
+    const env = parseEnv({ ...validEnv, CORS_ORIGIN: ' https://a.test , https://b.test ' })
+
+    expect(env.CORS_ORIGIN).toEqual(['https://a.test', 'https://b.test'])
+  })
+
+  it('écarte les segments vides plutôt que d’autoriser une origine vide', () => {
+    // Une virgule en trop — la faute de frappe la plus banale de ce format —
+    // produirait sinon une entrée `''` dans la liste des origines autorisées.
+    const env = parseEnv({ ...validEnv, CORS_ORIGIN: 'https://a.test,,https://b.test,' })
+
+    expect(env.CORS_ORIGIN).toEqual(['https://a.test', 'https://b.test'])
+  })
+
+  it('rend une liste vide quand la variable est vide, plutôt qu’une origine vide', () => {
+    expect(parseEnv({ ...validEnv, CORS_ORIGIN: '' }).CORS_ORIGIN).toEqual([])
+  })
+})

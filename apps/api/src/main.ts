@@ -4,7 +4,7 @@ import { NestFactory } from '@nestjs/core'
 
 import { AppModule } from './app.module'
 import { type Env, parseEnv } from './config/env'
-import { applyHttpConventions } from './interface/http-prefix'
+import { applyHttpConventions } from './interface/http-conventions'
 
 /**
  * Point d'entrée de l'API.

@@ -10,7 +10,7 @@ import {
 import request from 'supertest'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { AppModule } from '@/app.module'
-import { applyHttpConventions } from '@/interface/http-prefix'
+import { applyHttpConventions } from '@/interface/http-conventions'
 
 /**
  * Le contrat HTTP de la slice F3, de bout en bout : application NestJS réelle,

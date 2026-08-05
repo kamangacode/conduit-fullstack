@@ -46,7 +46,8 @@ const UNPREFIXED_PATHS = ['health']
  */
 
 /** Origine de dev par défaut quand aucune n'est fournie (tests, oubli de config). */
-const DEFAULT_CORS_ORIGIN = 'http://localhost:3000'
+/** Exportée pour que les tests asserttent la valeur réelle du repli, pas une copie. */
+export const DEFAULT_CORS_ORIGIN = 'http://localhost:3000'
 
 /** Options des conventions HTTP. */
 export interface HttpConventionsOptions {

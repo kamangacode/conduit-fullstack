@@ -5,7 +5,7 @@ import request from 'supertest'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 
 import { HealthModule } from '@/interface/health/health.module'
-import { applyHttpConventions } from '@/interface/http-prefix'
+import { applyHttpConventions, DEFAULT_CORS_ORIGIN } from '@/interface/http-conventions'
 
 /**
  * Couche `interface` : contrôleur testé via `Test.createTestingModule` + supertest
@@ -107,5 +107,39 @@ describe('conventions CORS partagées', () => {
       .expect(200)
 
     expect(response.headers['access-control-allow-origin']).not.toBe('https://pirate.example')
+  })
+})
+
+/**
+ * La branche par défaut d'`applyHttpConventions` — `corsOrigin` absent — n'était
+ * empruntée par aucune assertion : les deux tests ci-dessus passent toujours une
+ * origine explicite, et le premier `describe` ne regardait pas l'en-tête.
+ *
+ * Le risque pratique est faible (en production `main.ts` fournit toujours
+ * `env.CORS_ORIGIN`, qui a lui-même un défaut Zod), mais un repli qu'aucun test
+ * n'emprunte est un repli dont on ne sait pas s'il fonctionne — et celui-ci
+ * décide quelles origines le navigateur acceptera.
+ */
+describe('conventions CORS — repli sans options', () => {
+  let defaultApp: INestApplication
+
+  beforeAll(async () => {
+    const moduleRef = await Test.createTestingModule({ imports: [HealthModule] }).compile()
+    defaultApp = moduleRef.createNestApplication()
+    applyHttpConventions(defaultApp)
+    await defaultApp.init()
+  })
+
+  afterAll(async () => {
+    await defaultApp.close()
+  })
+
+  it('accorde l’en-tête à l’origine de développement par défaut', async () => {
+    const response = await request(defaultApp.getHttpServer())
+      .get('/health')
+      .set('Origin', DEFAULT_CORS_ORIGIN)
+      .expect(200)
+
+    expect(response.headers['access-control-allow-origin']).toBe(DEFAULT_CORS_ORIGIN)
   })
 })
