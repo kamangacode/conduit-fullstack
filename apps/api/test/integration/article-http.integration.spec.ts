@@ -3,6 +3,7 @@ import { Test } from '@nestjs/testing'
 import {
   articleResponseSchema,
   articlesResponseSchema,
+  CONTRACT_MESSAGES,
   commentResponseSchema,
   commentsResponseSchema,
   tagsResponseSchema,
@@ -598,5 +599,89 @@ describe('REQ-TAG-002 — GET /tags', () => {
     const response = await http().get('/api/tags').expect(200)
 
     expect(response.body.tags).toEqual([])
+  })
+})
+
+describe('REQ-ERROR-002 — messages d’erreur exigés par la suite de conformité', () => {
+  it('AC-6: dit « forbidden » pour un article comme pour un commentaire', async () => {
+    // Le contrat emploie **le même** message pour les deux ressources, sous des
+    // clés différentes. Nos libellés d'origine étaient distincts (« is not yours
+    // to modify » / « … to delete ») : plus explicites, et hors contrat.
+    const jake = await register('jake')
+    const jacob = await register('jacob')
+    const slug = await publish(jake)
+
+    const updated = await http()
+      .put(`/api/articles/${slug}`)
+      .set('Authorization', `Token ${jacob}`)
+      .send({ article: { body: 'détourné' } })
+      .expect(403)
+    expect(updated.body).toEqual({ errors: { article: [CONTRACT_MESSAGES.forbidden] } })
+
+    const deleted = await http()
+      .delete(`/api/articles/${slug}`)
+      .set('Authorization', `Token ${jacob}`)
+      .expect(403)
+    expect(deleted.body).toEqual({ errors: { article: [CONTRACT_MESSAGES.forbidden] } })
+
+    const comment = await http()
+      .post(`/api/articles/${slug}/comments`)
+      .set('Authorization', `Token ${jake}`)
+      .send({ comment: { body: 'le commentaire de jake' } })
+      .expect(201)
+
+    const refused = await http()
+      .delete(`/api/articles/${slug}/comments/${comment.body.comment.id}`)
+      .set('Authorization', `Token ${jacob}`)
+      .expect(403)
+    expect(refused.body).toEqual({ errors: { comment: [CONTRACT_MESSAGES.forbidden] } })
+  })
+
+  it('AC-1: rend « can’t be blank » sur les champs d’un article et d’un commentaire', async () => {
+    const token = await register('jake')
+
+    const article = await http()
+      .post('/api/articles')
+      .set('Authorization', `Token ${token}`)
+      .send({
+        article: { title: '', description: 'Ever wonder how?', body: 'You have to believe' },
+      })
+      .expect(422)
+    expect(article.body.errors.title[0]).toBe(CONTRACT_MESSAGES.blank)
+
+    const slug = await publish(token)
+    const comment = await http()
+      .post(`/api/articles/${slug}/comments`)
+      .set('Authorization', `Token ${token}`)
+      .send({ comment: { body: '' } })
+      .expect(422)
+    expect(comment.body.errors.body[0]).toBe(CONTRACT_MESSAGES.blank)
+  })
+
+  it('AC-3: dit « is missing » sur les routes d’écriture d’articles et de commentaires', async () => {
+    const token = await register('jake')
+    const slug = await publish(token)
+    const expected = { errors: { token: [CONTRACT_MESSAGES.tokenMissing] } }
+
+    // Les six routes que la suite officielle interroge sans jeton. Les balayer
+    // ensemble plutôt qu'une seule : le guard est posé route par route, et un
+    // oubli sur une seule d'entre elles ne se verrait sur aucune des autres.
+    expect(
+      (await http().post('/api/articles').send({ article: anArticle() }).expect(401)).body
+    ).toEqual(expected)
+    expect(
+      (await http().put(`/api/articles/${slug}`).send({ article: {} }).expect(401)).body
+    ).toEqual(expected)
+    expect((await http().delete(`/api/articles/${slug}`).expect(401)).body).toEqual(expected)
+    expect((await http().get('/api/articles/feed').expect(401)).body).toEqual(expected)
+    expect((await http().post(`/api/articles/${slug}/favorite`).expect(401)).body).toEqual(expected)
+    expect(
+      (
+        await http()
+          .post(`/api/articles/${slug}/comments`)
+          .send({ comment: { body: 'x' } })
+          .expect(401)
+      ).body
+    ).toEqual(expected)
   })
 })

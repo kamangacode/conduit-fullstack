@@ -1,9 +1,10 @@
-import { type ErrorResponse, fieldErrors } from '@repo/shared'
+import { CONTRACT_MESSAGES, type ErrorResponse, fieldErrors } from '@repo/shared'
 import { DomainError } from '../shared/errors/domain.error'
 
 /**
  * Erreurs métier du contexte `comment`. Même parti pris que `user` et
- * `article` : code métier + corps §10, aucun statut HTTP (rule 12).
+ * `article` : code métier + corps §10, aucun statut HTTP (rule 12), messages
+ * pris à `CONTRACT_MESSAGES` (ADR 017).
  */
 
 /**
@@ -18,7 +19,7 @@ import { DomainError } from '../shared/errors/domain.error'
  */
 export class CommentNotFoundError extends DomainError {
   readonly errorCode = 'not_found' as const
-  readonly response: ErrorResponse = fieldErrors('comment', 'not found')
+  readonly response: ErrorResponse = fieldErrors('comment', CONTRACT_MESSAGES.notFound)
 
   constructor() {
     super('comment not found')
@@ -34,10 +35,14 @@ export class CommentNotFoundError extends DomainError {
  * (`docs/adr/008-permission-manquante-403.md`). C'est ce critère qui paie la
  * dette contractée par l'ADR 004 en rendant les identifiants énumérables — la
  * lecture est publique de toute façon, seule l'écriture doit être gardée.
+ *
+ * Le message est le **même** que celui de l'article, seule la clé change
+ * (`errors_authorization.hurl`). C'est le contrat qui le veut ainsi : ce qui
+ * identifie la ressource est la clé, pas le libellé.
  */
 export class CommentNotOwnedError extends DomainError {
   readonly errorCode = 'forbidden' as const
-  readonly response: ErrorResponse = fieldErrors('comment', 'is not yours to delete')
+  readonly response: ErrorResponse = fieldErrors('comment', CONTRACT_MESSAGES.forbidden)
 
   constructor() {
     super('comment does not belong to the current user')

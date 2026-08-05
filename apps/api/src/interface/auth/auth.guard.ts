@@ -5,7 +5,7 @@ import {
   Injectable,
   UnauthorizedException,
 } from '@nestjs/common'
-import { fieldErrors } from '@repo/shared'
+import { CONTRACT_MESSAGES, fieldErrors } from '@repo/shared'
 import type { Request } from 'express'
 import { TOKEN_SERVICE, type TokenService } from '../../domain/user/ports/token-service.port'
 import { USER_REPOSITORY, type UserRepository } from '../../domain/user/ports/user-repository.port'
@@ -22,32 +22,51 @@ const AUTH_SCHEME = 'Token'
 export const CURRENT_USER_ID_KEY = 'conduitUserId'
 
 /**
- * Résout l'identité portée par l'en-tête `Authorization`, ou `null`.
+ * Pourquoi une requête n'a pas d'identité.
  *
- * Trois refus distincts remontent tous `null`, sans distinction : en-tête absent
- * ou mal formé, jeton invalide ou expiré, sujet qui ne se résout plus en compte.
- * Le dernier est celui qu'on oublie — un jeton parfaitement signé peut désigner
- * un compte supprimé depuis (REQ-AUTH-001 AC-6), et faire confiance au seul `sub`
- * laisserait un fantôme agir avec l'identité d'un compte inexistant.
+ * `missing` = aucun jeton à examiner (en-tête absent, ou d'un schéma que le
+ * contrat n'emploie pas). `invalid` = un jeton nous a été présenté et nous le
+ * refusons.
+ *
+ * Cette distinction-là est sûre, et le contrat l'exige (REQ-ERROR-002 AC-3 et
+ * AC-4) : l'appelant sait déjà s'il a envoyé un jeton, on ne lui apprend rien.
+ * Ce qui reste fermé, c'est le degré en dessous — les trois causes d'invalidité
+ * ne sont pas distinguées entre elles, sans quoi le porteur d'un jeton périmé
+ * apprendrait qu'il a déjà été valide.
+ */
+type AuthFailure = 'missing' | 'invalid'
+
+/**
+ * Résout l'identité portée par l'en-tête `Authorization`, ou dit pourquoi elle
+ * ne l'est pas.
+ *
+ * Trois refus remontent `invalid` sans se distinguer : jeton mal signé, jeton
+ * expiré, sujet qui ne se résout plus en compte. Le dernier est celui qu'on
+ * oublie — un jeton parfaitement signé peut désigner un compte supprimé depuis
+ * (REQ-AUTH-001 AC-6), et faire confiance au seul `sub` laisserait un fantôme
+ * agir avec l'identité d'un compte inexistant.
  */
 async function resolveUserId(
   request: Request,
   tokens: TokenService,
   users: UserRepository
-): Promise<string | null> {
+): Promise<string | AuthFailure> {
   const header = request.headers.authorization
   if (!header) {
-    return null
+    return 'missing'
   }
 
   const [scheme, token] = header.split(' ')
   if (scheme !== AUTH_SCHEME || !token) {
-    return null
+    // `Bearer <jwt>` tombe ici, et c'est bien une absence de notre point de vue :
+    // le contrat n'emploie que `Token`, donc rien dans cet en-tête n'est un
+    // jeton que nous ayons à examiner.
+    return 'missing'
   }
 
   const userId = await tokens.verify(token)
   if (userId === null) {
-    return null
+    return 'invalid'
   }
 
   // Résolution en base : la signature prouve que NOUS avons émis ce jeton, pas
@@ -59,16 +78,27 @@ async function resolveUserId(
   // partirait directement en écriture. Un test d'intégration dédié la rend
   // obligatoire (REQ-AUTH-001 AC-6).
   const user = await users.findById(userId)
-  return user === null ? null : user.id
+  return user === null ? 'invalid' : user.id
 }
 
+/** Une identité résolue se distingue d'un motif de refus par le fait de n'en être pas un. */
+const isFailure = (resolved: string | AuthFailure): resolved is AuthFailure =>
+  resolved === 'missing' || resolved === 'invalid'
+
 /**
- * Corps du 401, conforme au contrat. Le message ne dit jamais *pourquoi* le
- * refus a lieu : distinguer « jeton expiré » de « signature invalide »
- * renseignerait un attaquant sur l'état de son jeton.
+ * Corps du 401, conforme au contrat (`errors.token`, REQ-ERROR-002 AC-3/AC-4).
+ *
+ * Le message dit s'il y avait un jeton, jamais ce qui cloche avec lui :
+ * distinguer « expiré » de « mal signé » renseignerait un attaquant sur l'état
+ * du jeton qu'il détient.
  */
-const unauthorized = (): UnauthorizedException =>
-  new UnauthorizedException(fieldErrors('authorization', 'is invalid or missing'))
+const unauthorized = (failure: AuthFailure): UnauthorizedException =>
+  new UnauthorizedException(
+    fieldErrors(
+      'token',
+      failure === 'missing' ? CONTRACT_MESSAGES.tokenMissing : CONTRACT_MESSAGES.tokenInvalid
+    )
+  )
 
 /**
  * Guard des routes **protégées** : sans identité valide, la requête est refusée
@@ -83,16 +113,16 @@ export class AuthGuard implements CanActivate {
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const request = context.switchToHttp().getRequest<Request>()
-    const userId = await resolveUserId(request, this.tokens, this.users)
+    const resolved = await resolveUserId(request, this.tokens, this.users)
 
-    if (userId === null) {
-      throw unauthorized()
+    if (isFailure(resolved)) {
+      throw unauthorized(resolved)
     }
 
     // L'identité est posée sur la requête, d'où le décorateur la relira. C'est la
     // seule source d'autorité pour la suite du traitement : aucun identifiant
     // d'utilisateur n'est jamais lu dans le corps (rule 19).
-    Reflect.set(request, CURRENT_USER_ID_KEY, userId)
+    Reflect.set(request, CURRENT_USER_ID_KEY, resolved)
     return true
   }
 }
@@ -117,9 +147,12 @@ export class OptionalAuthGuard implements CanActivate {
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const request = context.switchToHttp().getRequest<Request>()
-    const userId = await resolveUserId(request, this.tokens, this.users)
+    const resolved = await resolveUserId(request, this.tokens, this.users)
 
-    Reflect.set(request, CURRENT_USER_ID_KEY, userId)
+    // Le motif du refus n'intéresse pas ce guard : absent ou refusé, la
+    // consultation est anonyme. Il est donc ramené à `null`, la forme que le
+    // décorateur et les use-cases attendent pour « pas d'appelant ».
+    Reflect.set(request, CURRENT_USER_ID_KEY, isFailure(resolved) ? null : resolved)
     return true
   }
 }

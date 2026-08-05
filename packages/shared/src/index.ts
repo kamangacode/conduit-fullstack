@@ -19,6 +19,7 @@
 /** Version du contrat de modèle partagé. Incrémentée quand le modèle Conduit évolue. */
 export const SHARED_MODEL_VERSION = '1.0.0' as const
 
+export * from './errors/contract-messages'
 export * from './errors/error-codes'
 export * from './errors/validation-errors'
 export * from './model/article'

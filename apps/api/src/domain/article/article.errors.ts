@@ -1,13 +1,13 @@
-import { type ErrorResponse, fieldErrors } from '@repo/shared'
+import { CONTRACT_MESSAGES, type ErrorResponse, fieldErrors } from '@repo/shared'
 import { DomainError } from '../shared/errors/domain.error'
 
 /**
  * Erreurs métier du contexte `article`.
  *
  * Même parti pris que le contexte `user` : chaque classe fixe le code métier
- * (donc le statut, via la table partagée) et le corps §10, et les messages sont
- * repris de l'implémentation de référence RealWorld pour rester interopérables
- * avec les front-ends de l'écosystème.
+ * (donc le statut, via la table partagée) et le corps §10, et les messages
+ * viennent de `CONTRACT_MESSAGES` — seul endroit où l'assertion officielle qui
+ * les impose peut être citée (ADR 017).
  */
 
 /**
@@ -20,7 +20,7 @@ import { DomainError } from '../shared/errors/domain.error'
  */
 export class ArticleNotFoundError extends DomainError {
   readonly errorCode = 'not_found' as const
-  readonly response: ErrorResponse = fieldErrors('article', 'not found')
+  readonly response: ErrorResponse = fieldErrors('article', CONTRACT_MESSAGES.notFound)
 
   constructor() {
     super('article not found')
@@ -39,10 +39,14 @@ export class ArticleNotFoundError extends DomainError {
  * L'exception porte sur le **code renvoyé**, jamais sur la vérification :
  * l'appartenance reste filtrée dans la requête elle-même, et non par une lecture
  * suivie d'une comparaison en mémoire (rule 19).
+ *
+ * Le message est `forbidden`, identique à celui du commentaire — c'est ce
+ * qu'assert `errors_authorization.hurl`. Notre libellé d'origine (« is not
+ * yours to modify ») était plus explicite et hors contrat.
  */
 export class ArticleNotOwnedError extends DomainError {
   readonly errorCode = 'forbidden' as const
-  readonly response: ErrorResponse = fieldErrors('article', 'is not yours to modify')
+  readonly response: ErrorResponse = fieldErrors('article', CONTRACT_MESSAGES.forbidden)
 
   constructor() {
     super('article does not belong to the current user')

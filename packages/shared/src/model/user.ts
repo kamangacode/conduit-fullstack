@@ -1,13 +1,19 @@
 import { z } from 'zod'
+import { CONTRACT_MESSAGES } from '../errors/contract-messages'
+import { contractEmail, minLengthText, nullableText, requiredText } from './contract-fields'
 
 /**
- * Longueur minimale du mot de passe à l'inscription.
+ * Longueur minimale du mot de passe.
  *
- * Le contrat RealWorld ne définit **aucune** politique de mot de passe
- * (`openapi.yml` déclare `password: type: string`, sans contrainte). On pose
- * donc un minimum explicite plutôt qu'implicite, isolé dans une constante : si
- * la suite de conformité Hurl (item F7) s'inscrit avec un secret plus court,
- * c'est cette seule ligne qui bouge, pas les schémas qui la consomment.
+ * Cette constante a été posée avant que la suite de conformité ne tourne, avec
+ * la note qu'elle bougerait si la suite s'inscrivait avec un secret plus court.
+ * La suite a tranché dans l'autre sens et l'a confirmée : `errors_auth.hurl`
+ * refuse `short7c` (7 caractères) par un 422 et accepte `bonjour1` (8) par un
+ * 200, en citant la politique NIST 800-63B. Ce qui était un choix par défaut est
+ * devenu une exigence du contrat.
+ *
+ * La même section impose d'accepter au moins 64 caractères : aucun maximum n'est
+ * donc déclaré, et il ne faut pas en ajouter.
  */
 export const PASSWORD_MIN_LENGTH = 8
 
@@ -51,8 +57,8 @@ export type UserResponse = z.infer<typeof userResponseSchema>
  * doit recevoir un échec d'authentification (401).
  */
 export const loginDtoSchema = z.object({
-  email: z.email(),
-  password: z.string().min(1),
+  email: contractEmail(),
+  password: requiredText(),
 })
 
 export type LoginDto = z.infer<typeof loginDtoSchema>
@@ -70,9 +76,9 @@ export type LoginRequest = z.infer<typeof loginRequestSchema>
  * `@unique` Prisma + traduction en 422), pas par ce schéma.
  */
 export const registerDtoSchema = z.object({
-  username: z.string().trim().min(1),
-  email: z.email(),
-  password: z.string().min(PASSWORD_MIN_LENGTH),
+  username: requiredText(),
+  email: contractEmail(),
+  password: minLengthText(PASSWORD_MIN_LENGTH, CONTRACT_MESSAGES.passwordTooShort),
 })
 
 export type RegisterDto = z.infer<typeof registerDtoSchema>
@@ -85,16 +91,22 @@ export type RegisterRequest = z.infer<typeof registerRequestSchema>
  * Mise à jour du compte — `PUT /api/user` (PRD §7.1).
  *
  * Tous les champs sont optionnels : seuls ceux présents sont modifiés. `bio` et
- * `image` sont `.nullable().optional()` et non `.optional()` seul, car le
- * contrat distingue deux intentions — omettre le champ (ne pas y toucher) et
- * l'envoyer à `null` (l'effacer).
+ * `image` sont nullables et non seulement optionnels, car le contrat distingue
+ * **trois** intentions et non deux — omettre le champ (ne pas y toucher),
+ * l'envoyer à `null` (l'effacer), et l'envoyer à la chaîne vide (l'effacer
+ * aussi). C'est la troisième qui manquait : `nullableText` la normalise, de
+ * sorte que le domaine n'en voie jamais que deux (REQ-USER-005).
+ *
+ * La normalisation ne touche **que** les champs nullables. `username` et
+ * `email` reçus vides restent un refus : les normaliser produirait un compte
+ * sans nom.
  */
 export const updateUserDtoSchema = z.object({
-  email: z.email().optional(),
-  username: z.string().trim().min(1).optional(),
-  password: z.string().min(PASSWORD_MIN_LENGTH).optional(),
-  bio: z.string().nullable().optional(),
-  image: z.string().nullable().optional(),
+  email: contractEmail().optional(),
+  username: requiredText().optional(),
+  password: minLengthText(PASSWORD_MIN_LENGTH, CONTRACT_MESSAGES.passwordTooShort).optional(),
+  bio: nullableText().optional(),
+  image: nullableText().optional(),
 })
 
 export type UpdateUserDto = z.infer<typeof updateUserDtoSchema>

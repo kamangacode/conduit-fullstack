@@ -1,6 +1,6 @@
 import type { INestApplication } from '@nestjs/common'
 import { Test } from '@nestjs/testing'
-import { profileResponseSchema, userResponseSchema } from '@repo/shared'
+import { CONTRACT_MESSAGES, profileResponseSchema, userResponseSchema } from '@repo/shared'
 import request from 'supertest'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { AppModule } from '@/app.module'
@@ -199,7 +199,7 @@ describe('REQ-AUTH-001 — vérification du jeton', () => {
     // `errors`, sur lequel un front RealWorld affiche une liste vide.
     const response = await http().get('/api/user').expect(401)
 
-    expect(response.body).toEqual({ errors: { authorization: ['is invalid or missing'] } })
+    expect(response.body).toEqual({ errors: { token: [CONTRACT_MESSAGES.tokenMissing] } })
   })
 
   it('AC-6: refuse un jeton valide dont le compte a été supprimé', async () => {
@@ -214,7 +214,7 @@ describe('REQ-AUTH-001 — vérification du jeton', () => {
     // Corps STRICTEMENT identique à celui d'un jeton forgé : un 404 porteur d'un
     // `errors.profile` apprendrait au porteur d'un jeton périmé que le compte a
     // existé, ce qui est l'oracle d'existence que tout le design d'erreurs ferme.
-    expect(response.body).toEqual({ errors: { authorization: ['is invalid or missing'] } })
+    expect(response.body).toEqual({ errors: { token: [CONTRACT_MESSAGES.tokenInvalid] } })
   })
 
   it('AC-6: refuse aussi sur une route qui ne relit pas le compte elle-même', async () => {
@@ -236,7 +236,7 @@ describe('REQ-AUTH-001 — vérification du jeton', () => {
       .set('Authorization', `Token ${jacob.token}`)
       .expect(401)
 
-    expect(response.body).toEqual({ errors: { authorization: ['is invalid or missing'] } })
+    expect(response.body).toEqual({ errors: { token: [CONTRACT_MESSAGES.tokenInvalid] } })
     expect(await prismaTestClient.follow.count()).toBe(0)
   })
 
@@ -469,5 +469,201 @@ describe('REQ-PROFILE-003 — suivre et ne plus suivre', () => {
       .post('/api/profiles/personne/follow')
       .set('Authorization', `Token ${token}`)
       .expect(404)
+  })
+})
+
+describe('REQ-ERROR-002 — messages d’erreur exigés par la suite de conformité', () => {
+  it('AC-3: dit « is missing » quand aucun en-tête d’autorisation n’est exploitable', async () => {
+    // Les deux formes d'absence : l'en-tête omis, et un en-tête présent dont le
+    // schéma n'est pas celui du contrat. `Bearer` porte peut-être un jeton
+    // parfaitement valide, mais nous n'avons rien à en lire — de notre point de
+    // vue il n'y a pas de jeton.
+    const omitted = await http().get('/api/user').expect(401)
+    expect(omitted.body).toEqual({ errors: { token: [CONTRACT_MESSAGES.tokenMissing] } })
+
+    const { token } = await registerAndLogin()
+    const wrongScheme = await http()
+      .get('/api/user')
+      .set('Authorization', `Bearer ${token}`)
+      .expect(401)
+    expect(wrongScheme.body).toEqual({ errors: { token: [CONTRACT_MESSAGES.tokenMissing] } })
+  })
+
+  it('AC-4: dit « is invalid » pour un jeton présent, et le même message pour les trois causes', async () => {
+    // Le cœur du critère est l'égalité des trois corps, pas leur contenu. Ce que
+    // le porteur ne doit pas pouvoir déduire, c'est *pourquoi* son jeton est
+    // refusé : un message qui distinguerait « expiré » de « mal signé » lui
+    // dirait qu'il a déjà été valide.
+    const { token } = await registerAndLogin()
+
+    const forged = await http()
+      .get('/api/user')
+      .set('Authorization', 'Token nimporte-quoi')
+      .expect(401)
+
+    const tampered = await http()
+      .get('/api/user')
+      .set('Authorization', `Token ${token.slice(0, -3)}xyz`)
+      .expect(401)
+
+    await prismaTestClient.user.deleteMany({ where: { username: 'jake' } })
+    const orphaned = await http()
+      .get('/api/user')
+      .set('Authorization', `Token ${token}`)
+      .expect(401)
+
+    const expected = { errors: { token: [CONTRACT_MESSAGES.tokenInvalid] } }
+    expect(forged.body).toEqual(expected)
+    expect(tampered.body).toEqual(expected)
+    expect(orphaned.body).toEqual(expected)
+  })
+
+  it('AC-4: distingue le jeton absent du jeton présent mais refusé', async () => {
+    // La contre-épreuve d'AC-3 et AC-4 pris ensemble. Sans elle, un guard qui
+    // répondrait « is missing » à *tout* refus passerait AC-3 et l'égalité
+    // d'AC-4 — les deux critères seraient verts sur un comportement faux.
+    //
+    // Cette distinction-ci est sûre : l'appelant sait déjà s'il a envoyé un
+    // jeton. C'est l'état du jeton qu'on lui tait, pas son existence.
+    const absent = await http().get('/api/user').expect(401)
+    const refused = await http()
+      .get('/api/user')
+      .set('Authorization', 'Token nimporte-quoi')
+      .expect(401)
+
+    expect(absent.body).not.toEqual(refused.body)
+  })
+
+  it('AC-5: dit « invalid » sous la clé credentials, identiquement pour les deux causes', async () => {
+    await registerAndLogin()
+
+    const unknownEmail = await http()
+      .post('/api/users/login')
+      .send({ user: { email: 'personne@nulle-part.com', password: 'jakejake' } })
+      .expect(401)
+
+    const wrongPassword = await http()
+      .post('/api/users/login')
+      .send({ user: { email: credentials.email, password: 'pas-le-bon-mot-de-passe' } })
+      .expect(401)
+
+    const expected = { errors: { credentials: [CONTRACT_MESSAGES.credentialsInvalid] } }
+    expect(unknownEmail.body).toEqual(expected)
+    // L'égalité stricte des deux corps est la propriété (REQ-USER-003 AC-3) :
+    // les distinguer ferait de l'endpoint un oracle répondant à « ce compte
+    // existe-t-il ? » sans authentification.
+    expect(wrongPassword.body).toEqual(expected)
+  })
+
+  it('AC-1: rend « can’t be blank » de bout en bout, et non un message de la bibliothèque de validation', async () => {
+    // La vérification au niveau du schéma vit dans `packages/shared`. Celle-ci
+    // prouve autre chose : que le message traverse le pipe de validation et le
+    // filtre d'exception sans être réécrit en route.
+    const response = await http()
+      .post('/api/users')
+      .send({ user: { username: '', email: 'jake@jake.jake', password: 'jakejake' } })
+      .expect(422)
+
+    expect(response.body.errors.username[0]).toBe(CONTRACT_MESSAGES.blank)
+  })
+})
+
+describe('REQ-USER-005 — un champ nullable reçu vide est une absence', () => {
+  it('AC-1: renvoie null pour une bio mise à la chaîne vide', async () => {
+    const { token } = await registerAndLogin()
+    await http()
+      .put('/api/user')
+      .set('Authorization', `Token ${token}`)
+      .send({ user: { bio: 'une bio' } })
+      .expect(200)
+
+    const response = await http()
+      .put('/api/user')
+      .set('Authorization', `Token ${token}`)
+      .send({ user: { bio: '' } })
+      .expect(200)
+
+    expect(response.body.user.bio).toBeNull()
+  })
+
+  it('AC-2: persiste la normalisation, au lieu de la limiter à la réponse', async () => {
+    // La distinction que ce test porte seul : normaliser à la sérialisation
+    // donnerait une réponse conforme sur une base qui stocke `''`. La relecture
+    // par un second appel est ce qui départage les deux.
+    const { token } = await registerAndLogin()
+    await http()
+      .put('/api/user')
+      .set('Authorization', `Token ${token}`)
+      .send({ user: { bio: 'une bio', image: 'https://example.com/a.jpg' } })
+      .expect(200)
+
+    await http()
+      .put('/api/user')
+      .set('Authorization', `Token ${token}`)
+      .send({ user: { bio: '' } })
+      .expect(200)
+
+    const reread = await http().get('/api/user').set('Authorization', `Token ${token}`).expect(200)
+    expect(reread.body.user.bio).toBeNull()
+
+    const stored = await prismaTestClient.user.findUniqueOrThrow({ where: { username: 'jake' } })
+    expect(stored.bio).toBeNull()
+  })
+
+  it('AC-3: traite l’image exactement comme la bio', async () => {
+    const { token } = await registerAndLogin()
+    await http()
+      .put('/api/user')
+      .set('Authorization', `Token ${token}`)
+      .send({ user: { image: 'https://example.com/a.jpg' } })
+      .expect(200)
+
+    const response = await http()
+      .put('/api/user')
+      .set('Authorization', `Token ${token}`)
+      .send({ user: { image: '' } })
+      .expect(200)
+
+    expect(response.body.user.image).toBeNull()
+
+    const reread = await http().get('/api/user').set('Authorization', `Token ${token}`).expect(200)
+    expect(reread.body.user.image).toBeNull()
+  })
+
+  it('AC-4: laisse intacts les champs que la requête ne mentionne pas', async () => {
+    // La contrepartie qui empêche la correction de déborder : une normalisation
+    // appliquée aux champs omis transformerait chaque enregistrement de
+    // formulaire en effacement partiel.
+    const { token } = await registerAndLogin()
+    await http()
+      .put('/api/user')
+      .set('Authorization', `Token ${token}`)
+      .send({ user: { bio: 'une bio', image: 'https://example.com/a.jpg' } })
+      .expect(200)
+
+    const response = await http()
+      .put('/api/user')
+      .set('Authorization', `Token ${token}`)
+      .send({ user: { username: 'jacob' } })
+      .expect(200)
+
+    expect(response.body.user.bio).toBe('une bio')
+    expect(response.body.user.image).toBe('https://example.com/a.jpg')
+  })
+
+  it('AC-5: refuse un champ obligatoire vide au lieu de le normaliser', async () => {
+    const { token } = await registerAndLogin()
+
+    await http()
+      .put('/api/user')
+      .set('Authorization', `Token ${token}`)
+      .send({ user: { username: '' } })
+      .expect(422)
+
+    await http()
+      .put('/api/user')
+      .set('Authorization', `Token ${token}`)
+      .send({ user: { email: '' } })
+      .expect(422)
   })
 })

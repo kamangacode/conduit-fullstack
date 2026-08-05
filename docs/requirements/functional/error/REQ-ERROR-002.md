@@ -3,7 +3,7 @@ id: REQ-ERROR-002
 title: Renvoyer les messages d'erreur exigés par la suite de conformité
 type: functional
 domain: error
-status: approved
+status: implemented
 priority: must
 source: "PRD §10 (erreurs) et §15.1 (suite Hurl, source de vérité du contrat) ; assertions de errors_auth.hurl, errors_articles.hurl, errors_comments.hurl, errors_profiles.hurl, errors_authorization.hurl"
 acceptance_criteria:
@@ -32,8 +32,17 @@ acceptance_criteria:
     when: "la requête est refusée"
     then: "la réponse est un 403 dont le message est exactement `forbidden`, sous la clé `article` ou `comment` selon la ressource"
 implementation:
-  files: []
-  tests: []
+  files:
+    - packages/shared/src/errors/contract-messages.ts
+    - packages/shared/src/model/contract-fields.ts
+    - apps/api/src/interface/auth/auth.guard.ts
+    - apps/api/src/domain/user/user.errors.ts
+    - apps/api/src/domain/article/article.errors.ts
+    - apps/api/src/domain/comment/comment.errors.ts
+  tests:
+    - packages/shared/src/errors/contract-messages.spec.ts
+    - apps/api/test/integration/auth-http.integration.spec.ts
+    - apps/api/test/integration/article-http.integration.spec.ts
 related:
   issues: [8]
   requirements:

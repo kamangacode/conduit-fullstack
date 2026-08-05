@@ -3,7 +3,7 @@ id: REQ-USER-005
 title: Traiter un champ nullable reçu vide comme une absence
 type: functional
 domain: user
-status: approved
+status: implemented
 priority: must
 source: "PRD §7.1 (mise à jour du compte) ; assertions de auth.hurl (« Update user bio to empty string - should normalize to null »)"
 acceptance_criteria:
@@ -28,8 +28,12 @@ acceptance_criteria:
     when: "la mise à jour est validée"
     then: "elle est refusée par un 422 : la normalisation du vide ne vaut que pour les champs que le contrat déclare nullables"
 implementation:
-  files: []
-  tests: []
+  files:
+    - packages/shared/src/model/contract-fields.ts
+    - packages/shared/src/model/user.ts
+  tests:
+    - packages/shared/src/errors/contract-messages.spec.ts
+    - apps/api/test/integration/auth-http.integration.spec.ts
 related:
   issues: [8]
   requirements:
