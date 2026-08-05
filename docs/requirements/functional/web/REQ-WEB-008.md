@@ -3,7 +3,7 @@ id: REQ-WEB-008
 title: Étendre le client API aux articles, commentaires et tags
 type: functional
 domain: web
-status: approved
+status: implemented
 priority: must
 source: "PRD §7.3, §7.4, §7.5 (endpoints articles, commentaires, tags) ; §8 (enveloppes) ; règles R-7, R-10"
 acceptance_criteria:
@@ -40,8 +40,10 @@ acceptance_criteria:
     when: "le client les liste, en publie un ou en supprime un"
     then: "les trois opérations passent par le chemin imbriqué de l'article et rendent les types partagés"
 implementation:
-  files: []
-  tests: []
+  files:
+    - apps/web/src/lib/api-client.ts
+  tests:
+    - apps/web/src/lib/api-client.spec.ts
 related:
   issues: [6]
   requirements:

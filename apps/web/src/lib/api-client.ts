@@ -1,9 +1,22 @@
 import type {
+  Article,
+  ArticleResponse,
+  ArticlesResponse,
+  Comment,
+  CommentResponse,
+  CommentsResponse,
+  CreateArticleDto,
+  CreateCommentDto,
   ErrorResponse,
+  ListArticlesQuery,
   LoginDto,
+  PaginationQuery,
   Profile,
   ProfileResponse,
   RegisterDto,
+  Tag,
+  TagsResponse,
+  UpdateArticleDto,
   UpdateUserDto,
   User,
   UserResponse,
@@ -80,7 +93,29 @@ interface RequestOptions {
   readonly method: 'GET' | 'POST' | 'PUT' | 'DELETE'
   readonly path: string
   readonly body?: unknown
+  /**
+   * Filtres de liste. Les entrées `undefined` sont **omises**, pas envoyées à
+   * blanc (REQ-WEB-008 AC-1) : `?tag=` désigne le tag vide côté API, donc une
+   * liste vide, et la page afficherait « aucun article » sur un flux qui en
+   * contient.
+   */
+  readonly query?: Readonly<Record<string, string | number | undefined>>
 }
+
+/**
+ * Rend chaque champ facultatif, **`undefined` explicite compris**.
+ *
+ * `Partial<T>` ne suffit pas ici, et la nuance a coûté un typecheck rouge.
+ * Le dépôt active `exactOptionalPropertyTypes` (tsconfig strict maximal, item
+ * A8) : sous ce drapeau, `{ limit?: number }` autorise la **clé absente** mais
+ * refuse la clé présente valant `undefined`. Or la forme qu'une page produit en
+ * lisant ses paramètres d'URL est exactement celle-là —
+ * `{ tag: searchParams.tag }`, où `tag` peut être `undefined`.
+ *
+ * Le drapeau a raison de distinguer les deux cas ; c'est la signature qui devait
+ * dire lequel elle accepte, et elle accepte les deux.
+ */
+type Unset<T> = { [K in keyof T]?: T[K] | undefined }
 
 export interface ApiClient {
   login(dto: LoginDto): Promise<User>
@@ -90,13 +125,30 @@ export interface ApiClient {
   getProfile(username: string): Promise<Profile>
   followUser(username: string): Promise<Profile>
   unfollowUser(username: string): Promise<Profile>
+  /**
+   * Dérivé du type partagé plutôt que redéclaré : après parse, `limit` et
+   * `offset` sont toujours présents (le schéma leur donne une valeur par
+   * défaut, règle R-10), alors que l'appelant a le droit de ne rien préciser.
+   */
+  listArticles(query: Unset<ListArticlesQuery>): Promise<ArticlesResponse>
+  getFeed(query: Unset<PaginationQuery>): Promise<ArticlesResponse>
+  getArticle(slug: string): Promise<Article>
+  createArticle(dto: CreateArticleDto): Promise<Article>
+  updateArticle(slug: string, dto: UpdateArticleDto): Promise<Article>
+  deleteArticle(slug: string): Promise<void>
+  favoriteArticle(slug: string): Promise<Article>
+  unfavoriteArticle(slug: string): Promise<Article>
+  getComments(slug: string): Promise<Comment[]>
+  addComment(slug: string, dto: CreateCommentDto): Promise<Comment>
+  deleteComment(slug: string, commentId: number): Promise<void>
+  getTags(): Promise<Tag[]>
 }
 
 export function createApiClient(config: ApiClientConfig): ApiClient {
   const fetchImpl = config.fetchImpl ?? globalThis.fetch
   const baseUrl = config.baseUrl.replace(/\/$/, '')
 
-  async function request<T>({ method, path, body }: RequestOptions): Promise<T> {
+  async function request<T>({ method, path, body, query }: RequestOptions): Promise<T> {
     const token = config.getToken()
     const headers = new Headers({ 'content-type': 'application/json' })
 
@@ -107,7 +159,7 @@ export function createApiClient(config: ApiClientConfig): ApiClient {
       headers.set('authorization', `Token ${token}`)
     }
 
-    const response = await fetchImpl(`${baseUrl}${path}`, {
+    const response = await fetchImpl(`${baseUrl}${path}${toQueryString(query)}`, {
       method,
       headers,
       ...(body === undefined ? {} : { body: JSON.stringify(body) }),
@@ -132,10 +184,44 @@ export function createApiClient(config: ApiClientConfig): ApiClient {
     return (await response.json()) as T
   }
 
-  // Regroupés par ressource plutôt qu'énumérés d'un bloc : sept méthodes
+  // Regroupés par ressource plutôt qu'énumérés d'un bloc : dix-neuf méthodes
   // quasi identiques dans un même littéral se relisent mal, et la frontière
-  // `user` / `profile` est celle que le contrat trace déjà (§7.1 et §7.2).
-  return { ...userEndpoints(request), ...profileEndpoints(request) }
+  // suit celle que le contrat trace déjà (§7.1 à §7.5).
+  return {
+    ...userEndpoints(request),
+    ...profileEndpoints(request),
+    ...articleEndpoints(request),
+    ...commentEndpoints(request),
+    ...tagEndpoints(request),
+  }
+}
+
+/**
+ * Chaîne de requête, **filtres absents omis** (REQ-WEB-008 AC-1).
+ *
+ * `URLSearchParams` fait l'encodage, y compris des valeurs qui contiennent un
+ * `&` ou un `=` — une concaténation manuelle y couperait la valeur et
+ * fabriquerait un paramètre supplémentaire, produisant une requête bien formée
+ * et de sens différent.
+ *
+ * Le filtrage porte sur `undefined` seulement : une chaîne vide fournie
+ * explicitement est transmise, parce que c'est alors une valeur choisie par
+ * l'appelant et non une absence.
+ */
+function toQueryString(query: RequestOptions['query']): string {
+  if (!query) {
+    return ''
+  }
+
+  const params = new URLSearchParams()
+  for (const [key, value] of Object.entries(query)) {
+    if (value !== undefined) {
+      params.set(key, String(value))
+    }
+  }
+
+  const serialized = params.toString()
+  return serialized ? `?${serialized}` : ''
 }
 
 /** Fonction de requête, telle que la referme `createApiClient`. */
@@ -173,6 +259,105 @@ function profileEndpoints(
     getProfile: (username) => unwrap({ method: 'GET', path: pathFor(username) }),
     followUser: (username) => unwrap({ method: 'POST', path: `${pathFor(username)}/follow` }),
     unfollowUser: (username) => unwrap({ method: 'DELETE', path: `${pathFor(username)}/follow` }),
+  }
+}
+
+/** Chemin d'un article. Le slug vient de l'URL ou d'une réponse : il est encodé. */
+const articlePath = (slug: string) => `/articles/${encodeURIComponent(slug)}`
+
+/**
+ * Endpoints d'articles et de favoris (PRD §7.3).
+ *
+ * Le flux personnel a son **propre chemin** et n'est pas un filtre de la liste
+ * globale (REQ-WEB-008 AC-4) : router l'un vers l'autre renverrait tout le site,
+ * dans une réponse parfaitement bien formée.
+ */
+function articleEndpoints(
+  request: Request
+): Pick<
+  ApiClient,
+  | 'listArticles'
+  | 'getFeed'
+  | 'getArticle'
+  | 'createArticle'
+  | 'updateArticle'
+  | 'deleteArticle'
+  | 'favoriteArticle'
+  | 'unfavoriteArticle'
+> {
+  const unwrap = async (options: RequestOptions): Promise<Article> => {
+    const { article } = await request<ArticleResponse>(options)
+    return article
+  }
+
+  // L'enveloppe de liste est rendue **telle quelle**, sous le type partagé :
+  // `articlesCount` est le total avant pagination, et le recalculer depuis
+  // `articles.length` donnerait une valeur juste tant que le jeu tient sous une
+  // page — puis fausse, sans erreur (AC-3). Une forme locale
+  // `{ articles, articlesCount }` serait de surcroît une redéfinition de
+  // `ArticlesResponse`, exactement ce que l'architecture §6 interdit.
+  const unwrapPage = (options: RequestOptions): Promise<ArticlesResponse> =>
+    request<ArticlesResponse>(options)
+
+  return {
+    listArticles: (query) => unwrapPage({ method: 'GET', path: '/articles', query }),
+    getFeed: (query) => unwrapPage({ method: 'GET', path: '/articles/feed', query }),
+    getArticle: (slug) => unwrap({ method: 'GET', path: articlePath(slug) }),
+    createArticle: (dto) => unwrap({ method: 'POST', path: '/articles', body: { article: dto } }),
+    updateArticle: (slug, dto) =>
+      unwrap({ method: 'PUT', path: articlePath(slug), body: { article: dto } }),
+    deleteArticle: async (slug) => {
+      await request<void>({ method: 'DELETE', path: articlePath(slug) })
+    },
+    favoriteArticle: (slug) => unwrap({ method: 'POST', path: `${articlePath(slug)}/favorite` }),
+    unfavoriteArticle: (slug) =>
+      unwrap({ method: 'DELETE', path: `${articlePath(slug)}/favorite` }),
+  }
+}
+
+/**
+ * Endpoints de commentaires (PRD §7.4).
+ *
+ * Tous passent par le chemin **imbriqué** dans l'article. Ce n'est pas une
+ * convention d'esthétique d'URL : c'est ce qui permet à l'API de vérifier que le
+ * commentaire appartient bien à cet article avant de le supprimer, contrôle sans
+ * lequel un identifiant séquentiel suffirait à supprimer le commentaire d'un
+ * autre (motif IDOR, rule 19).
+ */
+function commentEndpoints(
+  request: Request
+): Pick<ApiClient, 'getComments' | 'addComment' | 'deleteComment'> {
+  const commentsPath = (slug: string) => `${articlePath(slug)}/comments`
+
+  return {
+    getComments: async (slug) => {
+      const { comments } = await request<CommentsResponse>({
+        method: 'GET',
+        path: commentsPath(slug),
+      })
+      return comments
+    },
+    addComment: async (slug, dto) => {
+      const { comment } = await request<CommentResponse>({
+        method: 'POST',
+        path: commentsPath(slug),
+        body: { comment: dto },
+      })
+      return comment
+    },
+    deleteComment: async (slug, commentId) => {
+      await request<void>({ method: 'DELETE', path: `${commentsPath(slug)}/${commentId}` })
+    },
+  }
+}
+
+/** Tags populaires (PRD §7.5). */
+function tagEndpoints(request: Request): Pick<ApiClient, 'getTags'> {
+  return {
+    getTags: async () => {
+      const { tags } = await request<TagsResponse>({ method: 'GET', path: '/tags' })
+      return tags
+    },
   }
 }
 
