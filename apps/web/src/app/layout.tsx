@@ -30,6 +30,10 @@ export default function RootLayout({ children }: { children: ReactNode }) {
        *     `styles.css` ne bundle pas.
        * Ionicons et les polices restent en CDN (fidèle à l'exemple de la spec) ;
        * un éventuel passage au self-host (CSP stricte) fera l'objet d'un ADR.
+       *
+       * `/theme-overrides.css` vient EN DERNIER, à dessein : il corrige le thème
+       * vendoré sans le modifier (voir l'en-tête du fichier). L'ordre porte la
+       * sémantique — un override ne surcharge que s'il est chargé après sa cible.
        */}
       <head>
         <link
@@ -41,6 +45,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
           href="https://fonts.googleapis.com/css?family=Source+Sans+Pro:300,400,600,700|Lora:400,700&display=swap"
         />
         <link rel="stylesheet" href="/styles.css" />
+        <link rel="stylesheet" href="/theme-overrides.css" />
       </head>
       <body>
         <ApiProvider>

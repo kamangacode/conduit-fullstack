@@ -1,0 +1,23 @@
+/*
+ * Overrides projet, appliqués PAR-DESSUS le thème vendoré `styles.css`.
+ *
+ * `styles.css` est une copie fidèle de « Conduit Minimal CSS v4 » (voir le bloc
+ * Head de `layout.tsx`) : on ne le modifie pas pour ne pas diverger de l'upstream.
+ * Les corrections propres au projet vivent ici, chargées après lui.
+ *
+ * Anneau de focus au clavier seulement
+ * ------------------------------------
+ * Le thème hérite des règles normalize/Bootstrap `a:focus` et `button:focus`, qui
+ * posent `outline: 5px auto -webkit-focus-ring-color`. L'anneau bleu s'affiche
+ * donc AUSSI au clic souris (ex. l'onglet « Global Feed »), où il n'apporte rien
+ * et surprend l'utilisateur.
+ *
+ * `:focus-visible` est l'heuristique native du navigateur « ce focus mérite-t-il
+ * un indicateur ? » : vraie pour la navigation clavier, fausse pour un clic
+ * pointeur. On retire l'anneau uniquement quand il n'est PAS visible-au-clavier —
+ * les utilisateurs au clavier gardent donc leur repère, l'accessibilité est
+ * préservée (à l'inverse d'un `outline: none` global, qui la casserait).
+ */
+:focus:not(:focus-visible) {
+  outline: none;
+}
