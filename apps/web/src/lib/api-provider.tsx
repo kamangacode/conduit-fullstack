@@ -3,6 +3,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { createContext, type ReactNode, useContext, useMemo, useRef, useState } from 'react'
 import { type ApiClient, createApiClient } from './api-client'
+import { API_BASE_URL } from './env'
 import { SessionProvider, useSession } from './session'
 
 /**
@@ -12,13 +13,10 @@ import { SessionProvider, useSession } from './session'
  * la session pour connaître le jeton, donc la session l'englobe.
  */
 
-/** URL de l'API. Publique par nécessité — le navigateur doit la connaître. */
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001/api'
-
 const ApiContext = createContext<ApiClient | null>(null)
 
 function ApiClientProvider({ children }: { children: ReactNode }) {
-  const { token } = useSession()
+  const { token, signOut } = useSession()
 
   // Le jeton est lu **à chaque requête** via la closure, pas capturé à la
   // construction : un client figé continuerait d'envoyer l'ancien jeton après
@@ -28,8 +26,21 @@ function ApiClientProvider({ children }: { children: ReactNode }) {
   const tokenRef = useRef(token)
   tokenRef.current = token
 
+  // Même raisonnement pour `signOut` : la référence est stable aujourd'hui
+  // (`useCallback` sans dépendance), mais la lire par ref rend le client
+  // indépendant de cette garantie.
+  const signOutRef = useRef(signOut)
+  signOutRef.current = signOut
+
   const client = useMemo(
-    () => createApiClient({ baseUrl: API_BASE_URL, getToken: () => tokenRef.current }),
+    () =>
+      createApiClient({
+        baseUrl: API_BASE_URL,
+        getToken: () => tokenRef.current,
+        // C'est ici que l'API redevient seule autorité sur la validité du
+        // jeton (REQ-WEB-002 AC-4) : elle répond 401, la session se purge.
+        onUnauthorized: () => signOutRef.current(),
+      }),
     []
   )
 

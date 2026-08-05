@@ -4,7 +4,7 @@ import { type LoginDto, loginDtoSchema, type RegisterDto, registerDtoSchema } fr
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { type FormEvent, useState } from 'react'
-import { ApiError } from '../lib/api-client'
+import { toMessages } from '../lib/errors'
 import { ErrorMessages } from './ErrorMessages'
 
 /**
@@ -70,7 +70,7 @@ export function AuthForm({ mode, onSubmit }: AuthFormProps) {
       await onSubmit(parsed.data)
       router.push('/')
     } catch (error) {
-      setErrors(toMessages(error))
+      setErrors(toMessages(error, GENERIC_MESSAGES))
     } finally {
       setPending(false)
     }
@@ -144,7 +144,12 @@ function TextField({
 }) {
   return (
     <fieldset className="form-group">
+      {/* `aria-label` : un `placeholder` disparaît dès la première frappe, et
+          avec lui le nom du champ pour un lecteur d'écran. La rule 11 autorise
+          explicitement l'écart au markup de référence pour l'accessibilité, et
+          celui-ci ne touche ni la structure ni les classes. */}
       <input
+        aria-label={placeholder}
         className="form-control form-control-lg"
         type={type}
         placeholder={placeholder}
@@ -153,24 +158,4 @@ function TextField({
       />
     </fieldset>
   )
-}
-
-/**
- * Traduit une erreur en messages affichables.
- *
- * Les erreurs par champ du contrat (§10) sont affichées telles quelles — elles
- * sont rédigées pour l'utilisateur. Un statut sans détail retombe sur un
- * message générique ; une erreur non-API (réseau coupé) aussi, car elle ne dit
- * rien que l'utilisateur puisse corriger.
- */
-function toMessages(error: unknown): string[] {
-  if (error instanceof ApiError) {
-    const detailed = error.messages
-    if (detailed.length > 0) {
-      return detailed
-    }
-    return [GENERIC_MESSAGES[error.status] ?? 'request failed']
-  }
-
-  return ['unable to reach the server']
 }

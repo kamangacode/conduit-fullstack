@@ -31,8 +31,10 @@ implementation:
   files:
     - apps/web/src/lib/session.tsx
     - apps/web/src/lib/api-provider.tsx
+    - apps/web/src/lib/api-client.ts
   tests:
     - apps/web/src/lib/session.spec.tsx
+    - apps/web/src/lib/api-provider.spec.tsx
 related:
   issues: [5]
   requirements:

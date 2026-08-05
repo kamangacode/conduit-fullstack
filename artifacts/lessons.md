@@ -8,6 +8,54 @@
 
 ---
 
+## 2026-08-05 — La matrice de traçabilité rapproche des **libellés**, pas des comportements
+
+**Symptôme.** Revue de F4 : deux tests portaient un préfixe `AC-n:` dont ils ne
+prouvaient pas le critère. `session.spec.tsx` annonçait « purge la session sur
+une réponse 401 » et cliquait sur le bouton de déconnexion manuelle —
+c'est-à-dire re-testait AC-3. `SettingsForm.spec.tsx` annonçait AC-4 (« la
+session porte le compte à jour ») et vérifiait l'affichage des erreurs, libellé
+recopié depuis `AuthForm.spec.tsx` où AC-4 désigne autre chose.
+
+Conséquence : **REQ-WEB-002 AC-4 était marqué `implemented` alors qu'aucun code
+ne réalisait la purge**. Le contrôle de sécurité n'existait pas, et un jeton
+expiré laissait l'interface affirmer une identité que l'API ne reconnaissait
+plus.
+
+**Cause racine — et c'est la partie qui compte.** `requirements:matrix` rattache
+un test à un critère par **la chaîne** `AC-n:` contenue dans le nom du `it()`.
+Elle ne peut pas savoir ce que le test assert. Un libellé emprunté produit donc
+une couverture *rapportée* de 100 % sur un critère *non couvert* — et le chiffre,
+qui est là pour signaler les trous, les masque activement.
+
+C'est la **quatrième** occurrence du même mode d'échec dans ce dépôt (cf. les
+deux entrées ci-dessous, plus un test écrit à l'envers en F4 sur
+`loginDtoSchema`). Les deux premières ont coûté un bug ; celle-ci a laissé passer
+un contrôle de sécurité manquant. Écrire « faire attention » une troisième fois
+n'y changerait rien.
+
+**Ce qui marche, et qu'il faut faire systématiquement.** Le seul contrôle qui a
+attrapé ces cas est le **sabotage** : supprimer la ligne testée et vérifier que
+le test rougit. Il est déjà dans la rule 16 comme convention de revue ; ce que
+F4 montre, c'est qu'il doit s'appliquer **à chaque critère marqué
+`implemented`**, pas seulement aux endroits où l'on se sent incertain. Un test
+qui survit à la suppression de son sujet ne prouve rien, quel que soit son nom.
+
+**Contrôle complémentaire, non automatisable.** Avant de passer un REQ en
+`implemented`, relire le `then:` du critère **à côté** de l'assertion du test.
+Les deux défauts ci-dessus se voient en dix secondes par cette lecture, et
+restent invisibles à toute vérification mécanique — la machine compare des
+libellés, seul un humain compare des sens.
+
+**Piste d'outillage envisagée puis écartée pour l'instant** : faire échouer la
+matrice quand un `it('AC-n: …')` cite un REQ absent de `implementation.tests`.
+Ça attraperait le libellé posé sur le mauvais fichier (le cas
+`SettingsForm`/AC-4), pas le libellé posé sur le mauvais comportement dans le bon
+fichier (le cas `session`/AC-4). Utile, donc, mais partiel — à ne pas prendre
+pour une garantie.
+
+---
+
 ## 2026-08-05 — Un garde-fou qui ne tombe que sous charge est un garde-fou qu'on contourne
 
 **Symptôme.** Le job pre-push `migrations-apply` refusait le push sur « Postgres

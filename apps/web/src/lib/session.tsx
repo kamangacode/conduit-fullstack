@@ -33,11 +33,26 @@ import {
 /** Clé de stockage. Exportée pour que les tests décrivent l'état initial sans la deviner. */
 export const SESSION_STORAGE_KEY = 'conduit.session'
 
+/**
+ * État de résolution de la session.
+ *
+ * `pending` est la distinction qui manquait et qui a coûté un vrai défaut : au
+ * premier rendu, `user === null` signifie **deux choses** — « pas encore relu le
+ * stockage » et « anonyme ». Une page qui redirige sur `user === null` éjecte
+ * donc les utilisateurs connectés, parce que les effets React se déclenchent des
+ * enfants vers les parents : l'effet de la page s'exécute avant celui de ce
+ * fournisseur. Un booléen à trois états lève l'ambiguïté au lieu de la
+ * commenter.
+ */
+type SessionStatus = 'pending' | 'anonymous' | 'authenticated'
+
 interface SessionState {
-  /** Compte courant, ou `null` si anonyme. */
+  /** Compte courant, ou `null` si anonyme **ou** si le stockage n'a pas encore été relu. */
   readonly user: User | null
   /** Jeton courant, ou `null`. Dérivé de `user`, jamais stocké séparément. */
   readonly token: string | null
+  /** Distingue « pas encore résolu » de « anonyme ». À interroger avant toute redirection. */
+  readonly status: SessionStatus
   /** Ouvre la session à partir de la réponse `User` d'une connexion ou d'une inscription. */
   signIn(user: User): void
   /** Ferme la session et efface le stockage. */
@@ -77,9 +92,13 @@ function readPersistedSession(): User | null {
 export function SessionProvider({ children }: { children: ReactNode }) {
   // Toujours `null` au premier rendu — donc identique au rendu serveur.
   const [user, setUser] = useState<User | null>(null)
+  // `false` tant que le stockage n'a pas été relu : c'est ce qui distingue
+  // « pas encore résolu » de « anonyme ».
+  const [hydrated, setHydrated] = useState(false)
 
   useEffect(() => {
     setUser(readPersistedSession())
+    setHydrated(true)
   }, [])
 
   const signIn = useCallback((next: User) => {
@@ -92,10 +111,10 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     setUser(null)
   }, [])
 
-  const value = useMemo<SessionState>(
-    () => ({ user, token: user?.token ?? null, signIn, signOut }),
-    [user, signIn, signOut]
-  )
+  const value = useMemo<SessionState>(() => {
+    const status: SessionStatus = !hydrated ? 'pending' : user ? 'authenticated' : 'anonymous'
+    return { user, token: user?.token ?? null, status, signIn, signOut }
+  }, [user, hydrated, signIn, signOut])
 
   return <SessionContext.Provider value={value}>{children}</SessionContext.Provider>
 }

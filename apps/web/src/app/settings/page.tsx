@@ -21,16 +21,19 @@ import { useSession } from '../../lib/session'
 export default function SettingsPage() {
   const api = useApi()
   const router = useRouter()
-  const { user, signIn, signOut } = useSession()
+  const { user, status, signIn, signOut } = useSession()
 
   useEffect(() => {
-    // `user === null` couvre deux états que le rendu ne distingue pas : « pas
-    // encore réhydraté » et « anonyme ». On ne peut donc pas rediriger avant
-    // que la session ait été lue — d'où l'effet, qui s'exécute après.
-    if (user === null) {
+    // On attend que la session soit **résolue**. Rediriger sur `user === null`
+    // éjectait les utilisateurs connectés : les effets React se déclenchent des
+    // enfants vers les parents, donc cet effet s'exécutait avant que
+    // `SessionProvider` ait relu le stockage, et `user` y valait toujours
+    // `null`. `status` lève l'ambiguïté que ce commentaire se contentait
+    // auparavant de décrire.
+    if (status === 'anonymous') {
       router.push('/login')
     }
-  }, [user, router])
+  }, [status, router])
 
   if (!user) {
     return null

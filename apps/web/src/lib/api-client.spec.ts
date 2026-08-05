@@ -114,7 +114,10 @@ describe('REQ-WEB-001 — client API typé par le modèle partagé', () => {
     await expect(client.unfollowUser('jake')).resolves.not.toThrow()
   })
 
-  it('AC-2: construit l’URL sur la base fournie, sans double barre', async () => {
+  // Sans préfixe `AC-n:` : la construction de l'URL n'est le `then:` d'aucun
+  // critère de REQ-WEB-001. Le libellé emprunté à AC-2 gonflait la couverture
+  // rapportée sans rien prouver de ce que AC-2 demande (l'en-tête `Token`).
+  it('construit l’URL sur la base fournie, sans double barre', async () => {
     const fetchImpl = vi.fn().mockResolvedValue(jsonResponse(200, aUser))
     const client = buildClient(fetchImpl, 'jwt.token.here')
 
@@ -123,7 +126,9 @@ describe('REQ-WEB-001 — client API typé par le modèle partagé', () => {
     expect(fetchImpl.mock.calls[0]?.[0]).toBe('http://api.test/api/user')
   })
 
-  it('AC-1: enveloppe le corps des requêtes comme le contrat l’exige', async () => {
+  // Idem : l'enveloppe du corps sortant est une propriété du contrat §7.1, pas
+  // le `then:` de AC-1 (qui porte sur le type des réponses).
+  it('enveloppe le corps des requêtes comme le contrat l’exige', async () => {
     const fetchImpl = vi.fn().mockResolvedValue(jsonResponse(200, aUser))
     const client = buildClient(fetchImpl)
 

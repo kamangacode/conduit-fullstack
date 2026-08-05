@@ -99,6 +99,37 @@ describe('REQ-WEB-005 — bouton de suivi', () => {
     expect(screen.queryByRole('button', { name: /Follow/ })).not.toBeInTheDocument()
   })
 
+  it('AC-3: resynchronise l’état quand on change de profil sans démonter', async () => {
+    // Navigation cliente d'un profil à l'autre : React réconcilie la même
+    // instance, et `useState` ne relit pas son argument. Sans resynchronisation,
+    // le bouton de jake affichait l'état de suivi de jacob.
+    signedIn()
+    const { rerender } = renderButton({ ...jacobProfile, following: true })
+    expect(await screen.findByRole('button', { name: /Unfollow jacob/ })).toBeInTheDocument()
+
+    rerender(
+      <SessionProvider>
+        <FollowButton profile={{ username: 'martin', bio: null, image: null, following: false }} />
+      </SessionProvider>
+    )
+
+    expect(await screen.findByRole('button', { name: /Follow martin/ })).toBeInTheDocument()
+  })
+
+  it('AC-3: signale un échec au lieu de l’avaler', async () => {
+    signedIn()
+    follow.mockRejectedValue(new Error('réseau coupé'))
+    renderButton()
+    await waitFor(() => expect(screen.getByRole('button')).toBeEnabled())
+
+    await userEvent.click(screen.getByRole('button', { name: /Follow jacob/ }))
+
+    // Sans le `catch`, l'échec était un rejet non traité : bouton réactivé,
+    // état inchangé, et aucun moyen pour le lecteur de savoir que rien ne s'est
+    // passé.
+    expect(await screen.findByText(/unable to update the follow status/)).toBeInTheDocument()
+  })
+
   it('AC-3: suit le markup RealWorld', () => {
     const { container } = renderButton()
 

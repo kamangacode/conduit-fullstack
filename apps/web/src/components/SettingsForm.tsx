@@ -2,7 +2,7 @@
 
 import { type UpdateUserDto, type User, updateUserDtoSchema } from '@repo/shared'
 import { type FormEvent, useState } from 'react'
-import { ApiError } from '../lib/api-client'
+import { toMessages } from '../lib/errors'
 import { ErrorMessages } from './ErrorMessages'
 
 /**
@@ -72,6 +72,7 @@ export function SettingsForm({ user, onSave, onSignOut }: SettingsFormProps) {
                 <Field placeholder="Your Name" value={username} onChange={setUsername} />
                 <fieldset className="form-group">
                   <textarea
+                    aria-label="Short bio about you"
                     className="form-control form-control-lg"
                     rows={8}
                     placeholder="Short bio about you"
@@ -130,8 +131,17 @@ async function save(
     await onSave(parsed.data)
     return []
   } catch (error) {
-    return toMessages(error)
+    // Un 401 ici signifie « votre session a expiré », pas « la requête a
+    // échoué » : c'est la divergence que la copie locale de `toMessages` avait
+    // introduite, et que la table partagée referme.
+    return toMessages(error, SETTINGS_MESSAGES)
   }
+}
+
+/** Messages génériques propres à cette page (voir `lib/errors.ts`). */
+const SETTINGS_MESSAGES: Readonly<Record<number, string>> = {
+  401: 'your session has expired, please sign in again',
+  500: 'something went wrong, please try again',
 }
 
 /**
@@ -156,7 +166,9 @@ function Field({
 }) {
   return (
     <fieldset className="form-group">
+      {/* Voir `AuthForm` : le placeholder ne tient pas lieu de nom accessible. */}
       <input
+        aria-label={placeholder}
         className={className}
         type={type}
         placeholder={placeholder}
@@ -204,14 +216,4 @@ function collectChanges(user: User, values: FormValues): UpdateUserDto {
     ...(values.email === initial.email ? {} : { email: values.email }),
     ...(values.password === initial.password ? {} : { password: values.password }),
   }
-}
-
-/** Voir `AuthForm` : les messages du contrat sont affichés tels quels. */
-function toMessages(error: unknown): string[] {
-  if (error instanceof ApiError) {
-    const detailed = error.messages
-    return detailed.length > 0 ? detailed : ['request failed']
-  }
-
-  return ['unable to reach the server']
 }

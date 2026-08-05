@@ -58,6 +58,20 @@ export interface ApiClientConfig {
    * d'envoyer l'ancienne après une reconnexion.
    */
   readonly getToken: () => string | null
+  /**
+   * Notifié quand une requête **authentifiée** revient en 401.
+   *
+   * C'est une notification, pas une interprétation : le client signale que
+   * l'API a rejeté le jeton, et l'appelant décide quoi en faire (purger la
+   * session, ici). Sans ce signal, un jeton expiré resterait en place et
+   * l'interface continuerait d'affirmer une identité que l'API ne reconnaît
+   * plus (REQ-WEB-002 AC-4).
+   *
+   * Déclenché **uniquement** si un jeton avait été envoyé : un 401 de
+   * `POST /users/login` signifie « identifiants refusés », pas « session
+   * expirée », et n'a aucune session à purger.
+   */
+  readonly onUnauthorized?: () => void
   /** Injectable pour les tests ; `globalThis.fetch` en production. */
   readonly fetchImpl?: typeof fetch
 }
@@ -100,6 +114,11 @@ export function createApiClient(config: ApiClientConfig): ApiClient {
     })
 
     if (!response.ok) {
+      // Le jeton a été refusé : on signale avant de lever, pour que la session
+      // soit purgée même si l'appelant se contente d'afficher l'erreur.
+      if (response.status === 401 && token) {
+        config.onUnauthorized?.()
+      }
       throw await toApiError(response)
     }
 

@@ -37,6 +37,7 @@ implementation:
     - apps/web/src/app/settings/page.tsx
   tests:
     - apps/web/src/components/SettingsForm.spec.tsx
+    - apps/web/src/app/settings/page.spec.tsx
 related:
   issues: [5]
   requirements:

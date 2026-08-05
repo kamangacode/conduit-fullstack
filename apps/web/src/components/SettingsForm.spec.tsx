@@ -81,7 +81,14 @@ describe('REQ-WEB-004 — page de paramètres', () => {
     expect(payload).toEqual({ bio: 'Nouvelle bio' })
   })
 
-  it('AC-4: affiche les erreurs de l’API au format §10', async () => {
+  // Sans préfixe `AC-n:` : ce test prouve l'affichage des erreurs, un
+  // comportement légitime mais qui ne correspond à AUCUN critère de
+  // REQ-WEB-004. Il portait auparavant le libellé `AC-4`, recopié depuis
+  // `AuthForm.spec.tsx` — or l'AC-4 de REQ-WEB-004 parle du rafraîchissement de
+  // la session, couvert désormais par `app/settings/page.spec.tsx`. La matrice
+  // de traçabilité rapprochant les tests des critères **par la chaîne** `AC-n:`,
+  // ce libellé emprunté masquait un trou réel derrière une couverture apparente.
+  it('affiche les erreurs de l’API au format §10', async () => {
     save.mockRejectedValue(new ApiError(409, { email: ['has already been taken'] }))
     const { container } = renderForm()
 

@@ -16,12 +16,13 @@ const jake: User = {
 
 /** Sonde : expose l'état de session dans le DOM pour l'asserter. */
 function SessionProbe() {
-  const { user, token, signIn, signOut } = useSession()
+  const { user, token, status, signIn, signOut } = useSession()
 
   return (
     <div>
       <span data-testid="username">{user?.username ?? 'anonyme'}</span>
       <span data-testid="token">{token ?? 'aucun'}</span>
+      <span data-testid="status">{status}</span>
       <button type="button" onClick={() => signIn(jake)}>
         connexion
       </button>
@@ -128,17 +129,20 @@ describe('REQ-WEB-002 — session cliente', () => {
     expect(window.localStorage.getItem(SESSION_STORAGE_KEY)).toBeNull()
   })
 
-  it('AC-4: purge la session sur demande d’une réponse 401', async () => {
+  it('AC-5: distingue « pas encore résolu » de « anonyme »', async () => {
+    // La distinction qui manquait, et qui a coûté un vrai défaut : une page qui
+    // redirige sur `user === null` éjecte les utilisateurs connectés, parce que
+    // son effet s'exécute avant celui de ce fournisseur.
     window.localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(jake))
+
     renderProbe()
-    await waitFor(() => expect(screen.getByTestId('username')).toHaveTextContent('jake'))
 
-    // Un jeton expiré laissé en place fait croire à l'interface qu'elle est
-    // connectée, et chaque action échoue en 401 sans que rien ne l'explique.
-    await act(async () => {
-      screen.getByRole('button', { name: 'déconnexion' }).click()
-    })
+    await waitFor(() => expect(screen.getByTestId('status')).toHaveTextContent('authenticated'))
+  })
 
-    expect(screen.getByTestId('token')).toHaveTextContent('aucun')
+  it('AC-5: rapporte « anonymous » seulement après lecture du stockage', async () => {
+    renderProbe()
+
+    await waitFor(() => expect(screen.getByTestId('status')).toHaveTextContent('anonymous'))
   })
 })

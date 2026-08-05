@@ -1,6 +1,8 @@
-import type { Profile, ProfileResponse } from '@repo/shared'
+import type { Profile } from '@repo/shared'
 import { notFound } from 'next/navigation'
 import { FollowButton } from '../../../components/FollowButton'
+import { ApiError, createApiClient } from '../../../lib/api-client'
+import { API_BASE_URL } from '../../../lib/env'
 
 /**
  * Page de profil public (REQ-WEB-005, route `/profile/:username`).
@@ -15,26 +17,40 @@ import { FollowButton } from '../../../components/FollowButton'
  * exactement ce que la règle R-5 prescrit pour un lecteur non identifié.
  */
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001/api'
-
 /**
- * Charge le profil côté serveur.
+ * Charge le profil côté serveur, **par le même client** que le navigateur.
  *
- * `cache: 'no-store'` : un profil peut changer (bio, image), et servir une
- * version mise en cache ferait afficher un état périmé après une modification
- * dans les paramètres. La page reste rendue à la demande.
+ * Ce fichier avait sa propre implémentation : URL de base, construction du
+ * chemin et déballage de l'enveloppe recopiés. Trois occasions de diverger pour
+ * un endpoint que la rule 10 confie explicitement à `api-client.ts`. Rien ici
+ * n'est propre au serveur — le client n'a aucune dépendance au navigateur.
+ *
+ * `getToken: () => null` **est** la décision de l'ADR 012 rendue explicite : le
+ * rendu serveur est anonyme, donc `following` vaut `false`, ce que R-5 prescrit
+ * pour un lecteur non identifié.
+ *
+ * `cache: 'no-store'` : un profil change (bio, image), et servir une version
+ * mise en cache afficherait un état périmé juste après une modification dans
+ * les paramètres.
  */
 async function fetchProfile(username: string): Promise<Profile | null> {
-  const response = await fetch(`${API_BASE_URL}/profiles/${encodeURIComponent(username)}`, {
-    cache: 'no-store',
+  const client = createApiClient({
+    baseUrl: API_BASE_URL,
+    getToken: () => null,
+    fetchImpl: (input, init) => fetch(input, { ...init, cache: 'no-store' }),
   })
 
-  if (!response.ok) {
-    return null
+  try {
+    return await client.getProfile(username)
+  } catch (error) {
+    // Un username inconnu répond 404 : c'est un résultat attendu, pas une
+    // panne. Toute autre erreur remonte, pour ne pas déguiser une API en rade
+    // en « profil introuvable ».
+    if (error instanceof ApiError && error.status === 404) {
+      return null
+    }
+    throw error
   }
-
-  const { profile } = (await response.json()) as ProfileResponse
-  return profile
 }
 
 export async function generateMetadata({ params }: { params: Promise<{ username: string }> }) {
