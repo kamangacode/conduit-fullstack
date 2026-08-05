@@ -46,3 +46,4 @@ pnpm-debug.log*
 # Cadre de développement local (non versionné)
 /CLAUDE.md
 /.claude/
+.gstack/
