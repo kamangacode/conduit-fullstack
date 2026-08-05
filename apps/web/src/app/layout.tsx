@@ -18,6 +18,30 @@ export const metadata = {
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="en">
+      {/*
+       * Chargement du thème RealWorld (spec `specifications/frontend/styles.md`
+       * + bloc Head de `templates.md`). Le markup de l'app suit les classes
+       * RealWorld (rule 11) ; sans cette feuille, ces classes n'ont aucune règle
+       * derrière et la page rend « nue ». Trois ressources, comme la spec :
+       *   - `/styles.css` : le thème « Conduit Minimal CSS v4 », **servi depuis
+       *     l'app** (vendoré dans `public/`), pas depuis un CDN — la spec l'exige.
+       *   - Ionicons v2 : les icônes `ion-*` (compose, gear, heart…) du template.
+       *   - Source Sans Pro (corps) + Lora (titres) : les polices du thème, que
+       *     `styles.css` ne bundle pas.
+       * Ionicons et les polices restent en CDN (fidèle à l'exemple de la spec) ;
+       * un éventuel passage au self-host (CSP stricte) fera l'objet d'un ADR.
+       */}
+      <head>
+        <link
+          rel="stylesheet"
+          href="https://cdnjs.cloudflare.com/ajax/libs/ionicons/2.0.1/css/ionicons.min.css"
+        />
+        <link
+          rel="stylesheet"
+          href="https://fonts.googleapis.com/css?family=Source+Sans+Pro:300,400,600,700|Lora:400,700&display=swap"
+        />
+        <link rel="stylesheet" href="/styles.css" />
+      </head>
       <body>
         <ApiProvider>
           <Navbar />
