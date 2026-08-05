@@ -2,6 +2,7 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
+import { avatarUrl } from '../lib/avatar'
 import { useSession } from '../lib/session'
 
 /**
@@ -21,6 +22,17 @@ import { useSession } from '../lib/session'
 interface NavLink {
   readonly href: string
   readonly label: string
+  /**
+   * Classe d'icône Ionicons v2 du template (REQ-WEB-007 AC-8).
+   *
+   * Les icônes ne sont pas une décoration ajoutée après coup : `templates.md`
+   * les place dans le DOM de la barre authentifiée, et la feuille de style de
+   * référence les dimensionne. Les omettre laisse des libellés nus, décalés par
+   * rapport au reste du thème.
+   */
+  readonly icon?: string
+  /** Avatar affiché avant le libellé — seul le lien de profil en porte un. */
+  readonly avatar?: string
 }
 
 const ANONYMOUS_LINKS: readonly NavLink[] = [
@@ -36,9 +48,13 @@ export function Navbar() {
   const links: readonly NavLink[] = user
     ? [
         { href: '/', label: 'Home' },
-        { href: '/editor', label: 'New Article' },
-        { href: '/settings', label: 'Settings' },
-        { href: `/profile/${user.username}`, label: user.username },
+        { href: '/editor', label: 'New Article', icon: 'ion-compose' },
+        { href: '/settings', label: 'Settings', icon: 'ion-gear-a' },
+        {
+          href: `/profile/${user.username}`,
+          label: user.username,
+          avatar: avatarUrl(user.image),
+        },
       ]
     : ANONYMOUS_LINKS
 
@@ -58,6 +74,11 @@ export function Navbar() {
                 className={`nav-link${pathname === link.href ? ' active' : ''}`}
                 href={link.href}
               >
+                {link.icon && <i className={link.icon} />}
+                {link.avatar && (
+                  // biome-ignore lint/performance/noImgElement: le contrat de sélecteurs E2E vise `img.user-pic` (REQ-WEB-007 AC-8) et l'URL est arbitraire — `next/image` exigerait de déclarer chaque hôte distant en configuration, ce qu'un avatar fourni par l'utilisateur rend impossible.
+                  <img className="user-pic" src={link.avatar} alt="" />
+                )}
                 {link.label}
               </Link>
             </li>

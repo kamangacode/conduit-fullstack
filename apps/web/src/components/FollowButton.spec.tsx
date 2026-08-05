@@ -2,7 +2,7 @@ import type { Profile, User } from '@repo/shared'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { SESSION_STORAGE_KEY, SessionProvider } from '../lib/session'
+import { SessionProvider, TOKEN_STORAGE_KEY } from '../lib/session'
 import { FollowButton } from './FollowButton'
 
 /** Tests écrits depuis les critères de REQ-WEB-005, avant l'implémentation. */
@@ -31,14 +31,16 @@ const jacobProfile: Profile = {
   following: false,
 }
 
+// Depuis l'ADR 014, le stockage ne porte que le jeton et le compte est
+// redemandé à l'API : la réponse est donc injectée plutôt que persistée.
 const renderButton = (profile: Profile = jacobProfile) =>
   render(
-    <SessionProvider>
+    <SessionProvider fetchCurrentUser={async () => jake}>
       <FollowButton profile={profile} />
     </SessionProvider>
   )
 
-const signedIn = () => window.localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(jake))
+const signedIn = () => window.localStorage.setItem(TOKEN_STORAGE_KEY, jake.token)
 
 beforeEach(() => {
   push.mockClear()

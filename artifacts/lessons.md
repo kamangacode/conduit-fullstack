@@ -8,6 +8,41 @@
 
 ---
 
+## 2026-08-05 — Un commentaire dans `biome.json` désactive la config **sans rien dire**
+
+**Symptôme.** En ajoutant deux exclusions à `files.includes` (l'état local
+`.gstack/` et les assets vendorés de `apps/web/public/`), chacune précédée d'un
+commentaire `//` expliquant le pourquoi — comme la rule 18 le demande pour tout
+fichier destiné à être cité publiquement — `pnpm lint` est passé de **170 à 677
+fichiers analysés** et de 0 à 2 385 erreurs.
+
+**Fausse piste.** Le changement contenait aussi l'activation de
+`vcs.useIgnoreFile`, essayée d'abord pour faire respecter `.gitignore` par
+biome. La retirer n'a rien changé — le compte est resté à 677 — ce qui a
+disculpé cette option et désigné la vraie cause.
+
+**Cause racine.** `biome.json` est lu en JSON **strict**. Un commentaire ne
+provoque pas une erreur de configuration : la clé `files.includes` devient
+illisible, biome retombe sur son périmètre par défaut et **analyse tout**, y
+compris `node_modules` et les artefacts de build. Le garde-fou ne dit pas
+« ta config est invalide », il dit « voici 2 385 erreurs » — le symptôme ne
+désigne pas sa cause, et le réflexe naturel est d'aller chercher une régression
+dans le code.
+
+**Ce qu'on en tire.** Une config qui échoue en élargissant silencieusement son
+périmètre est plus dangereuse qu'une config qui refuse de démarrer : la seconde
+s'arrête sur son vrai problème, la première envoie déboguer ailleurs. Le tell
+qui aurait fait gagner du temps est le **nombre de fichiers analysés**, imprimé
+à chaque exécution et qu'on lit rarement.
+
+Conséquence pratique : le *pourquoi* des exclusions de `biome.json` ne peut pas
+vivre dans le fichier. Il vit dans le message de commit et ici. Le rendre
+commentable supposerait de renommer en `biome.jsonc`, ce qui déplacerait un
+chemin référencé par `scripts/verify-biome-hardfail.sh` — arbitrage à faire
+séparément, pas au détour d'une slice front.
+
+---
+
 ## 2026-08-05 — La matrice de traçabilité rapproche des **libellés**, pas des comportements
 
 **Symptôme.** Revue de F4 : deux tests portaient un préfixe `AC-n:` dont ils ne

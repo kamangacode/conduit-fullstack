@@ -2,7 +2,7 @@ import type { User } from '@repo/shared'
 import { act, render, screen, waitFor } from '@testing-library/react'
 import { renderToString } from 'react-dom/server'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { SESSION_STORAGE_KEY, SessionProvider, useSession } from '../lib/session'
+import { SessionProvider, TOKEN_STORAGE_KEY, useSession } from '../lib/session'
 import { Navbar } from './Navbar'
 
 /** Tests écrits depuis les critères de REQ-WEB-006, avant l'implémentation. */
@@ -20,9 +20,11 @@ const jake: User = {
   image: null,
 }
 
-const renderNavbar = () =>
+// Depuis l'ADR 014, le stockage ne porte que le jeton et le compte est
+// redemandé à l'API : la réponse est injectée plutôt que persistée.
+const renderNavbar = (user: User = jake) =>
   render(
-    <SessionProvider>
+    <SessionProvider fetchCurrentUser={async () => user}>
       <Navbar />
     </SessionProvider>
   )
@@ -47,7 +49,7 @@ describe('REQ-WEB-006 — barre de navigation', () => {
   })
 
   it('AC-2: propose les liens du compte à un utilisateur connecté', async () => {
-    window.localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(jake))
+    window.localStorage.setItem(TOKEN_STORAGE_KEY, jake.token)
 
     renderNavbar()
 
@@ -58,7 +60,7 @@ describe('REQ-WEB-006 — barre de navigation', () => {
   })
 
   it('AC-2: le lien de profil porte le username courant', async () => {
-    window.localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(jake))
+    window.localStorage.setItem(TOKEN_STORAGE_KEY, jake.token)
 
     renderNavbar()
 
@@ -67,7 +69,7 @@ describe('REQ-WEB-006 — barre de navigation', () => {
   })
 
   it('AC-4: repasse aux liens anonymes à la déconnexion, sans rechargement', async () => {
-    window.localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(jake))
+    window.localStorage.setItem(TOKEN_STORAGE_KEY, jake.token)
 
     // La déconnexion est déclenchée depuis la page de paramètres, pas depuis la
     // navbar : on monte donc une sonde qui appelle `signOut`, pour éprouver que
@@ -82,7 +84,7 @@ describe('REQ-WEB-006 — barre de navigation', () => {
     }
 
     render(
-      <SessionProvider>
+      <SessionProvider fetchCurrentUser={async () => jake}>
         <Navbar />
         <SignOutProbe />
       </SessionProvider>
@@ -111,13 +113,13 @@ describe('REQ-WEB-006 — barre de navigation', () => {
     // Le rendu serveur ne connaît pas la session : il doit produire la version
     // anonyme, celle que le client rendra aussi au premier passage. Rendre
     // autre chose ici ferait diverger les deux arbres.
-    window.localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(jake))
+    window.localStorage.setItem(TOKEN_STORAGE_KEY, jake.token)
     const storage = window.localStorage
     Reflect.deleteProperty(window, 'localStorage')
 
     try {
       const html = renderToString(
-        <SessionProvider>
+        <SessionProvider fetchCurrentUser={async () => jake}>
           <Navbar />
         </SessionProvider>
       )
@@ -137,5 +139,42 @@ describe('REQ-WEB-006 — barre de navigation', () => {
     expect(container.querySelector('nav.navbar.navbar-light')).not.toBeNull()
     expect(container.querySelector('a.navbar-brand')).toHaveTextContent('conduit')
     expect(container.querySelectorAll('li.nav-item').length).toBeGreaterThan(0)
+  })
+})
+
+describe('REQ-WEB-007 — contrat de sélecteurs, barre de navigation', () => {
+  it('AC-8: affiche l’avatar du compte en user-pic', async () => {
+    window.localStorage.setItem(TOKEN_STORAGE_KEY, jake.token)
+
+    const { container } = renderNavbar({ ...jake, image: 'https://example.test/jake.png' })
+
+    await waitFor(() => expect(container.querySelector('img.user-pic')).not.toBeNull())
+    expect(container.querySelector('img.user-pic')).toHaveAttribute(
+      'src',
+      'https://example.test/jake.png'
+    )
+  })
+
+  it('AC-3: retombe sur l’avatar par défaut quand le compte n’a pas d’image', async () => {
+    // `jake` n'a pas d'image. Sans repli, le contrat E2E échoue sur un `src`
+    // vide — et l'utilisateur voit une icône d'image cassée, ce qui est le
+    // genre de détail qu'on ne remarque pas en développant avec un avatar.
+    window.localStorage.setItem(TOKEN_STORAGE_KEY, jake.token)
+
+    const { container } = renderNavbar()
+
+    await waitFor(() => expect(container.querySelector('img.user-pic')).not.toBeNull())
+    expect(container.querySelector('img.user-pic')?.getAttribute('src')).toContain(
+      'default-avatar.svg'
+    )
+  })
+
+  it('AC-8: porte les icônes du template sur les liens éditeur et paramètres', async () => {
+    window.localStorage.setItem(TOKEN_STORAGE_KEY, jake.token)
+
+    const { container } = renderNavbar()
+
+    await waitFor(() => expect(container.querySelector('i.ion-compose')).not.toBeNull())
+    expect(container.querySelector('i.ion-gear-a')).not.toBeNull()
   })
 })

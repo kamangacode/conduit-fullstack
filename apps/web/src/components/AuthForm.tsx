@@ -93,14 +93,22 @@ export function AuthForm({ mode, onSubmit }: AuthFormProps) {
             <form onSubmit={handleSubmit}>
               {isRegister && (
                 <TextField
+                  name="username"
                   placeholder="Username"
                   type="text"
                   value={username}
                   onChange={setUsername}
                 />
               )}
-              <TextField placeholder="Email" type="text" value={email} onChange={setEmail} />
               <TextField
+                name="email"
+                placeholder="Email"
+                type="text"
+                value={email}
+                onChange={setEmail}
+              />
+              <TextField
+                name="password"
                 placeholder="Password"
                 type="password"
                 value={password}
@@ -132,11 +140,14 @@ export function AuthForm({ mode, onSubmit }: AuthFormProps) {
  * fois invitait à en modifier un et pas les autres.
  */
 function TextField({
+  name,
   placeholder,
   type,
   value,
   onChange,
 }: {
+  /** Nom du contrat de sélecteurs E2E — pas le libellé (REQ-WEB-007 AC-1). */
+  name: string
   placeholder: string
   type: 'text' | 'password'
   value: string
@@ -147,10 +158,16 @@ function TextField({
       {/* `aria-label` : un `placeholder` disparaît dès la première frappe, et
           avec lui le nom du champ pour un lecteur d'écran. La rule 11 autorise
           explicitement l'écart au markup de référence pour l'accessibilité, et
-          celui-ci ne touche ni la structure ni les classes. */}
+          celui-ci ne touche ni la structure ni les classes.
+
+          `name` est d'une autre nature : c'est par lui que la suite E2E
+          partagée localise le champ (`input[name="email"]`). Il est obligatoire
+          et non dérivé du placeholder, parce que les deux divergent — le champ
+          « Your Name » des paramètres s'appelle `username`. */}
       <input
         aria-label={placeholder}
         className="form-control form-control-lg"
+        name={name}
         type={type}
         placeholder={placeholder}
         value={value}

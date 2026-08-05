@@ -129,7 +129,9 @@
       "!**/playwright-report",
       "!**/test-results",
       "!**/prisma/migrations",
-      "!**/generated"
+      "!**/generated",
+      "!**/.gstack",
+      "!apps/web/public"
     ]
   }
 }

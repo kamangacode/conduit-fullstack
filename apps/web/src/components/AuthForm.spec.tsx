@@ -161,3 +161,33 @@ describe('REQ-WEB-003 — formulaires d’authentification', () => {
     resolveSubmit?.()
   })
 })
+
+describe('REQ-WEB-007 — contrat de sélecteurs, formulaires d’authentification', () => {
+  // Les tests ci-dessus localisent les champs par leur libellé accessible, ce
+  // qui est correct et ne dit **rien** du contrat : la suite E2E partagée, elle,
+  // les cherche par `input[name="…"]`. Sans ces assertions, l'attribut peut
+  // disparaître d'une refonte sans qu'aucun test du dépôt ne bronche.
+  it('AC-1: nomme les champs de connexion comme le contrat l’exige', () => {
+    const { container } = renderForm('login')
+
+    expect(container.querySelector('input[name="email"]')).not.toBeNull()
+    expect(container.querySelector('input[name="password"]')).not.toBeNull()
+  })
+
+  it('AC-1: ajoute le champ username à l’inscription, sous son nom de contrat', () => {
+    const { container } = renderForm('register')
+
+    expect(container.querySelector('input[name="username"]')).not.toBeNull()
+    expect(container.querySelector('input[name="email"]')).not.toBeNull()
+    expect(container.querySelector('input[name="password"]')).not.toBeNull()
+  })
+
+  it('AC-1: ne pose pas de champ username sur la connexion', () => {
+    // Le contrat n'attend `username` que sur l'inscription et les paramètres.
+    // En poser un ici ferait échouer un test E2E qui compte les champs — et,
+    // plus sûrement, enverrait une clé que `loginDtoSchema` refuse.
+    const { container } = renderForm('login')
+
+    expect(container.querySelector('input[name="username"]')).toBeNull()
+  })
+})

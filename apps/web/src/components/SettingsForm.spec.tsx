@@ -127,3 +127,33 @@ describe('REQ-WEB-004 — page de paramètres', () => {
     expect(screen.getByPlaceholderText('URL of profile picture')).toHaveValue('')
   })
 })
+
+describe('REQ-WEB-007 — contrat de sélecteurs, page de paramètres', () => {
+  it('AC-2: nomme les cinq champs comme le contrat l’exige', () => {
+    const { container } = renderForm()
+
+    expect(container.querySelector('input[name="image"]')).not.toBeNull()
+    expect(container.querySelector('input[name="username"]')).not.toBeNull()
+    expect(container.querySelector('input[name="email"]')).not.toBeNull()
+    expect(container.querySelector('input[name="password"]')).not.toBeNull()
+  })
+
+  it('AC-2: expose la bio en textarea nommé, et non en input', () => {
+    // Le contrat distingue `textarea[name="bio"]` de `input[name="bio"]` : un
+    // sélecteur E2E qui vise l'un ne trouve pas l'autre, alors que les deux
+    // s'affichent et se saisissent de la même façon en développement.
+    const { container } = renderForm()
+
+    expect(container.querySelector('textarea[name="bio"]')).not.toBeNull()
+    expect(container.querySelector('input[name="bio"]')).toBeNull()
+  })
+
+  it('AC-2: nomme le champ « Your Name » username, comme le contrat, pas name', () => {
+    // Piège de traduction : le placeholder dit « Your Name », le contrat dit
+    // `username`. Nommer l'attribut d'après ce que l'utilisateur lit ferait
+    // échouer la suite E2E sans rien changer à l'affichage.
+    const { container } = renderForm()
+
+    expect(container.querySelector('input[name="username"]')).toHaveValue('jake')
+  })
+})

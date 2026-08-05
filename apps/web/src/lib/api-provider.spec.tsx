@@ -3,7 +3,7 @@ import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { ApiError, createApiClient } from './api-client'
-import { SESSION_STORAGE_KEY, SessionProvider, useSession } from './session'
+import { SessionProvider, TOKEN_STORAGE_KEY, useSession } from './session'
 
 /**
  * Couvre ce que la revue de F4 a trouvé non couvert :
@@ -89,7 +89,7 @@ describe('REQ-WEB-002 — purge de session sur 401', () => {
   })
 
   it('AC-4: purge la session quand une requête authentifiée revient en 401', async () => {
-    window.localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(jake))
+    window.localStorage.setItem(TOKEN_STORAGE_KEY, jake.token)
     fetchImpl.mockResolvedValue(
       new Response(JSON.stringify({ errors: { authorization: ['is invalid'] } }), {
         status: 401,
@@ -97,8 +97,11 @@ describe('REQ-WEB-002 — purge de session sur 401', () => {
       })
     )
 
+    // La réhydratation du démarrage est injectée : sans cela, elle emprunterait
+    // le `fetch` global et non la doublure ci-dessus, et la session s'ouvrirait
+    // ou non selon un appel que ce test ne décrit pas.
     render(
-      <SessionProvider>
+      <SessionProvider fetchCurrentUser={async () => jake}>
         <ApiProbe />
       </SessionProvider>
     )
@@ -109,7 +112,7 @@ describe('REQ-WEB-002 — purge de session sur 401', () => {
     // Sans la purge, l'interface continuerait d'affirmer une identité que l'API
     // ne reconnaît plus, et chaque action suivante échouerait en silence.
     await waitFor(() => expect(screen.getByTestId('status')).toHaveTextContent('anonymous'))
-    expect(window.localStorage.getItem(SESSION_STORAGE_KEY)).toBeNull()
+    expect(window.localStorage.getItem(TOKEN_STORAGE_KEY)).toBeNull()
   })
 
   it('AC-4: envoie le jeton courant, même après une reconnexion', async () => {

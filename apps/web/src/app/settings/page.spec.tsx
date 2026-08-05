@@ -2,7 +2,7 @@ import type { User } from '@repo/shared'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { SESSION_STORAGE_KEY, SessionProvider, useSession } from '../../lib/session'
+import { SessionProvider, TOKEN_STORAGE_KEY, useSession } from '../../lib/session'
 import SettingsPage from './page'
 
 /**
@@ -39,9 +39,15 @@ function SessionEcho() {
   return <span data-testid="session-username">{user?.username ?? 'anonyme'}</span>
 }
 
+/**
+ * La réhydratation passe par l'API depuis l'ADR 014 : le stockage ne porte plus
+ * que le jeton, et le compte est redemandé. On injecte donc la réponse plutôt
+ * que d'écrire un `User` complet dans le stockage, ce qui ne signifierait plus
+ * rien.
+ */
 const renderPage = () =>
   render(
-    <SessionProvider>
+    <SessionProvider fetchCurrentUser={async () => jake}>
       <SettingsPage />
       <SessionEcho />
     </SessionProvider>
@@ -58,7 +64,7 @@ describe('REQ-WEB-004 — page de paramètres', () => {
     // vers les parents, donc l'effet de la page s'exécutait avant que le
     // fournisseur ait relu le stockage — et `user === null` était pris pour
     // « anonyme » alors qu'il signifiait « pas encore résolu ».
-    window.localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(jake))
+    window.localStorage.setItem(TOKEN_STORAGE_KEY, jake.token)
 
     renderPage()
 
@@ -74,7 +80,7 @@ describe('REQ-WEB-004 — page de paramètres', () => {
   })
 
   it('AC-4: rafraîchit la session avec le compte à jour', async () => {
-    window.localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(jake))
+    window.localStorage.setItem(TOKEN_STORAGE_KEY, jake.token)
     renderPage()
     await waitFor(() => expect(screen.getByDisplayValue('jake')).toBeInTheDocument())
 
@@ -91,14 +97,14 @@ describe('REQ-WEB-004 — page de paramètres', () => {
   })
 
   it('AC-6: ferme la session et revient à l’accueil', async () => {
-    window.localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(jake))
+    window.localStorage.setItem(TOKEN_STORAGE_KEY, jake.token)
     renderPage()
     await waitFor(() => expect(screen.getByDisplayValue('jake')).toBeInTheDocument())
 
     await userEvent.click(screen.getByRole('button', { name: /Or click here to logout/ }))
 
     expect(screen.getByTestId('session-username')).toHaveTextContent('anonyme')
-    expect(window.localStorage.getItem(SESSION_STORAGE_KEY)).toBeNull()
+    expect(window.localStorage.getItem(TOKEN_STORAGE_KEY)).toBeNull()
     expect(push).toHaveBeenCalledWith('/')
   })
 })

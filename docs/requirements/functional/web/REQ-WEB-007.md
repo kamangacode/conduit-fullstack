@@ -3,7 +3,7 @@ id: REQ-WEB-007
 title: Exposer le contrat de sélecteurs attendu par la suite E2E partagée
 type: functional
 domain: web
-status: approved
+status: implemented
 priority: must
 source: "specifications/frontend/tests.md et styles.md (contrat specs/e2e/SELECTORS.md du dépôt RealWorld) ; ADR 014"
 acceptance_criteria:
@@ -40,8 +40,20 @@ acceptance_criteria:
     when: "la barre de navigation affiche son lien de profil"
     then: "elle porte une image de classe `user-pic`, et les liens éditeur et paramètres portent leurs icônes `ion-*`"
 implementation:
-  files: []
-  tests: []
+  files:
+    - apps/web/public/default-avatar.svg
+    - apps/web/src/lib/avatar.ts
+    - apps/web/src/lib/session.tsx
+    - apps/web/src/components/AuthForm.tsx
+    - apps/web/src/components/SettingsForm.tsx
+    - apps/web/src/components/Navbar.tsx
+    - "apps/web/src/app/profile/[username]/page.tsx"
+  tests:
+    - apps/web/src/lib/avatar.spec.ts
+    - apps/web/src/lib/session.spec.tsx
+    - apps/web/src/components/AuthForm.spec.tsx
+    - apps/web/src/components/SettingsForm.spec.tsx
+    - apps/web/src/components/Navbar.spec.tsx
 related:
   issues: [5]
   requirements:

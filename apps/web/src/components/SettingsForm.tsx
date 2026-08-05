@@ -65,23 +65,35 @@ export function SettingsForm({ user, onSave, onSignOut }: SettingsFormProps) {
               <fieldset>
                 <Field
                   className="form-control"
+                  name="image"
                   placeholder="URL of profile picture"
                   value={image}
                   onChange={setImage}
                 />
-                <Field placeholder="Your Name" value={username} onChange={setUsername} />
+                {/* `username`, pas `name` : le contrat de sélecteurs nomme le
+                    champ d'après la donnée, le placeholder d'après ce que
+                    l'utilisateur lit. Les aligner casserait la suite E2E sans
+                    rien changer à l'affichage (REQ-WEB-007 AC-2). */}
+                <Field
+                  name="username"
+                  placeholder="Your Name"
+                  value={username}
+                  onChange={setUsername}
+                />
                 <fieldset className="form-group">
                   <textarea
                     aria-label="Short bio about you"
                     className="form-control form-control-lg"
+                    name="bio"
                     rows={8}
                     placeholder="Short bio about you"
                     value={bio}
                     onChange={(event) => setBio(event.target.value)}
                   />
                 </fieldset>
-                <Field placeholder="Email" value={email} onChange={setEmail} />
+                <Field name="email" placeholder="Email" value={email} onChange={setEmail} />
                 <Field
+                  name="password"
                   placeholder="New Password"
                   type="password"
                   value={password}
@@ -152,12 +164,15 @@ const SETTINGS_MESSAGES: Readonly<Record<number, string>> = {
  * paramétrer aurait produit une abstraction à deux formes pour un seul usage.
  */
 function Field({
+  name,
   placeholder,
   value,
   onChange,
   type = 'text',
   className = 'form-control form-control-lg',
 }: {
+  /** Nom du contrat de sélecteurs E2E — pas le libellé (REQ-WEB-007 AC-2). */
+  name: string
   placeholder: string
   value: string
   onChange(next: string): void
@@ -166,10 +181,12 @@ function Field({
 }) {
   return (
     <fieldset className="form-group">
-      {/* Voir `AuthForm` : le placeholder ne tient pas lieu de nom accessible. */}
+      {/* Voir `AuthForm` : le placeholder ne tient pas lieu de nom accessible,
+          et `name` répond à un besoin distinct — la suite E2E partagée. */}
       <input
         aria-label={placeholder}
         className={className}
+        name={name}
         type={type}
         placeholder={placeholder}
         value={value}

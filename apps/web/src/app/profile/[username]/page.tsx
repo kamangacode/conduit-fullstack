@@ -2,6 +2,7 @@ import type { Profile } from '@repo/shared'
 import { notFound } from 'next/navigation'
 import { FollowButton } from '../../../components/FollowButton'
 import { ApiError, createApiClient } from '../../../lib/api-client'
+import { avatarUrl } from '../../../lib/avatar'
 import { API_BASE_URL } from '../../../lib/env'
 
 /**
@@ -74,10 +75,13 @@ export default async function ProfilePage({ params }: { params: Promise<{ userna
         <div className="container">
           <div className="row">
             <div className="col-xs-12 col-md-10 offset-md-1">
-              {profile.image && (
-                // biome-ignore lint/performance/noImgElement: le markup RealWorld attend `img.user-img` (rule 11), et l'URL est arbitraire — `next/image` exigerait de déclarer chaque hôte distant dans la configuration, ce qu'un avatar fourni par l'utilisateur rend impossible.
-                <img className="user-img" src={profile.image} alt={profile.username} />
-              )}
+              {/* L'avatar est rendu **inconditionnellement** : il l'était
+                  seulement quand `image` était renseigné, ce qui laissait la
+                  page d'un compte sans photo sans `img.user-img` du tout. Le
+                  contrat de sélecteurs attend l'élément et un `src` contenant
+                  `default-avatar.svg` (REQ-WEB-007 AC-3). */}
+              {/* biome-ignore lint/performance/noImgElement: le markup RealWorld attend `img.user-img` (rule 11), et l'URL est arbitraire — `next/image` exigerait de déclarer chaque hôte distant dans la configuration, ce qu'un avatar fourni par l'utilisateur rend impossible. */}
+              <img className="user-img" src={avatarUrl(profile.image)} alt={profile.username} />
               <h4>{profile.username}</h4>
               {profile.bio && <p>{profile.bio}</p>}
               <FollowButton profile={profile} />

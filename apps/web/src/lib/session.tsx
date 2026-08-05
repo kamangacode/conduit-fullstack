@@ -1,6 +1,6 @@
 'use client'
 
-import { type User, userSchema } from '@repo/shared'
+import type { User } from '@repo/shared'
 import {
   createContext,
   type ReactNode,
@@ -8,11 +8,14 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from 'react'
+import { ApiError, createApiClient } from './api-client'
+import { API_BASE_URL } from './env'
 
 /**
- * Session côté client (REQ-WEB-002, [ADR 012]).
+ * Session côté client (REQ-WEB-002, REQ-WEB-007, [ADR 012] amendé par [ADR 014]).
  *
  * L'ADR 012 place délibérément la session **hors du serveur** : ni cookie, ni
  * session serveur, un jeton qui ne quitte pas le navigateur. Ce fichier en est
@@ -25,31 +28,75 @@ import {
  * d'hydratation — un avertissement qu'on apprend vite à ignorer, et qui masque
  * ensuite les vrais. Le prix est l'état anonyme transitoire que l'ADR assume.
  *
+ * L'ADR 014 y ajoute une contrainte externe : le contrat de sélecteurs E2E fixe
+ * la clé (`jwtToken`) **et** la valeur (la chaîne JWT, rien d'autre). Le compte
+ * courant n'est donc plus persisté — il est redemandé à l'API au démarrage.
+ * L'aller-retour a un effet secondaire heureux : le profil affiché ne peut plus
+ * être une copie périmée d'un compte modifié ailleurs.
+ *
  * Un contexte React et non une bibliothèque d'état : deux valeurs, posées une
  * fois, rarement modifiées. Zustand n'apporterait ici qu'une dépendance
  * (ADR 012, rule 10 amendée).
  */
 
-/** Clé de stockage. Exportée pour que les tests décrivent l'état initial sans la deviner. */
-export const SESSION_STORAGE_KEY = 'conduit.session'
+/**
+ * Clé de stockage du jeton.
+ *
+ * Sa valeur n'est pas un choix interne : le contrat de sélecteurs E2E l'impose
+ * (REQ-WEB-007 AC-5). La renommer « pour préfixer comme le reste » casserait la
+ * suite Playwright partagée sans rien casser dans l'application.
+ */
+export const TOKEN_STORAGE_KEY = 'jwtToken'
 
 /**
  * État de résolution de la session.
  *
  * `pending` est la distinction qui manquait et qui a coûté un vrai défaut : au
- * premier rendu, `user === null` signifie **deux choses** — « pas encore relu le
- * stockage » et « anonyme ». Une page qui redirige sur `user === null` éjecte
- * donc les utilisateurs connectés, parce que les effets React se déclenchent des
- * enfants vers les parents : l'effet de la page s'exécute avant celui de ce
- * fournisseur. Un booléen à trois états lève l'ambiguïté au lieu de la
- * commenter.
+ * premier rendu, `user === null` signifie **deux choses** — « pas encore résolu »
+ * et « anonyme ». Une page qui redirige sur `user === null` éjecte donc les
+ * utilisateurs connectés, parce que les effets React se déclenchent des enfants
+ * vers les parents : l'effet de la page s'exécute avant celui de ce fournisseur.
+ *
+ * Depuis l'ADR 014, `pending` n'est plus quasi instantané — il dure le temps
+ * d'une requête. La distinction n'est donc plus une précaution : c'est l'état
+ * dans lequel une page authentifiée se trouve réellement à chaque chargement.
  */
 type SessionStatus = 'pending' | 'anonymous' | 'authenticated'
 
+/** Noms d'états du contrat de débogage E2E (REQ-WEB-007 AC-7). */
+type DebugAuthState = 'authenticated' | 'unauthenticated' | 'unavailable' | 'loading'
+
+/**
+ * Interface de débogage exigée par le contrat de sélecteurs E2E.
+ *
+ * En **lecture seule** : elle rapporte l'état, elle ne permet pas de l'ouvrir.
+ * Une interface qui exposerait `signIn` deviendrait un vecteur ; lire ne donne
+ * accès à rien qu'un script de la même origine ne puisse déjà lire dans
+ * `localStorage` (ADR 014).
+ */
+interface ConduitDebug {
+  getToken(): string | null
+  getAuthState(): DebugAuthState
+  getCurrentUser(): User | null
+}
+
+declare global {
+  interface Window {
+    __conduit_debug__?: ConduitDebug
+  }
+}
+
+/** Traduction vers le vocabulaire du contrat, faite une seule fois, ici. */
+const DEBUG_STATES: Record<SessionStatus, DebugAuthState> = {
+  pending: 'loading',
+  anonymous: 'unauthenticated',
+  authenticated: 'authenticated',
+}
+
 interface SessionState {
-  /** Compte courant, ou `null` si anonyme **ou** si le stockage n'a pas encore été relu. */
+  /** Compte courant, ou `null` si anonyme **ou** si la session n'est pas encore résolue. */
   readonly user: User | null
-  /** Jeton courant, ou `null`. Dérivé de `user`, jamais stocké séparément. */
+  /** Jeton courant, ou `null`. Dérivé de `user`, jamais porté séparément. */
   readonly token: string | null
   /** Distingue « pas encore résolu » de « anonyme ». À interroger avant toute redirection. */
   readonly status: SessionStatus
@@ -62,61 +109,147 @@ interface SessionState {
 const SessionContext = createContext<SessionState | null>(null)
 
 /**
- * Relit la session persistée.
+ * Relit le jeton persisté.
  *
- * Le contenu est validé par le schéma partagé plutôt que transtypé : un
- * stockage écrit par une version antérieure du format, ou tronqué par une
- * écriture interrompue, produirait sinon un `User` incomplet qui casserait
- * l'interface loin de sa cause. En cas d'échec on repart anonyme, et on purge —
- * garder une valeur qu'on refuse de lire ne sert à rien.
+ * Aucune validation à faire : la valeur est une chaîne opaque, et `apps/web` ne
+ * vérifie jamais un JWT — seule l'API fait autorité (rule 10). Un jeton tronqué
+ * ou périmé se manifeste par un 401, qui est traité comme tel plus bas.
  */
-function readPersistedSession(): User | null {
-  try {
-    const raw = window.localStorage.getItem(SESSION_STORAGE_KEY)
-    if (!raw) {
-      return null
-    }
-
-    const parsed = userSchema.safeParse(JSON.parse(raw))
-    if (parsed.success) {
-      return parsed.data
-    }
-  } catch {
-    // JSON illisible : on retombe sur l'état anonyme.
-  }
-
-  window.localStorage.removeItem(SESSION_STORAGE_KEY)
-  return null
+function readStoredToken(): string | null {
+  return window.localStorage.getItem(TOKEN_STORAGE_KEY) || null
 }
 
-export function SessionProvider({ children }: { children: ReactNode }) {
+/**
+ * Réhydratation par défaut : `GET /user` avec le jeton conservé.
+ *
+ * Un client jetable plutôt que celui du fournisseur d'API : c'est ce dernier
+ * qui dépend de la session, pas l'inverse. L'inverser produirait un cycle, et
+ * le client n'a de toute façon aucun état à partager pour un appel unique —
+ * la page de profil procède déjà ainsi côté serveur.
+ */
+async function fetchCurrentUserWithToken(token: string): Promise<User> {
+  const client = createApiClient({ baseUrl: API_BASE_URL, getToken: () => token })
+  return client.getCurrentUser()
+}
+
+export interface SessionProviderProps {
+  readonly children: ReactNode
+  /** Injectable pour les tests ; `GET /user` en production. */
+  fetchCurrentUser?(token: string): Promise<User>
+}
+
+export function SessionProvider({
+  children,
+  fetchCurrentUser = fetchCurrentUserWithToken,
+}: SessionProviderProps) {
   // Toujours `null` au premier rendu — donc identique au rendu serveur.
   const [user, setUser] = useState<User | null>(null)
-  // `false` tant que le stockage n'a pas été relu : c'est ce qui distingue
+  // `false` tant que la session n'a pas été résolue : c'est ce qui distingue
   // « pas encore résolu » de « anonyme ».
-  const [hydrated, setHydrated] = useState(false)
+  const [resolved, setResolved] = useState(false)
+
+  // Lu par l'effet de réhydratation sans le faire dépendre de la prop : une
+  // fonction recréée à chaque rendu par un appelant relancerait sinon l'appel
+  // en boucle, et le symptôme serait une avalanche de requêtes `GET /user`.
+  const fetchRef = useRef(fetchCurrentUser)
+  fetchRef.current = fetchCurrentUser
 
   useEffect(() => {
-    setUser(readPersistedSession())
-    setHydrated(true)
+    const token = readStoredToken()
+
+    if (!token) {
+      // Aucun jeton : inutile d'interroger l'API, elle ne pourrait que refuser.
+      // C'est le cas du premier écran d'un visiteur anonyme, celui qu'on ne
+      // veut surtout pas ralentir d'un aller-retour.
+      setResolved(true)
+      return
+    }
+
+    // Le démontage pendant la requête n'est pas un cas d'école en navigation
+    // cliente : sans ce drapeau, la réponse tardive appellerait `setUser` sur
+    // un arbre démonté.
+    let cancelled = false
+
+    fetchRef.current(token).then(
+      (current) => {
+        if (cancelled) {
+          return
+        }
+        // Le jeton retenu est celui de la **réponse**, pas celui du stockage :
+        // l'API est libre d'en émettre un neuf, et conserver l'ancien ferait
+        // expirer la session sans raison visible.
+        window.localStorage.setItem(TOKEN_STORAGE_KEY, current.token)
+        setUser(current)
+        setResolved(true)
+      },
+      (error: unknown) => {
+        if (cancelled) {
+          return
+        }
+        // Seul un 401 est un **verdict sur le jeton**. Une panne réseau ou un
+        // 500 n'en sont pas : purger sur ces signaux transformerait une coupure
+        // de trente secondes en déconnexion de tous les visiteurs
+        // (REQ-WEB-002 AC-6 et AC-7).
+        if (error instanceof ApiError && error.status === 401) {
+          window.localStorage.removeItem(TOKEN_STORAGE_KEY)
+        }
+        setResolved(true)
+      }
+    )
+
+    return () => {
+      cancelled = true
+    }
   }, [])
 
   const signIn = useCallback((next: User) => {
-    window.localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(next))
+    // Le jeton **seul**, en clair : c'est la valeur que le contrat décrit, et
+    // c'est aussi la seule donnée du compte qui ait besoin de survivre à la
+    // visite (ADR 014).
+    window.localStorage.setItem(TOKEN_STORAGE_KEY, next.token)
     setUser(next)
   }, [])
 
   const signOut = useCallback(() => {
-    window.localStorage.removeItem(SESSION_STORAGE_KEY)
+    window.localStorage.removeItem(TOKEN_STORAGE_KEY)
     setUser(null)
   }, [])
 
   const value = useMemo<SessionState>(() => {
-    const status: SessionStatus = !hydrated ? 'pending' : user ? 'authenticated' : 'anonymous'
+    const status: SessionStatus = !resolved ? 'pending' : user ? 'authenticated' : 'anonymous'
     return { user, token: user?.token ?? null, status, signIn, signOut }
-  }, [user, hydrated, signIn, signOut])
+  }, [user, resolved, signIn, signOut])
+
+  useDebugInterface(value)
 
   return <SessionContext.Provider value={value}>{children}</SessionContext.Provider>
+}
+
+/**
+ * Publie `window.__conduit_debug__` (REQ-WEB-007 AC-6, ADR 014).
+ *
+ * L'objet est posé **une seule fois** et lit l'état par référence, plutôt que
+ * d'être remplacé à chaque rendu : la suite E2E capture parfois la fonction
+ * avant une navigation, et une identité changeante lui ferait lire un état figé.
+ *
+ * Extrait du fournisseur pour l'y garder lisible : cette interface ne sert
+ * qu'aux tests externes, aucun code applicatif ne la consomme.
+ */
+function useDebugInterface(session: SessionState) {
+  const sessionRef = useRef(session)
+  sessionRef.current = session
+
+  useEffect(() => {
+    window.__conduit_debug__ = {
+      getToken: () => sessionRef.current.token,
+      getAuthState: () => DEBUG_STATES[sessionRef.current.status],
+      getCurrentUser: () => sessionRef.current.user,
+    }
+
+    return () => {
+      Reflect.deleteProperty(window, '__conduit_debug__')
+    }
+  }, [])
 }
 
 /**
