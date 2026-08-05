@@ -10,16 +10,31 @@
 
 ## 2026-08-05 — Un commentaire dans `biome.json` désactive la config **sans rien dire**
 
-**Symptôme.** En ajoutant deux exclusions à `files.includes` (l'état local
-`.gstack/` et les assets vendorés de `apps/web/public/`), chacune précédée d'un
-commentaire `//` expliquant le pourquoi — comme la rule 18 le demande pour tout
-fichier destiné à être cité publiquement — `pnpm lint` est passé de **170 à 677
-fichiers analysés** et de 0 à 2 385 erreurs.
+**Symptôme.** En ajoutant deux exclusions à `files.includes`, chacune précédée
+d'un commentaire `//` expliquant le pourquoi — comme la rule 18 le demande pour
+tout fichier destiné à être cité publiquement — `pnpm lint` est passé de **170
+fichiers analysés à plusieurs centaines** et de 0 à plusieurs milliers
+d'erreurs, sur `node_modules` et les artefacts de build.
 
-**Fausse piste.** Le changement contenait aussi l'activation de
-`vcs.useIgnoreFile`, essayée d'abord pour faire respecter `.gitignore` par
-biome. La retirer n'a rien changé — le compte est resté à 677 — ce qui a
-disculpé cette option et désigné la vraie cause.
+*(L'ordre de grandeur plutôt qu'un chiffre : la mesure initiale relevait 677
+fichiers, une reproduction ultérieure 757. Le compte exact dérive avec le
+contenu du dépôt, le mécanisme non — un registre qui fige un chiffre
+irreproductible s'auto-décrédibilise.)*
+
+**Fausse piste — et elle a coûté une mauvaise décision.** Le changement
+contenait aussi l'activation de `vcs.useIgnoreFile`, essayée pour faire
+respecter `.gitignore` par biome. La retirer n'a rien changé : le compte est
+resté à plusieurs centaines. On en a conclu que l'option *élargissait* le
+périmètre, et on l'a écartée au profit d'une exclusion écrite à la main.
+
+**C'était faux.** Les commentaires étaient encore présents lors de ce second
+essai, donc `files.includes` restait illisible dans les deux cas — l'option
+n'a jamais été mesurée dans des conditions propres. Testée seule, une fois les
+commentaires retirés, elle donne exactement le même résultat que l'exclusion
+manuelle (170 fichiers). Le raisonnement « je retire X, le symptôme persiste,
+donc X est hors de cause » ne tient que si **rien d'autre** ne produit le même
+symptôme. Ici deux causes candidates coexistaient, et l'une masquait l'innocence
+de l'autre.
 
 **Cause racine.** `biome.json` est lu en JSON **strict**. Un commentaire ne
 provoque pas une erreur de configuration : la clé `files.includes` devient
@@ -40,6 +55,15 @@ vivre dans le fichier. Il vit dans le message de commit et ici. Le rendre
 commentable supposerait de renommer en `biome.jsonc`, ce qui déplacerait un
 chemin référencé par `scripts/verify-biome-hardfail.sh` — arbitrage à faire
 séparément, pas au détour d'une slice front.
+
+**Second enseignement, sur la forme des exclusions.** La première rédaction
+excluait `apps/web/public` **en entier** pour faire taire une seule règle sur un
+seul fichier (`noSvgWithoutTitle` sur l'avatar vendoré) — `styles.css` étant
+déjà couvert par `!**/*.css`. Un fichier ajouté plus tard dans ce répertoire
+aurait échappé au lint sans le moindre signal. C'est le même mode d'échec que
+ci-dessus — un périmètre qui s'élargit en silence — obtenu par une autre voie.
+Une exclusion se pose au fichier, pas au répertoire, tant qu'un seul fichier la
+justifie.
 
 ---
 

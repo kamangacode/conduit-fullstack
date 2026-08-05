@@ -87,19 +87,25 @@ Sur l'interface de débogage :
 - Le compte affiché ne peut plus être périmé : il vient de l'API à chaque
   démarrage, là où une copie persistée survivait indéfiniment à une modification
   faite ailleurs.
-- Le stockage ne contient plus l'email ni la bio de l'utilisateur. La surface
-  exposée à un script tiers se réduit au jeton, qui était de toute façon le seul
-  élément sensible.
+- Le **stockage persistant** ne contient plus l'email ni la bio : ce qui survit à
+  la visite se réduit au jeton. La nuance est importante et vaut d'être écrite,
+  parce qu'on la lit spontanément plus large qu'elle ne l'est — au **runtime**,
+  `window.__conduit_debug__.getCurrentUser()` réexpose l'objet complet, email
+  compris, et le contrat de sélecteurs l'exige littéralement
+  (`{ username, email, bio, image, token }`). Le gain porte donc sur la
+  rémanence, pas sur la confidentialité en mémoire.
 
 ### Negative
 
 - Un aller-retour réseau au démarrage de chaque visite authentifiée. L'état
   transitoire de la barre de navigation, déjà assumé par l'ADR 012, dure
   désormais le temps d'une requête au lieu d'un rendu.
-- `window.__conduit_debug__` est présente en production. Elle ne rend accessible
-  que ce que `localStorage` rendait déjà accessible au même script, mais elle le
-  rend *commode*, et c'est un point à réexaminer si une CSP stricte arrive
-  (item B8, Phase 5).
+- `window.__conduit_debug__` est présente en production. Elle n'ouvre aucune
+  capacité nouvelle — le jeton seul suffit déjà à rejouer n'importe quel appel —
+  mais elle abaisse le **coût** d'exfiltration au minimum : une lecture de
+  propriété nommée et stable entre les versions, sans requête réseau à observer,
+  là où il fallait auparavant un aller-retour vers `GET /user`. C'est le point à
+  réexaminer si une CSP stricte arrive (item B8, Phase 5).
 - Le contrat de sélecteurs devient une contrainte de conception permanente :
   renommer une classe ou un attribut `name` « pour faire propre » casse une suite
   de tests qu'on ne maintient pas. C'est le prix d'être comparable, et la rule 11

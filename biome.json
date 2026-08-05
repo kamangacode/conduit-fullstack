@@ -130,8 +130,8 @@
       "!**/test-results",
       "!**/prisma/migrations",
       "!**/generated",
-      "!**/.gstack",
-      "!apps/web/public"
+      "!apps/web/public/default-avatar.svg"
     ]
-  }
+  },
+  "vcs": { "enabled": true, "clientKind": "git", "useIgnoreFile": true }
 }
