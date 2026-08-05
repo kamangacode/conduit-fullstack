@@ -27,12 +27,48 @@ import { loadReferential } from './referential.ts'
  */
 
 const DEFAULT_REQUIREMENTS_DIR = 'docs/requirements'
-const DEFAULT_TEST_ROOTS = ['apps', 'packages']
+/**
+ * `scripts` en fait partie depuis l'item F6 : toutes les preuves ne sont pas des
+ * specs Vitest. Les vérifications actives du dépôt — verrou Biome, validateur
+ * d'exigences, frontière typée — sont des scripts shell, et elles prouvaient des
+ * critères que cette matrice déclarait non couverts. Un rapport qui ignore une
+ * famille entière de preuves pousse à écrire de faux tests pour le satisfaire.
+ */
+const DEFAULT_TEST_ROOTS = ['apps', 'packages', 'scripts']
 const DEFAULT_OUT_DIR = 'docs/requirements/_generated'
 const IGNORED_DIRS = new Set(['node_modules', 'dist', '.next', '.turbo', 'coverage'])
 
+/**
+ * Deux formes pour une même convention.
+ *
+ * En TypeScript, le nommage des blocs porte le lien (rule 20). En shell, il n'y
+ * a pas de `describe` : le lien passe par un **commentaire** de la même forme,
+ * `# describe REQ-…` et `# it AC-n:`, placé au-dessus de la phase qui prouve le
+ * critère. La convention reste lisible par un humain, et devient une donnée pour
+ * cet outil — c'est tout ce qu'on lui demande.
+ */
 const DESCRIBE_REQ = /describe\(\s*['"`](REQ-[A-Z]+-\d{3})/
 const IT_AC = /\bit\(\s*['"`](AC-\d+)\s*:/
+
+const SHELL_DESCRIBE_REQ = /#\s*describe\s+(REQ-[A-Z]+-\d{3})/
+const SHELL_IT_AC = /#\s*it\s+(AC-\d+)\s*:/
+
+/**
+ * Chaque forme ne s'applique qu'à son type de fichier, et ce cloisonnement est
+ * nécessaire — pas une élégance.
+ *
+ * `scripts/verify-requirements-matrix.sh` **teste** cette matrice : il écrit des
+ * fixtures contenant `describe('REQ-GHOST-001'…)` dans des heredocs. Une lecture
+ * indifférenciée y voyait deux vrais tests rattachés à une exigence inexistante,
+ * et le rapport signalait deux orphelins qui n'en étaient pas. L'outil qui
+ * vérifie la matrice ne doit pas être lu par la matrice comme du code de
+ * production.
+ */
+function patternsFor(file: string): { describe: RegExp; it: RegExp } {
+  return file.endsWith('.sh')
+    ? { describe: SHELL_DESCRIBE_REQ, it: SHELL_IT_AC }
+    : { describe: DESCRIBE_REQ, it: IT_AC }
+}
 
 type Hit = { file: string; line: number }
 type Coverage = Map<string, Map<string, Hit[]>>
@@ -54,7 +90,7 @@ function collectTestFiles(roots: string[]): string[] {
       continue
     }
     for (const entry of readdirSync(root, { withFileTypes: true, recursive: true })) {
-      if (!(entry.isFile() && /\.(spec|test)\.tsx?$/.test(entry.name))) {
+      if (!(entry.isFile() && /(\.(spec|test)\.tsx?|\.sh)$/.test(entry.name))) {
         continue
       }
       const path = join(entry.parentPath, entry.name)
@@ -74,15 +110,16 @@ function scanTests(files: string[]): { coverage: Coverage; unknown: Array<Hit & 
 
   for (const file of files) {
     let currentReq: string | null = null
+    const patterns = patternsFor(file)
     readFileSync(file, 'utf8')
       .split('\n')
       .forEach((text, index) => {
-        const describeMatch = DESCRIBE_REQ.exec(text)
+        const describeMatch = patterns.describe.exec(text)
         if (describeMatch?.[1]) {
           currentReq = describeMatch[1]
           return
         }
-        const itMatch = IT_AC.exec(text)
+        const itMatch = patterns.it.exec(text)
         if (!itMatch?.[1]) {
           return
         }

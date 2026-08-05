@@ -18,6 +18,7 @@
     "format": "biome format --write .",
     "typecheck": "turbo run typecheck",
     "adr:check": "bash scripts/check-adr-index.sh",
+    "verify:type-boundary": "bash scripts/verify-type-boundary.sh",
     "test:coverage": "turbo run test:coverage",
     "coverage:summary": "bash scripts/coverage-summary.sh",
     "requirements:validate": "tsx docs/requirements/_scripts/validate.ts",

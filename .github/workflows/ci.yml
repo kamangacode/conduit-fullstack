@@ -181,6 +181,12 @@ jobs:
           key: turbo-typecheck-${{ github.sha }}
           restore-keys: turbo-typecheck-
       - run: pnpm typecheck
+      # Vérification active de la thèse du dépôt : casser le modèle partagé doit
+      # faire échouer `apps/api` ET `apps/web` (REQ-ARCH-001). Placée après le
+      # typecheck ordinaire, dont elle réutilise le cache — et qui sert de
+      # référence : le script refuse de conclure si le dépôt ne compile pas déjà.
+      - name: Frontière typée bout-en-bout (vérification active)
+        run: bash scripts/verify-type-boundary.sh
 
   test:
     name: Test
