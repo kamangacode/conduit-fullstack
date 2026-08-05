@@ -406,7 +406,32 @@ jobs:
         continue-on-error: true
         env:
           E2E_DATABASE_URL: postgresql://conduit:conduit@localhost:5432/conduit_e2e?schema=public
-        run: pnpm conformance:e2e
+        # `pipefail` explicite : le shell par défaut des runners est `bash -e`,
+        # sans lui. Le code de sortie du run serait donc celui de `tee`, donc 0,
+        # et l'étape s'afficherait verte quel qu'ait été le verdict — le
+        # `continue-on-error` ci-dessus deviendrait décoratif et l'échec
+        # invisible jusque dans le journal.
+        run: |
+          set -o pipefail
+          pnpm conformance:e2e 2>&1 | tee /tmp/e2e.log
+      # Un rapport que personne ne lit ne rapporte rien. Le job ne bloque pas :
+      # sans ce résumé, connaître le verdict imposerait d'ouvrir le journal d'un
+      # job vert, ce que personne ne fait. Les comptes remontent donc dans le
+      # résumé du run, comme la couverture des tests et celle des exigences —
+      # lisible depuis la PR, sans permission d'écriture.
+      - name: Verdict e2e (résumé de run)
+        if: always()
+        run: |
+          {
+            echo "## Conformité e2e RealWorld (rapport, non bloquant)"
+            echo ""
+            if grep -qE '^\s+[0-9]+ (passed|failed|flaky)' /tmp/e2e.log 2> /dev/null; then
+              grep -E '^\s+[0-9]+ (passed|failed|flaky|skipped)' /tmp/e2e.log \
+                | sed -E 's/^\s*/- /'
+            else
+              echo "_La suite n'a pas atteint son terme : voir le journal du job._"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
       # Les traces et captures d'écran sont ce qui rend un échec e2e
       # diagnosticable sans reproduire le run : sans elles, le rapport se réduit
       # à un nom de test et une ligne.
