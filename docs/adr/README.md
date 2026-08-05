@@ -4,7 +4,8 @@ Les décisions techniques structurantes de `conduit-fullstack` sont versionnées
 ici, à côté du code qu'elles gouvernent. Un ADR répond à une question que le
 code seul ne documente pas : **pourquoi ce choix, contre quelles alternatives**.
 
-**Quand créer un ADR** : voir [`.claude/rules/03-commits-review.md`](../../.claude/rules/03-commits-review.md)
+**Quand créer un ADR** : voir `.claude/rules/03-commits-review.md` (cadre de
+développement local, non publié — voir la note en bas de page)
 (section « Décisions architecturales »). Cette page ne redécrit pas cette règle —
 elle porte la mécanique : gabarit, numérotation, statuts, vérification.
 
@@ -65,3 +66,14 @@ vivant dans ce dépôt.
 
 Le contrôle tourne en pre-commit (sur les fichiers `docs/adr/**`) et dans le job
 `quality` de la CI : un index à jour ne dépend pas de la vigilance du rédacteur.
+
+## Note sur `.claude/rules/`
+
+Plusieurs ADR renvoient à des fichiers de `.claude/rules/`. Ce dossier porte le
+cadre de développement **local** et n'est pas publié (`.gitignore`) : les
+références sont donc données en clair plutôt qu'en lien, pour ne pas produire de
+404 depuis le dépôt public.
+
+Ce que ces règles imposent et qui engage le code est repris ici et dans les ADR
+concernés — un lecteur externe doit pouvoir reconstruire la décision sans avoir
+accès au cadre.

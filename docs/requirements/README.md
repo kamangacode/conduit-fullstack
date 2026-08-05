@@ -7,8 +7,11 @@ reprennent en préfixe. C'est ce qui rend la question « ce critère est-il prou
 par un test ? » mécaniquement décidable.
 
 **La convention** (quand créer un REQ, comment le faire évoluer, nommage des
-tests) vit dans [`.claude/rules/20-requirements-docs-as-code.md`](../../.claude/rules/20-requirements-docs-as-code.md).
-Cette page ne la redécrit pas — elle documente la mécanique de ce dossier.
+tests) vit dans `.claude/rules/20-requirements-docs-as-code.md`, cadre de
+développement local non publié (voir la note de
+[`docs/adr/README.md`](../adr/README.md)). Cette page ne la redécrit pas — elle
+documente la mécanique de ce dossier, qui est vérifiable sans elle : le gabarit,
+le schéma Zod et les scripts de validation sont tous versionnés ici.
 
 ## Structure
 

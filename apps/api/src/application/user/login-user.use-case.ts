@@ -16,8 +16,15 @@ import { InvalidCredentialsError } from '../../domain/user/user.errors'
  *
  * Les paramètres sont ceux de l'ADR 007, pour que le coût du calcul soit celui
  * d'une vérification réelle.
+ *
+ * **Exporté pour être mis à l'épreuve.** L'adapter argon2 avale une erreur de
+ * décodage et renvoie `false` en microsecondes : un leurre indécodable
+ * désactiverait donc la parade en silence, sans qu'aucune assertion sur la
+ * réponse ne change. `argon2-password-hasher.spec.ts` vérifie que la
+ * bibliothèque réelle sait le décoder — c'est la seule chose qui rend cette
+ * constante autre chose qu'une décoration.
  */
-const DUMMY_PASSWORD_HASH =
+export const DUMMY_PASSWORD_HASH =
   '$argon2id$v=19$m=19456,t=2,p=1$DkZMIVITZtdRk3h3sXUkxg$bb4EJMiXYR6TkvCnG6ARH9M1oVXgorBrbTJcSLkdtfw'
 
 export interface LoginUserInput {

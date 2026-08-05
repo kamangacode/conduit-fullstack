@@ -3,7 +3,7 @@ id: REQ-USER-004
 title: Consulter et mettre à jour le compte courant
 type: functional
 domain: user
-status: approved
+status: implemented
 priority: must
 source: "PRD §7.1, §8 (format « User ») ; openapi.yml GET /user et PUT /user"
 acceptance_criteria:
@@ -32,8 +32,18 @@ acceptance_criteria:
     when: "PUT /api/user est appelé"
     then: "l'API répond 200 — reprendre sa propre valeur n'est pas un conflit d'unicité"
 implementation:
-  files: []
-  tests: []
+  files:
+    - apps/api/src/domain/user/user.ts
+    - apps/api/src/application/user/get-current-user.use-case.ts
+    - apps/api/src/application/user/update-user.use-case.ts
+    - apps/api/src/infrastructure/persistence/prisma-user.repository.ts
+    - apps/api/src/interface/user/user.controller.ts
+  tests:
+    - apps/api/src/domain/user/user.spec.ts
+    - apps/api/src/application/user/get-current-user.use-case.spec.ts
+    - apps/api/src/application/user/update-user.use-case.spec.ts
+    - apps/api/test/integration/auth-persistence.integration.spec.ts
+    - apps/api/test/integration/auth-http.integration.spec.ts
 related:
   issues: [3]
   requirements:

@@ -61,13 +61,14 @@ export class InvalidCredentialsError extends DomainError {
 }
 
 /**
- * Compte introuvable.
+ * Compte introuvable, désigné par une **valeur publique** — un username.
  *
- * Deux usages seulement, tous deux hors connexion : un profil demandé par un
- * username qui ne désigne personne (REQ-PROFILE-002 AC-3), et un jeton dont le
- * sujet ne se résout plus (REQ-AUTH-001 AC-6) — ce dernier cas étant traduit en
- * 401 par le use-case appelant, puisque le porteur du jeton n'a pas à savoir si
- * le compte a existé.
+ * Usage unique : un profil demandé pour un username qui ne désigne personne
+ * (REQ-PROFILE-002 AC-3). Le 404 ne divulgue rien ici, puisque les profils sont
+ * consultables sans authentification.
+ *
+ * Ne pas l'utiliser pour une identité issue d'un jeton : voir
+ * `AuthenticatedUserNotFoundError`, dont c'est précisément la raison d'être.
  */
 export class UserNotFoundError extends DomainError {
   readonly errorCode = 'not_found' as const
@@ -75,5 +76,29 @@ export class UserNotFoundError extends DomainError {
 
   constructor() {
     super('user not found')
+  }
+}
+
+/**
+ * L'identité portée par un jeton pourtant valide ne résout plus vers un compte
+ * (REQ-AUTH-001 AC-6).
+ *
+ * Le cas survient dès qu'un compte est supprimé alors que des jetons émis
+ * courent encore — y compris dans la fenêtre entre la résolution du guard et
+ * l'écriture d'un use-case.
+ *
+ * **401 et non 404**, avec le corps exact du refus d'authentification du guard.
+ * C'est le point entier de cette classe : un 404 porteur d'un `errors.profile`
+ * distinguerait « ce compte n'existe plus » de « ton jeton ne vaut rien », et
+ * rendrait donc l'API capable de confirmer qu'un compte a existé à qui présente
+ * un jeton périmé. Le porteur d'un jeton qui ne résout plus obtient exactement
+ * ce qu'obtient le porteur d'un jeton forgé.
+ */
+export class AuthenticatedUserNotFoundError extends DomainError {
+  readonly errorCode = 'unauthorized' as const
+  readonly response: ErrorResponse = fieldErrors('authorization', 'is invalid or missing')
+
+  constructor() {
+    super('authenticated user no longer exists')
   }
 }

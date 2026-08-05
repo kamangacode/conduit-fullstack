@@ -3,7 +3,7 @@ id: REQ-PROFILE-002
 title: Consulter le profil public d'un utilisateur
 type: functional
 domain: profile
-status: approved
+status: implemented
 priority: must
 source: "PRD §7.2, §8 (format « Profile »), règle R-5 ; openapi.yml GET /profiles/{username}"
 acceptance_criteria:
@@ -24,8 +24,14 @@ acceptance_criteria:
     when: "la réponse est produite"
     then: "elle ne contient que username, bio, image et following — ni email, ni condensat, ni identifiant interne"
 implementation:
-  files: []
-  tests: []
+  files:
+    - apps/api/src/domain/user/user.ts
+    - apps/api/src/application/profile/get-profile.use-case.ts
+    - apps/api/src/interface/profile/profile.controller.ts
+  tests:
+    - apps/api/src/domain/user/user.spec.ts
+    - apps/api/src/application/profile/get-profile.use-case.spec.ts
+    - apps/api/test/integration/auth-http.integration.spec.ts
 related:
   issues: [3]
   requirements:

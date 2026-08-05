@@ -36,9 +36,12 @@ describe('lane d’intégration — plomberie de persistance', () => {
     const reloaded = await prismaTestClient.user.findUniqueOrThrow({ where: { id: created.id } })
 
     expect(reloaded.email).toBe('sonde@conduit.test')
-    // `bio` a un @default("") côté schéma : le relire prouve que la valeur par
-    // défaut vient bien de la base, pas d'une supposition du client.
-    expect(reloaded.bio).toBe('')
+    // `bio` est nullable et SANS valeur par défaut depuis la migration
+    // `user_bio_nullable` : un compte créé sans bio porte NULL, ce que le contrat
+    // RealWorld montre verbatim (ADR 004). Cette assertion valait `''` tant que
+    // la colonne portait `@default("")` — elle a échoué à la migration, ce qui
+    // est précisément son rôle.
+    expect(reloaded.bio).toBeNull()
     expect(reloaded.createdAt).toBeInstanceOf(Date)
   })
 

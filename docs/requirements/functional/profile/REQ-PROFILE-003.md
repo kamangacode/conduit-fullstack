@@ -3,7 +3,7 @@ id: REQ-PROFILE-003
 title: Suivre et ne plus suivre un utilisateur
 type: functional
 domain: profile
-status: approved
+status: implemented
 priority: must
 source: "PRD §7.2, règle R-5 ; openapi.yml POST et DELETE /profiles/{username}/follow"
 acceptance_criteria:
@@ -32,8 +32,17 @@ acceptance_criteria:
     when: "POST /api/profiles/:username/follow est appelé avec un jeton valide"
     then: "l'API répond 404"
 implementation:
-  files: []
-  tests: []
+  files:
+    - apps/api/src/domain/profile/ports/follow-repository.port.ts
+    - apps/api/src/application/profile/follow-user.use-case.ts
+    - apps/api/src/application/profile/unfollow-user.use-case.ts
+    - apps/api/src/infrastructure/persistence/prisma-follow.repository.ts
+    - apps/api/src/interface/profile/profile.controller.ts
+  tests:
+    - apps/api/src/application/profile/follow-user.use-case.spec.ts
+    - apps/api/src/application/profile/unfollow-user.use-case.spec.ts
+    - apps/api/test/integration/auth-persistence.integration.spec.ts
+    - apps/api/test/integration/auth-http.integration.spec.ts
 related:
   issues: [3]
   requirements:
