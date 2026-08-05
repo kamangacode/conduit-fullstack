@@ -3,7 +3,7 @@ id: REQ-ARTICLE-007
 title: Lister et filtrer les articles publiés
 type: functional
 domain: article
-status: approved
+status: implemented
 priority: must
 source: "PRD §7.3, §8 (format « MultipleArticles »), règles R-2, R-3, R-5, R-7 et R-10 ; openapi.yml GET /articles"
 acceptance_criteria:
@@ -40,8 +40,14 @@ acceptance_criteria:
     when: "GET /api/articles est appelé"
     then: "l'API répond 200 avec une liste vide et `articlesCount` à 0, plutôt qu'une erreur ou le catalogue entier"
 implementation:
-  files: []
-  tests: []
+  files:
+    - apps/api/src/application/article/list-articles.use-case.ts
+    - apps/api/src/infrastructure/persistence/prisma-article.query.ts
+    - apps/api/src/interface/article/article.controller.ts
+  tests:
+    - apps/api/src/application/article/read-articles.use-case.spec.ts
+    - apps/api/test/integration/article-persistence.integration.spec.ts
+    - apps/api/test/integration/article-http.integration.spec.ts
 related:
   issues: [4]
   requirements:

@@ -3,7 +3,7 @@ id: REQ-COMMENT-002
 title: Commenter un article
 type: functional
 domain: comment
-status: approved
+status: implemented
 priority: must
 source: "PRD §7.4, §8 (format « Comment ») ; openapi.yml POST /articles/{slug}/comments"
 acceptance_criteria:
@@ -32,8 +32,16 @@ acceptance_criteria:
     when: "POST /api/articles/:slug/comments est appelé avec un jeton valide"
     then: "l'API répond 404 — on ne commente pas un article qui n'existe pas"
 implementation:
-  files: []
-  tests: []
+  files:
+    - apps/api/src/domain/comment/comment.ts
+    - apps/api/src/application/comment/add-comment.use-case.ts
+    - apps/api/src/infrastructure/persistence/prisma-comment.repository.ts
+    - apps/api/src/interface/article/article.controller.ts
+  tests:
+    - apps/api/src/domain/comment/comment.spec.ts
+    - apps/api/src/application/comment/comments.use-case.spec.ts
+    - apps/api/test/integration/article-persistence.integration.spec.ts
+    - apps/api/test/integration/article-http.integration.spec.ts
 related:
   issues: [4]
   requirements:

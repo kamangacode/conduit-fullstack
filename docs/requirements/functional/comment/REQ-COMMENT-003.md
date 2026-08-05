@@ -3,7 +3,7 @@ id: REQ-COMMENT-003
 title: Lister les commentaires d'un article
 type: functional
 domain: comment
-status: approved
+status: implemented
 priority: must
 source: "PRD §7.4, §8 (format « MultipleComments »), règle R-5 ; openapi.yml GET /articles/{slug}/comments"
 acceptance_criteria:
@@ -28,8 +28,14 @@ acceptance_criteria:
     when: "la réponse est produite"
     then: "chaque `author` ne contient que username, bio, image et following"
 implementation:
-  files: []
-  tests: []
+  files:
+    - apps/api/src/application/comment/list-comments.use-case.ts
+    - apps/api/src/infrastructure/persistence/prisma-comment.repository.ts
+    - apps/api/src/interface/article/article.controller.ts
+  tests:
+    - apps/api/src/application/comment/comments.use-case.spec.ts
+    - apps/api/test/integration/article-persistence.integration.spec.ts
+    - apps/api/test/integration/article-http.integration.spec.ts
 related:
   issues: [4]
   requirements:

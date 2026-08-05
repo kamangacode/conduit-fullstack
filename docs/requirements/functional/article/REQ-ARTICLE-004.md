@@ -3,7 +3,7 @@ id: REQ-ARTICLE-004
 title: Consulter un article par son slug
 type: functional
 domain: article
-status: approved
+status: implemented
 priority: must
 source: "PRD §7.3, §8 (format « Article »), règles R-5 et R-7 ; openapi.yml GET /articles/{slug}"
 acceptance_criteria:
@@ -24,8 +24,15 @@ acceptance_criteria:
     when: "la réponse est produite"
     then: "`author` ne contient que username, bio, image et following — la projection ne laisse fuiter aucun champ privé"
 implementation:
-  files: []
-  tests: []
+  files:
+    - apps/api/src/application/article/get-article.use-case.ts
+    - apps/api/src/infrastructure/persistence/prisma-article.query.ts
+    - apps/api/src/interface/article/article.controller.ts
+  tests:
+    - apps/api/src/domain/article/slug.spec.ts
+    - apps/api/src/application/article/read-articles.use-case.spec.ts
+    - apps/api/test/integration/article-persistence.integration.spec.ts
+    - apps/api/test/integration/article-http.integration.spec.ts
 related:
   issues: [4]
   requirements:

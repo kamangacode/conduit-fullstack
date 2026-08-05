@@ -3,7 +3,7 @@ id: REQ-ARTICLE-003
 title: Publier un article
 type: functional
 domain: article
-status: approved
+status: implemented
 priority: must
 source: "PRD §7.3, §8 (format « Article »), règle R-1 ; openapi.yml POST /articles"
 acceptance_criteria:
@@ -36,8 +36,16 @@ acceptance_criteria:
     when: "POST /api/articles est appelé"
     then: "l'API répond 422 au format `{ errors: { champ: [messages] } }`"
 implementation:
-  files: []
-  tests: []
+  files:
+    - apps/api/src/domain/article/slug.ts
+    - apps/api/src/application/article/create-article.use-case.ts
+    - apps/api/src/infrastructure/persistence/prisma-article.repository.ts
+    - apps/api/src/interface/article/article.controller.ts
+  tests:
+    - apps/api/src/domain/article/slug.spec.ts
+    - apps/api/src/application/article/create-article.use-case.spec.ts
+    - apps/api/test/integration/article-persistence.integration.spec.ts
+    - apps/api/test/integration/article-http.integration.spec.ts
 related:
   issues: [4]
   requirements:

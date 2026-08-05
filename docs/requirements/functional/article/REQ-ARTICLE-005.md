@@ -3,7 +3,7 @@ id: REQ-ARTICLE-005
 title: Modifier son propre article
 type: functional
 domain: article
-status: approved
+status: implemented
 priority: must
 source: "PRD §7.3, règles R-1 et R-6 ; openapi.yml PUT /articles/{slug}"
 acceptance_criteria:
@@ -36,8 +36,16 @@ acceptance_criteria:
     when: "PUT /api/articles/:slug est appelé"
     then: "l'API répond 422 et l'article reste dans son état antérieur"
 implementation:
-  files: []
-  tests: []
+  files:
+    - apps/api/src/domain/article/article.ts
+    - apps/api/src/application/article/update-article.use-case.ts
+    - apps/api/src/infrastructure/persistence/prisma-article.repository.ts
+    - apps/api/src/interface/article/article.controller.ts
+  tests:
+    - apps/api/src/domain/article/article.spec.ts
+    - apps/api/src/application/article/update-article.use-case.spec.ts
+    - apps/api/test/integration/article-persistence.integration.spec.ts
+    - apps/api/test/integration/article-http.integration.spec.ts
 related:
   issues: [4]
   requirements:

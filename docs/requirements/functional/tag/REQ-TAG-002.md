@@ -3,7 +3,7 @@ id: REQ-TAG-002
 title: Lister les tags disponibles
 type: functional
 domain: tag
-status: approved
+status: implemented
 priority: must
 source: "PRD §7.5, §8 (format « Tags ») ; openapi.yml GET /tags"
 acceptance_criteria:
@@ -24,8 +24,14 @@ acceptance_criteria:
     when: "GET /api/tags est rappelé"
     then: "le tag n'est plus proposé : la liste reflète les articles existants, pas l'historique des saisies"
 implementation:
-  files: []
-  tests: []
+  files:
+    - apps/api/src/application/tag/list-tags.use-case.ts
+    - apps/api/src/infrastructure/persistence/prisma-tag.query.ts
+    - apps/api/src/interface/tag/tag.controller.ts
+  tests:
+    - apps/api/src/application/tag/list-tags.use-case.spec.ts
+    - apps/api/test/integration/article-persistence.integration.spec.ts
+    - apps/api/test/integration/article-http.integration.spec.ts
 related:
   issues: [4]
   requirements:

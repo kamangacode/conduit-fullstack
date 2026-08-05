@@ -3,7 +3,7 @@ id: REQ-ARTICLE-009
 title: Favoriser et défavoriser un article
 type: functional
 domain: article
-status: approved
+status: implemented
 priority: must
 source: "PRD §7.5, règle R-5 ; openapi.yml POST et DELETE /articles/{slug}/favorite"
 acceptance_criteria:
@@ -36,8 +36,15 @@ acceptance_criteria:
     when: "POST ou DELETE /api/articles/:slug/favorite est appelé avec un jeton valide"
     then: "l'API répond 404"
 implementation:
-  files: []
-  tests: []
+  files:
+    - apps/api/src/application/article/favorite-article.use-case.ts
+    - apps/api/src/application/article/unfavorite-article.use-case.ts
+    - apps/api/src/infrastructure/persistence/prisma-favorite.repository.ts
+    - apps/api/src/interface/article/article.controller.ts
+  tests:
+    - apps/api/src/application/article/favorite-article.use-case.spec.ts
+    - apps/api/test/integration/article-persistence.integration.spec.ts
+    - apps/api/test/integration/article-http.integration.spec.ts
 related:
   issues: [4]
   requirements:

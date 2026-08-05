@@ -3,7 +3,7 @@ id: REQ-COMMENT-004
 title: Supprimer son propre commentaire
 type: functional
 domain: comment
-status: approved
+status: implemented
 priority: must
 source: "PRD §7.4, règle R-6 ; openapi.yml DELETE /articles/{slug}/comments/{id}"
 acceptance_criteria:
@@ -28,8 +28,16 @@ acceptance_criteria:
     when: "DELETE /api/articles/:slug/comments/:id est appelé"
     then: "l'API répond 401 et le commentaire subsiste"
 implementation:
-  files: []
-  tests: []
+  files:
+    - apps/api/src/domain/comment/comment.ts
+    - apps/api/src/application/comment/delete-comment.use-case.ts
+    - apps/api/src/infrastructure/persistence/prisma-comment.repository.ts
+    - apps/api/src/interface/article/article.controller.ts
+  tests:
+    - apps/api/src/domain/comment/comment.spec.ts
+    - apps/api/src/application/comment/comments.use-case.spec.ts
+    - apps/api/test/integration/article-persistence.integration.spec.ts
+    - apps/api/test/integration/article-http.integration.spec.ts
 related:
   issues: [4]
   requirements:

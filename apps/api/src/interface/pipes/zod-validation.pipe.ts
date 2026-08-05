@@ -50,6 +50,23 @@ class ZodValidationPipe<T> implements PipeTransform<unknown, T> {
  * ensuite avec le schéma déballé — ce dernier étant celui dont les chemins
  * d'erreur sont corrects.
  */
+/**
+ * Valide une **query string** avec un schéma de `packages/shared`.
+ *
+ * Pas d'enveloppe à déballer ici — une query est déjà plate, et ses clés
+ * d'erreur (`limit`, `tag`) sont directement celles du contrat. La fonction
+ * existe malgré tout plutôt que d'exporter `ZodValidationPipe` : le nom dit où
+ * la valeur est lue, et empêche qu'on s'en serve un jour pour un corps de
+ * requête, où l'absence de déballage produirait des clés préfixées.
+ *
+ * Le schéma fait plus que refuser : il **applique les défauts** de pagination
+ * (R-10). Une requête sans `limit` ressort donc avec `limit: 20`, et aucun
+ * use-case n'a de cas « absent » à traiter (REQ-ARTICLE-002).
+ */
+export function zodQuery<T>(schema: ZodType<T>): PipeTransform<unknown, T> {
+  return new ZodValidationPipe(schema)
+}
+
 export function zodEnvelope<T>(key: string, inner: ZodType<T>): PipeTransform<unknown, T> {
   const innerPipe = new ZodValidationPipe(inner)
 

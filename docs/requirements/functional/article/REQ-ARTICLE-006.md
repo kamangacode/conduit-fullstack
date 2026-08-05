@@ -3,7 +3,7 @@ id: REQ-ARTICLE-006
 title: Supprimer son propre article
 type: functional
 domain: article
-status: approved
+status: implemented
 priority: must
 source: "PRD §7.3, règle R-6 ; openapi.yml DELETE /articles/{slug}"
 acceptance_criteria:
@@ -28,8 +28,16 @@ acceptance_criteria:
     when: "DELETE /api/articles/:slug est appelé"
     then: "l'API répond 401 et l'article existe toujours"
 implementation:
-  files: []
-  tests: []
+  files:
+    - apps/api/src/domain/article/article.ts
+    - apps/api/src/application/article/delete-article.use-case.ts
+    - apps/api/src/infrastructure/persistence/prisma-article.repository.ts
+    - apps/api/src/interface/article/article.controller.ts
+  tests:
+    - apps/api/src/domain/article/article.spec.ts
+    - apps/api/src/application/article/delete-article.use-case.spec.ts
+    - apps/api/test/integration/article-persistence.integration.spec.ts
+    - apps/api/test/integration/article-http.integration.spec.ts
 related:
   issues: [4]
   requirements:

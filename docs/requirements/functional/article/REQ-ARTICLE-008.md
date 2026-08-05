@@ -3,7 +3,7 @@ id: REQ-ARTICLE-008
 title: Consulter le flux personnel des auteurs suivis
 type: functional
 domain: article
-status: approved
+status: implemented
 priority: must
 source: "PRD §7.3, règles R-2, R-4, R-7 et R-10 ; openapi.yml GET /articles/feed"
 acceptance_criteria:
@@ -32,8 +32,14 @@ acceptance_criteria:
     when: "GET /api/articles/feed est rappelé"
     then: "les articles de cet auteur ont disparu du flux, sans qu'aucune donnée n'ait été recopiée à l'abonnement"
 implementation:
-  files: []
-  tests: []
+  files:
+    - apps/api/src/application/article/get-feed.use-case.ts
+    - apps/api/src/infrastructure/persistence/prisma-article.query.ts
+    - apps/api/src/interface/article/article.controller.ts
+  tests:
+    - apps/api/src/application/article/read-articles.use-case.spec.ts
+    - apps/api/test/integration/article-persistence.integration.spec.ts
+    - apps/api/test/integration/article-http.integration.spec.ts
 related:
   issues: [4]
   requirements:
