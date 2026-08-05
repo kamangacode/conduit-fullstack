@@ -179,10 +179,14 @@ describe('REQ-WEB-002 — session cliente', () => {
     expect(window.localStorage.getItem(TOKEN_STORAGE_KEY)).toBe('jwt.token.here')
   })
 
-  it('AC-5: distingue « pas encore résolu » de « anonyme »', async () => {
-    // La distinction qui manquait, et qui a coûté un vrai défaut : une page qui
-    // redirige sur `user === null` éjecte les utilisateurs connectés, parce que
-    // son effet s'exécute avant celui de ce fournisseur.
+  // Sans préfixe `AC-n:`, et c'est le point : ces deux tests décrivent la
+  // transition d'état du fournisseur, qu'aucun critère de REQ-WEB-002 ne nomme.
+  // Ils portaient `AC-5:`, dont le `then:` réel est « rendu serveur, stockage
+  // absent, état anonyme sans erreur » — un comportement qu'ils ne touchent pas
+  // (ils rendent côté client). La matrice rapproche des libellés, pas des
+  // comportements : le critère paraissait donc couvert deux fois de plus qu'il
+  // ne l'était. Quatrième occurrence du motif consigné dans `artifacts/lessons.md`.
+  it('atteint « authenticated » quand la réhydratation aboutit', async () => {
     window.localStorage.setItem(TOKEN_STORAGE_KEY, 'jwt.token.here')
 
     renderProbe()
@@ -190,10 +194,95 @@ describe('REQ-WEB-002 — session cliente', () => {
     await waitFor(() => expect(screen.getByTestId('status')).toHaveTextContent('authenticated'))
   })
 
-  it('AC-5: rapporte « anonymous » seulement après résolution', async () => {
+  it('reste « pending » tant que la réhydratation n’a pas répondu', async () => {
+    // La version précédente de ce test n'observait que l'état **final**. Retirer
+    // entièrement l'état `pending` de l'implémentation la laissait verte — elle
+    // ne prouvait donc pas la distinction qu'elle annonçait. Observer l'état
+    // transitoire exige une promesse qu'on contrôle.
+    window.localStorage.setItem(TOKEN_STORAGE_KEY, 'jwt.token.here')
+    let resolveFetch: ((user: User) => void) | undefined
+    fetchCurrentUser.mockReturnValue(
+      new Promise<User>((resolve) => {
+        resolveFetch = resolve
+      })
+    )
+
+    renderProbe()
+
+    // « pas encore résolu » — et surtout pas « anonyme », qui ferait rediriger
+    // une page authentifiée alors que l'utilisateur a bien une session.
+    await waitFor(() => expect(screen.getByTestId('status')).toHaveTextContent('pending'))
+    expect(screen.getByTestId('username')).toHaveTextContent('anonyme')
+
+    await act(async () => {
+      resolveFetch?.(jake)
+    })
+
+    expect(screen.getByTestId('status')).toHaveTextContent('authenticated')
+  })
+
+  it('rapporte « anonymous » seulement après résolution', async () => {
     renderProbe()
 
     await waitFor(() => expect(screen.getByTestId('status')).toHaveTextContent('anonymous'))
+  })
+
+  it('AC-1: une connexion pendant une réhydratation en vol n’est pas écrasée par celle-ci', async () => {
+    // Le fournisseur reste monté pendant toute la navigation App Router : la
+    // réponse tardive d'un `GET /user` lancé au démarrage peut donc retomber
+    // **après** qu'un utilisateur s'est connecté avec un autre compte. Sans
+    // garde, elle réapplique l'ancien compte et réécrit l'ancien jeton par-dessus
+    // le nouveau — la session fraîchement ouverte disparaît sans erreur.
+    window.localStorage.setItem(TOKEN_STORAGE_KEY, 'jeton.ancien')
+    let resolveFetch: ((user: User) => void) | undefined
+    fetchCurrentUser.mockReturnValue(
+      new Promise<User>((resolve) => {
+        resolveFetch = resolve
+      })
+    )
+
+    renderProbe()
+    await waitFor(() => expect(screen.getByTestId('status')).toHaveTextContent('pending'))
+
+    // L'utilisateur se connecte avant que la réhydratation ait répondu.
+    await act(async () => {
+      screen.getByRole('button', { name: 'connexion' }).click()
+    })
+    expect(window.localStorage.getItem(TOKEN_STORAGE_KEY)).toBe(jake.token)
+
+    // La réponse tardive arrive, portant l'ancien compte.
+    await act(async () => {
+      resolveFetch?.({ ...jake, username: 'ancien', token: 'jeton.ancien' })
+    })
+
+    expect(screen.getByTestId('username')).toHaveTextContent('jake')
+    expect(window.localStorage.getItem(TOKEN_STORAGE_KEY)).toBe(jake.token)
+  })
+
+  it('AC-3: une déconnexion pendant une réhydratation en vol n’est pas annulée par celle-ci', async () => {
+    window.localStorage.setItem(TOKEN_STORAGE_KEY, 'jeton.ancien')
+    let resolveFetch: ((user: User) => void) | undefined
+    fetchCurrentUser.mockReturnValue(
+      new Promise<User>((resolve) => {
+        resolveFetch = resolve
+      })
+    )
+
+    renderProbe()
+    await waitFor(() => expect(screen.getByTestId('status')).toHaveTextContent('pending'))
+
+    await act(async () => {
+      screen.getByRole('button', { name: 'déconnexion' }).click()
+    })
+
+    await act(async () => {
+      resolveFetch?.(jake)
+    })
+
+    // Une déconnexion que la réponse tardive ressusciterait est pire qu'un bug
+    // d'affichage : l'utilisateur croit avoir fermé sa session.
+    expect(screen.getByTestId('username')).toHaveTextContent('anonyme')
+    expect(window.localStorage.getItem(TOKEN_STORAGE_KEY)).toBeNull()
   })
 })
 
@@ -269,6 +358,20 @@ describe('REQ-WEB-007 — contrat de sélecteurs, stockage et interface de débo
     renderProbe()
 
     await waitFor(() => expect(window.__conduit_debug__?.getAuthState()).toBe('authenticated'))
+  })
+
+  it('AC-6: retire l’interface au démontage du fournisseur', async () => {
+    // Le `beforeEach` de chaque fichier de test purge lui-même la propriété, ce
+    // qui masquait l'absence du vrai nettoyage : le retirer de la production
+    // laissait 44 tests verts. Sans lui, un fournisseur démonté laisserait un
+    // objet obsolète accessible depuis la même origine, qui continuerait de
+    // rapporter un état figé — l'inverse de ce que l'interface promet.
+    const { unmount } = renderProbe()
+    await waitFor(() => expect(window.__conduit_debug__).toBeDefined())
+
+    unmount()
+
+    expect(window.__conduit_debug__).toBeUndefined()
   })
 
   it('AC-7: rapporte « unauthenticated » et non « loading » à un anonyme résolu', async () => {

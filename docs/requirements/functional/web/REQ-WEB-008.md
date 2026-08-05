@@ -39,6 +39,10 @@ acceptance_criteria:
     given: "les commentaires d'un article"
     when: "le client les liste, en publie un ou en supprime un"
     then: "les trois opérations passent par le chemin imbriqué de l'article et rendent les types partagés"
+  - id: AC-9
+    given: "la création puis la modification d'un article"
+    when: "le client les envoie"
+    then: "la création poste sur la collection et la modification vise le slug, toutes deux dans l'enveloppe `{ article: … }` du contrat"
 implementation:
   files:
     - apps/web/src/lib/api-client.ts

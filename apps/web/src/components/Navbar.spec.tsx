@@ -177,4 +177,22 @@ describe('REQ-WEB-007 — contrat de sélecteurs, barre de navigation', () => {
     await waitFor(() => expect(container.querySelector('i.ion-compose')).not.toBeNull())
     expect(container.querySelector('i.ion-gear-a')).not.toBeNull()
   })
+
+  it('AC-8: sépare l’icône du libellé, comme le gabarit', async () => {
+    // Le gabarit écrit `<i class="ion-compose"></i>&nbsp;New Article`. En JSX,
+    // deux expressions `{…}` séparées par un simple saut de ligne ne produisent
+    // **aucune** espace — contrairement au HTML statique, où ce saut se réduit à
+    // une espace au rendu. Sans séparateur explicite, le glyphe touche le texte.
+    //
+    // Aucune règle CSS ne rattrape ce cas : `styles.css` donne bien un
+    // `margin-right` à `.nav-link .user-pic`, mais rien à `.nav-link i`. Les
+    // tests de classes ci-dessus ne peuvent pas le voir — d'où celui-ci.
+    window.localStorage.setItem(TOKEN_STORAGE_KEY, jake.token)
+
+    const { container } = renderNavbar()
+
+    await waitFor(() => expect(container.querySelector('i.ion-compose')).not.toBeNull())
+    const editorLink = container.querySelector('i.ion-compose')?.closest('a')
+    expect(editorLink?.textContent).toBe(' New Article')
+  })
 })

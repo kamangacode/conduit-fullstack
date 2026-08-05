@@ -120,6 +120,25 @@ function readStoredToken(): string | null {
 }
 
 /**
+ * Écrit et efface le jeton — **les deux seuls endroits** qui touchent le
+ * stockage.
+ *
+ * La purge existait en double : `signOut` d'un côté, la branche 401 de la
+ * réhydratation de l'autre, chacune avec son propre `removeItem`. Rien ne
+ * cassait, mais toute évolution de la politique de purge (invalider le cache de
+ * requêtes, émettre un événement, nettoyer une clé de plus) devait être
+ * répercutée aux deux endroits, sans que rien ne le rappelle au moment du
+ * changement.
+ */
+function writeStoredToken(token: string): void {
+  window.localStorage.setItem(TOKEN_STORAGE_KEY, token)
+}
+
+function clearStoredToken(): void {
+  window.localStorage.removeItem(TOKEN_STORAGE_KEY)
+}
+
+/**
  * Réhydratation par défaut : `GET /user` avec le jeton conservé.
  *
  * Un client jetable plutôt que celui du fournisseur d'API : c'est ce dernier
@@ -138,19 +157,69 @@ export interface SessionProviderProps {
   fetchCurrentUser?(token: string): Promise<User>
 }
 
-export function SessionProvider({
-  children,
-  fetchCurrentUser = fetchCurrentUserWithToken,
-}: SessionProviderProps) {
-  // Toujours `null` au premier rendu — donc identique au rendu serveur.
-  const [user, setUser] = useState<User | null>(null)
-  // `false` tant que la session n'a pas été résolue : c'est ce qui distingue
-  // « pas encore résolu » de « anonyme ».
-  const [resolved, setResolved] = useState(false)
+/** Ce que le fournisseur détient : le compte, et le fait qu'il soit résolu. */
+interface ResolvedSession {
+  readonly user: User | null
+  readonly resolved: boolean
+}
 
-  // Lu par l'effet de réhydratation sans le faire dépendre de la prop : une
-  // fonction recréée à chaque rendu par un appelant relancerait sinon l'appel
-  // en boucle, et le symptôme serait une avalanche de requêtes `GET /user`.
+/**
+ * État de session et ses deux mutations explicites.
+ *
+ * Chaque mutation incrémente une **génération**. C'est ce compteur qui rend la
+ * réhydratation inoffensive quand elle retombe trop tard : voir
+ * `useRehydration` ci-dessous.
+ */
+function useSessionState() {
+  // Toujours anonyme et non résolu au premier rendu — donc identique au rendu
+  // serveur, qui ne connaît pas le stockage.
+  const [session, setSession] = useState<ResolvedSession>({ user: null, resolved: false })
+  const generation = useRef(0)
+
+  const signIn = useCallback((next: User) => {
+    generation.current += 1
+    // Le jeton **seul**, en clair : c'est la valeur que le contrat décrit, et
+    // c'est aussi la seule donnée du compte qui ait besoin de survivre à la
+    // visite (ADR 014).
+    writeStoredToken(next.token)
+    // `resolved: true` n'est pas décoratif : sans lui, une connexion survenue
+    // pendant une réhydratation en vol laisserait l'état à « pas encore
+    // résolu », et toute page qui attend `authenticated` resterait bloquée
+    // alors que l'utilisateur vient de s'authentifier.
+    setSession({ user: next, resolved: true })
+  }, [])
+
+  const signOut = useCallback(() => {
+    generation.current += 1
+    clearStoredToken()
+    setSession({ user: null, resolved: true })
+  }, [])
+
+  return { session, setSession, generation, signIn, signOut }
+}
+
+/**
+ * Réhydrate la session au démarrage (REQ-WEB-002 AC-2, AC-6, AC-7).
+ *
+ * Extrait du fournisseur pour deux raisons : il dépassait le seuil de la
+ * rule 17, et cet effet est la seule partie du fichier qui parle au réseau.
+ *
+ * **Deux façons pour une réponse d'arriver trop tard**, et une seule ne suffit
+ * pas. Le drapeau `cancelled` couvre le démontage. La **génération** couvre le
+ * cas plus retors : le fournisseur reste monté pendant toute la navigation App
+ * Router, donc un `signIn` ou un `signOut` peut survenir *pendant* que l'appel
+ * est en vol. Sans ce compteur, la réponse tardive réappliquerait l'ancien
+ * compte et réécrirait l'ancien jeton par-dessus le nouveau — une session
+ * fraîchement ouverte disparaîtrait, ou une déconnexion serait ressuscitée,
+ * dans les deux cas sans la moindre erreur.
+ */
+function useRehydration(
+  fetchCurrentUser: (token: string) => Promise<User>,
+  { setSession, generation }: Pick<ReturnType<typeof useSessionState>, 'setSession' | 'generation'>
+) {
+  // Lu sans faire dépendre l'effet de la prop : une fonction recréée à chaque
+  // rendu par un appelant relancerait sinon l'appel en boucle, et le symptôme
+  // serait une avalanche de requêtes `GET /user`.
   const fetchRef = useRef(fetchCurrentUser)
   fetchRef.current = fetchCurrentUser
 
@@ -161,29 +230,28 @@ export function SessionProvider({
       // Aucun jeton : inutile d'interroger l'API, elle ne pourrait que refuser.
       // C'est le cas du premier écran d'un visiteur anonyme, celui qu'on ne
       // veut surtout pas ralentir d'un aller-retour.
-      setResolved(true)
+      setSession((current) => ({ ...current, resolved: true }))
       return
     }
 
-    // Le démontage pendant la requête n'est pas un cas d'école en navigation
-    // cliente : sans ce drapeau, la réponse tardive appellerait `setUser` sur
-    // un arbre démonté.
+    const startedAt = generation.current
     let cancelled = false
+    /** Démonté, ou doublé par une connexion/déconnexion entre-temps. */
+    const isStale = () => cancelled || generation.current !== startedAt
 
     fetchRef.current(token).then(
       (current) => {
-        if (cancelled) {
+        if (isStale()) {
           return
         }
         // Le jeton retenu est celui de la **réponse**, pas celui du stockage :
         // l'API est libre d'en émettre un neuf, et conserver l'ancien ferait
         // expirer la session sans raison visible.
-        window.localStorage.setItem(TOKEN_STORAGE_KEY, current.token)
-        setUser(current)
-        setResolved(true)
+        writeStoredToken(current.token)
+        setSession({ user: current, resolved: true })
       },
       (error: unknown) => {
-        if (cancelled) {
+        if (isStale()) {
           return
         }
         // Seul un 401 est un **verdict sur le jeton**. Une panne réseau ou un
@@ -191,29 +259,26 @@ export function SessionProvider({
         // de trente secondes en déconnexion de tous les visiteurs
         // (REQ-WEB-002 AC-6 et AC-7).
         if (error instanceof ApiError && error.status === 401) {
-          window.localStorage.removeItem(TOKEN_STORAGE_KEY)
+          clearStoredToken()
         }
-        setResolved(true)
+        setSession({ user: null, resolved: true })
       }
     )
 
     return () => {
       cancelled = true
     }
-  }, [])
+  }, [setSession, generation])
+}
 
-  const signIn = useCallback((next: User) => {
-    // Le jeton **seul**, en clair : c'est la valeur que le contrat décrit, et
-    // c'est aussi la seule donnée du compte qui ait besoin de survivre à la
-    // visite (ADR 014).
-    window.localStorage.setItem(TOKEN_STORAGE_KEY, next.token)
-    setUser(next)
-  }, [])
+export function SessionProvider({
+  children,
+  fetchCurrentUser = fetchCurrentUserWithToken,
+}: SessionProviderProps) {
+  const { session, setSession, generation, signIn, signOut } = useSessionState()
+  const { user, resolved } = session
 
-  const signOut = useCallback(() => {
-    window.localStorage.removeItem(TOKEN_STORAGE_KEY)
-    setUser(null)
-  }, [])
+  useRehydration(fetchCurrentUser, { setSession, generation })
 
   const value = useMemo<SessionState>(() => {
     const status: SessionStatus = !resolved ? 'pending' : user ? 'authenticated' : 'anonymous'

@@ -170,9 +170,15 @@ const urlOf = (fetchImpl: ReturnType<typeof vi.fn>, call = 0) =>
 
 describe('REQ-WEB-008 — client API des articles, commentaires et tags', () => {
   it('AC-1: n’envoie aucun paramètre pour un filtre absent', async () => {
+    // `mockImplementation` et non `mockResolvedValue` : ce test appelle deux
+    // fois, et un corps de `Response` ne se lit qu'une fois — la même instance
+    // rendue deux fois échoue au second appel, sur une erreur sans rapport avec
+    // ce qui est testé.
     const fetchImpl = vi
       .fn()
-      .mockResolvedValue(jsonResponse(200, { articles: [anArticleSummary], articlesCount: 1 }))
+      .mockImplementation(async () =>
+        jsonResponse(200, { articles: [anArticleSummary], articlesCount: 1 })
+      )
     const client = buildClient(fetchImpl)
 
     // Les filtres sont passés **explicitement à `undefined`**, et non omis de
@@ -188,17 +194,14 @@ describe('REQ-WEB-008 — client API des articles, commentaires et tags', () => 
     const url = urlOf(fetchImpl)
     expect(url.pathname).toBe('/api/articles')
     expect(url.search).toBe('')
-  })
 
-  it('AC-1: n’envoie rien non plus quand aucun filtre n’est fourni', async () => {
-    const fetchImpl = vi
-      .fn()
-      .mockResolvedValue(jsonResponse(200, { articles: [], articlesCount: 0 }))
-    const client = buildClient(fetchImpl)
-
+    // Second appel, forme sans aucune clé. Fusionné ici plutôt qu'isolé dans
+    // son propre test : seul le cas ci-dessus peut faire échouer la garde, et
+    // les séparer laisserait croire que AC-1 reste couvert si le premier
+    // disparaissait un jour.
     await client.listArticles({})
 
-    expect(urlOf(fetchImpl).search).toBe('')
+    expect(urlOf(fetchImpl, 1).search).toBe('')
   })
 
   it('AC-2: place chaque filtre fourni en paramètre, sous le nom du contrat', async () => {
@@ -340,6 +343,49 @@ describe('REQ-WEB-008 — client API des articles, commentaires et tags', () => 
     // Le chemin imbriqué n'est pas décoratif : c'est lui qui permet à l'API de
     // vérifier que le commentaire appartient bien à cet article (motif IDOR).
     expect(urlOf(fetchImpl).pathname).toBe('/api/articles/how-to-train-your-dragon/comments/1')
+  })
+
+  it('AC-9: publie un article sur la collection, dans l’enveloppe du contrat', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(jsonResponse(201, { article: anArticle }))
+    const client = buildClient(fetchImpl, 'jwt.token.here')
+
+    const created = await client.createArticle({
+      title: 'How to train your dragon',
+      description: 'Ever wonder how?',
+      body: 'It takes a Jacobian',
+      tagList: ['dragons'],
+    })
+
+    expect(urlOf(fetchImpl).pathname).toBe('/api/articles')
+    expect(fetchImpl.mock.calls[0]?.[1]?.method).toBe('POST')
+    // Le DTO nu serait rejeté par l'API : l'enveloppe fait partie du contrat.
+    expect(JSON.parse(String(fetchImpl.mock.calls[0]?.[1]?.body))).toEqual({
+      article: {
+        title: 'How to train your dragon',
+        description: 'Ever wonder how?',
+        body: 'It takes a Jacobian',
+        tagList: ['dragons'],
+      },
+    })
+    expect(created.slug).toBe('how-to-train-your-dragon')
+  })
+
+  it('AC-9: modifie un article par son slug, en PUT et sous la même enveloppe', async () => {
+    // Le couple verbe/chemin est ce qui distingue création et modification :
+    // les inverser produirait deux appels bien formés au mauvais endroit — un
+    // POST sur le slug, ou un PUT sur la collection.
+    const fetchImpl = vi.fn().mockResolvedValue(jsonResponse(200, { article: anArticle }))
+    const client = buildClient(fetchImpl, 'jwt.token.here')
+
+    await client.updateArticle('un slug/à encoder', { title: 'Nouveau titre' })
+
+    expect(String(fetchImpl.mock.calls[0]?.[0])).toBe(
+      'http://api.test/api/articles/un%20slug%2F%C3%A0%20encoder'
+    )
+    expect(fetchImpl.mock.calls[0]?.[1]?.method).toBe('PUT')
+    expect(JSON.parse(String(fetchImpl.mock.calls[0]?.[1]?.body))).toEqual({
+      article: { title: 'Nouveau titre' },
+    })
   })
 
   it('AC-8: rend la liste des tags, déballée', async () => {

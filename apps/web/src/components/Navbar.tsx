@@ -74,10 +74,25 @@ export function Navbar() {
                 className={`nav-link${pathname === link.href ? ' active' : ''}`}
                 href={link.href}
               >
-                {link.icon && <i className={link.icon} />}
+                {/* Le séparateur est **explicite**, et il doit l'être : deux
+                    expressions JSX que seul un saut de ligne sépare se
+                    concatènent sans espace, là où le gabarit HTML écrit
+                    `<i class="ion-compose"></i>&nbsp;New Article` et où le saut
+                    de ligne du source se réduirait à une espace au rendu. Rien
+                    ne rattraperait l'oubli côté style : `styles.css` donne un
+                    `margin-right` à `.nav-link .user-pic`, mais rien à
+                    `.nav-link i`. L'espace insécable reprend celle du gabarit. */}
+                {link.icon && (
+                  <>
+                    <i className={link.icon} />
+                    {' '}
+                  </>
+                )}
                 {link.avatar && (
-                  // biome-ignore lint/performance/noImgElement: le contrat de sélecteurs E2E vise `img.user-pic` (REQ-WEB-007 AC-8) et l'URL est arbitraire — `next/image` exigerait de déclarer chaque hôte distant en configuration, ce qu'un avatar fourni par l'utilisateur rend impossible.
-                  <img className="user-pic" src={link.avatar} alt="" />
+                  <>
+                    {/* biome-ignore lint/performance/noImgElement: le contrat de sélecteurs E2E vise `img.user-pic` (REQ-WEB-007 AC-8) et l'URL est arbitraire — `next/image` exigerait de déclarer chaque hôte distant en configuration, ce qu'un avatar fourni par l'utilisateur rend impossible. */}
+                    <img className="user-pic" src={link.avatar} alt="" />{' '}
+                  </>
                 )}
                 {link.label}
               </Link>
