@@ -199,3 +199,74 @@ vérifier le rouge) attrape ce cas : ici, retirer `slug` du `data` de l'update
 rend 2 tests rouges. Il ne l'attrape que si le test dit la bonne chose — le
 sabotage valide la sensibilité du test, pas la justesse de son assertion. Les
 deux contrôles sont nécessaires, aucun ne remplace l'autre.
+
+---
+
+## 2026-08-06 — Une propriété affirmée dans un commentaire vaut zéro tant que rien ne l'observe
+
+**Contexte.** Slice F7, première exécution de la suite de conformité RealWorld
+officielle contre `apps/api` : **29 assertions en échec**. Aucune ne portait sur
+un parcours métier — `articles`, `comments`, `favorites`, `feed`, `pagination`,
+`profiles` et `tags` passaient intégralement du premier coup. Toutes portaient
+sur la forme des erreurs.
+
+**Le défaut.** `apps/api/src/domain/user/user.errors.ts` portait ce commentaire :
+« les messages sont repris **verbatim** de l'implémentation de référence
+RealWorld et des exemples d'`openapi.yml` ». Trois de ses cinq classes ne le
+faisaient pas. Le contrat emploie `errors.credentials: ["invalid"]` là où nous
+écrivions `errors["email or password"]: ["is invalid"]`, et `errors.token` là où
+nous écrivions `errors.authorization`.
+
+**Ce qui l'a laissé passer.** Rien n'était en position de le contredire. Les
+exemples d'un fichier OpenAPI illustrent une *forme* ; la suite de conformité
+*est* le contrat (PRD §15). Le commentaire a été écrit de bonne foi, il était
+faux, et il a tenu lieu de vérification pendant deux slices — F2 et F3 — pendant
+que la couverture AC affichait 100 %. Nos tests vérifiaient consciencieusement
+que le code faisait ce que **nous** avions dit.
+
+**Le motif général.** C'est celui que REQ-ARCH-001 avait déjà traité pour la
+thèse du dépôt, sous une autre forme : la frontière typée était *affirmée* par
+l'ADR 001 jusqu'à ce qu'un script la casse volontairement et constate que les
+deux applications refusent de compiler. Même structure ici. **Une propriété
+qu'aucun mécanisme ne peut démentir n'est pas une propriété, c'est une
+intention.**
+
+**Règle à appliquer.** Un commentaire qui affirme une conformité à une source
+externe doit nommer **le fichier de cette source qui l'impose**, et ce fichier
+doit être exécutable. `CONTRACT_MESSAGES` le fait : chaque message porte le
+`.hurl` qui l'assert. Un commentaire qui dit « conforme à X » sans que X soit
+rejouable est à traiter comme non vérifié.
+
+**Corollaire sur les tests.** Le vrai signal était disponible et nous l'avons
+manqué : une suite écrite **par un tiers** est le seul contrôle capable de
+révéler un écart entre notre compréhension d'une spec et la spec. Aucune quantité
+de tests maison ne le remplace — ils partagent tous le même malentendu.
+
+---
+
+## 2026-08-06 — Un nettoyage partiel produit un build vert et vide
+
+**Contexte.** En vérifiant que `scripts/test-conformance.sh` tient sur une
+machine froide (rule 02 : « reproduire la condition du runner »), j'ai supprimé
+`apps/api/dist` et `packages/shared/dist` — mais pas les `*.tsbuildinfo`.
+
+**Le symptôme.** `turbo run build --filter=@repo/api` a rapporté
+`@repo/shared:build` en **succès**, puis 40 erreurs `TS2307: Cannot find module
+'@repo/shared'`. Un graphe qui ordonne correctement, une tâche qui réussit, et un
+artefact absent.
+
+**La cause.** `packages/shared/tsconfig.json` porte `composite: true`, donc `tsc`
+écrit `tsconfig.tsbuildinfo`. Avec le buildinfo présent et les sources
+inchangées, `tsc` conclut que tout est à jour et **n'émet rien** — en sortant 0.
+Le `dist/` supprimé n'est jamais reconstruit.
+
+**Ce que ça n'est pas.** Ce n'est pas un trou du graphe turbo, et il ne fallait
+pas le « corriger » : un runner de CI part d'un clone frais, où ni `dist/` ni le
+buildinfo n'existent. La reproduction était fausse, pas le graphe. Rejouée
+correctement (`pnpm clean`, qui supprime les deux), la suite passe.
+
+**Règle à appliquer.** Pour simuler une machine froide, utiliser `pnpm clean`
+— jamais un `rm -rf dist` à la main. Supprimer un artefact sans son index
+d'incrémentalité crée un état que **ni le poste de développement ni la CI ne
+connaissent**, et le diagnostic qu'on en tire porte sur un scénario qui n'existe
+pas. Le temps s'y perd à chercher un trou de graphe imaginaire.

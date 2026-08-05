@@ -8,7 +8,7 @@ Accepted — 2026-08-05.
 
 Le PRD §15 désigne la suite **Hurl** de `realworld-apps/realworld`
 (`specs/api/hurl/`) comme la source de vérité du contrat externe : 13 fichiers,
-1 709 lignes, 84 requêtes. C'est elle, et non notre lecture de la spec, qui dit
+1 709 lignes, 154 requêtes. C'est elle, et non notre lecture de la spec, qui dit
 si `apps/api` est conforme. Le tableau §15.3 l'assigne explicitement à ce dépôt
 (« Hurl au vert sur l'API + e2e Playwright sur le front »).
 

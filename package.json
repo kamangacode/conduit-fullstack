@@ -31,6 +31,9 @@
     "test": "turbo run test",
     "test:integration": "turbo run test:integration",
     "test:e2e": "turbo run test:e2e",
+    "conformance": "bash scripts/test-conformance.sh",
+    "conformance:drift": "bash scripts/check-conformance-drift.sh",
+    "conformance:verify": "bash scripts/verify-conformance-gate.sh && bash scripts/verify-conformance-drift.sh",
     "clean": "turbo run clean"
   },
   "devDependencies": {

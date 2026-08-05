@@ -3,7 +3,7 @@ id: REQ-CONF-001
 title: Faire du contrat externe une vérification exécutable
 type: non-functional
 domain: conformance
-status: approved
+status: implemented
 priority: must
 source: "PRD §15.1 (tests Hurl, source de vérité) et §15.3 (conduit-fullstack : Hurl au vert sur l'API) ; ADR 016"
 acceptance_criteria:
@@ -28,8 +28,15 @@ acceptance_criteria:
     when: "la suite de conformité est exécutée"
     then: "elle rend son verdict quand même : l'exécution ne dépend que de la copie vendorée, et seul le contrôle de dérive est empêché"
 implementation:
-  files: []
-  tests: []
+  files:
+    - apps/api/conformance/UPSTREAM.md
+    - scripts/test-conformance.sh
+    - scripts/check-conformance-drift.sh
+    - .github/workflows/ci.yml
+  tests:
+    - scripts/test-conformance.sh
+    - scripts/verify-conformance-drift.sh
+    - scripts/verify-conformance-gate.sh
 related:
   issues: [8]
   requirements:
@@ -98,3 +105,18 @@ réseau, le verdict de conformité dépendrait de la disponibilité de GitHub.
 - La correction des défauts que la suite révèle, qui relève des exigences
   fonctionnelles concernées — [REQ-ERROR-002](../../functional/error/REQ-ERROR-002.md)
   et [REQ-USER-005](../../functional/user/REQ-USER-005.md) pour le premier lot.
+
+## Couverture
+
+AC-1 à AC-4 sont prouvés par des scripts exécutés en CI : la suite elle-même
+pour AC-1, `verify-conformance-gate.sh` pour AC-2 (la suite opposée à un stub
+qui répond 200 à tout, donc un faux vert maximalement favorable), et
+`verify-conformance-drift.sh` pour AC-3 et AC-4.
+
+**AC-5 n'est pas couvert par un test, et c'est délibéré.** Prouver qu'une
+exécution ne dépend d'aucun réseau demanderait de couper le réseau du runner,
+ce qui n'est pas à notre portée dans un job GitHub Actions. La propriété tient
+par construction — la suite ne lit que `apps/api/conformance/hurl/` — et par le
+fait que le contrôle de dérive, lui, sort explicitement en « non concluant »
+quand l'amont est injoignable. C'est un critère **sciemment non couvert**, pas
+un oubli.

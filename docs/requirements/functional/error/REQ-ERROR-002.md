@@ -57,7 +57,7 @@ related:
 ## Contexte
 
 La première exécution de la suite officielle (ADR 016) contre `apps/api` a
-produit **29 assertions en échec sur 84 requêtes**, et le détail de leur
+produit **29 assertions en échec**, et le détail de leur
 répartition est l'information la plus utile de cette exigence : aucune ne portait
 sur un parcours métier. `articles`, `comments`, `favorites`, `feed`,
 `pagination`, `profiles` et `tags` passaient intégralement du premier coup.

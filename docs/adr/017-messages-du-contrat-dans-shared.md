@@ -9,7 +9,7 @@ contrat partagé, pas par la couche de persistance.
 ## Context
 
 La première exécution de la suite de conformité officielle (ADR 016) contre
-`apps/api` a produit 29 assertions en échec sur 84 requêtes. Aucune ne portait
+`apps/api` a produit 29 assertions en échec. Aucune ne portait
 sur un parcours métier : `articles`, `comments`, `favorites`, `feed`,
 `pagination`, `profiles` et `tags` passaient intégralement. **Toutes** portaient
 sur la forme des erreurs.
