@@ -3,7 +3,7 @@ id: REQ-WEB-010
 title: Paginer une liste d'articles à partir du total renvoyé par l'API
 type: functional
 domain: web
-status: approved
+status: implemented
 priority: must
 source: "PRD §7.3 et règle R-10 (limit/offset) ; templates.md §Home (`.pagination`) ; contrat de sélecteurs E2E (`/?page=N`)"
 acceptance_criteria:
@@ -32,8 +32,12 @@ acceptance_criteria:
     when: "la liste est chargée"
     then: "le décalage envoyé à l'API est déduit de ce numéro et de la taille de page, la première page valant un décalage nul"
 implementation:
-  files: []
-  tests: []
+  files:
+    - apps/web/src/lib/pagination.ts
+    - apps/web/src/components/Pagination.tsx
+  tests:
+    - apps/web/src/lib/pagination.spec.ts
+    - apps/web/src/components/Pagination.spec.tsx
 related:
   issues: [6]
   requirements:
