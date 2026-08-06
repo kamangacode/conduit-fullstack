@@ -270,13 +270,45 @@ wait_for "l'API" "${API_BASE_URL}/tags" "$api_pid"
 #
 # Certificat auto-signé, régénéré à chaque run dans un répertoire temporaire, et
 # jamais installé dans un magasin de confiance : seul le navigateur de test
-# l'accepte (`ignoreHTTPSErrors` dans `playwright.config.ts`).
+# l'accepte, par `ignoreHTTPSErrors` et par l'épinglage de sa clé publique dans
+# `playwright.config.ts`.
 echo "→ certificat jetable pour ${MOCKED_API_HOST}..."
 tls_dir="$(mktemp -d)"
 openssl req -x509 -newkey rsa:2048 -sha256 -days 1 -nodes \
   -keyout "$tls_dir/key.pem" -out "$tls_dir/cert.pem" \
   -subj "/CN=${MOCKED_API_HOST}" \
   -addext "subjectAltName=DNS:${MOCKED_API_HOST}" > /dev/null 2>&1
+
+# describe REQ-CONF-002
+# it AC-8: un contexte fabrique par un test voit la meme API que ceux de la config
+#
+# Empreinte SHA-256 de la clé publique (SPKI) de ce certificat, en base64.
+# `--ignore-certificate-errors-spki-list` la prend telle quelle et la compare au
+# certificat présenté ; le navigateur n'accepte donc que **celui-ci**, régénéré
+# à chaque run et jamais installé dans un magasin de confiance.
+#
+# Pourquoi la calculer alors que `playwright.config.ts` pose déjà
+# `ignoreHTTPSErrors` : cette option n'est appliquée qu'aux contextes fabriqués
+# par la fixture de Playwright. Quatre tests de la suite vendorée créent le leur
+# avec `browser.newContext()`, qui n'en hérite pas — et comme la page article
+# charge son contenu depuis le navigateur (ADR 020), leurs appels échouaient tous
+# en erreur de certificat. La page rendait alors son mode « indisponible » et les
+# assertions passaient **parce que** rien n'avait chargé. Un drapeau de lancement
+# est porté par le navigateur entier, donc hérité par tout contexte.
+#
+# `-A` sur l'encodage : sans lui, OpenSSL replierait la sortie et la variable
+# porterait un saut de ligne au milieu de l'empreinte.
+TLS_SPKI="$(openssl x509 -in "$tls_dir/cert.pem" -pubkey -noout \
+  | openssl pkey -pubin -outform der \
+  | openssl dgst -sha256 -binary \
+  | openssl base64 -A)"
+if [ -z "$TLS_SPKI" ]; then
+  echo "ERREUR: empreinte SPKI du certificat jetable vide."
+  echo "        Les tests qui créent leur propre contexte navigateur verraient"
+  echo "        toutes leurs requêtes d'API échouer en erreur de certificat, et"
+  echo "        passeraient au vert sur une page qui n'a rien chargé."
+  exit 1
+fi
 
 echo "→ démarrage du terminateur TLS sur le port ${TLS_PORT}..."
 node scripts/e2e-tls-terminator.mjs \
@@ -346,4 +378,5 @@ cd apps/web
 API_BASE="$API_BASE_URL" \
   E2E_MOCKED_API_HOST="$MOCKED_API_HOST" \
   E2E_TLS_PORT="$TLS_PORT" \
+  E2E_TLS_SPKI="$TLS_SPKI" \
   pnpm exec playwright test "$@"

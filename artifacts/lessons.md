@@ -365,6 +365,44 @@ langages fixe sa collation (`LC_ALL=C`).
 
 ---
 
+## 2026-08-06 — Une option de test n'a pas la portée qu'on lui prête, et le vert obtenu est un faux négatif
+
+**Contexte.** Trois échecs e2e du lot #16, dont `comments.spec.ts:102` : « un
+visiteur anonyme voit un lien de connexion et pas de formulaire ». Le défaut
+attendu était le doublon de `a[href="/login"]` — la barre et l'invite en
+portaient un chacun, et les assertions de locator Playwright sont strictes.
+
+**Ce qui a été trouvé en tirant le fil.** Ce test crée son contexte lui-même
+(`browser.newContext()`). Les options du bloc `use` de `playwright.config.ts` —
+dont `ignoreHTTPSErrors` — sont appliquées par la fixture `_contextFactory` de
+Playwright, donc **seulement** aux contextes que la configuration fabrique. Un
+contexte créé par un test n'en hérite d'aucune.
+
+**Pourquoi ça comptait ici, et pas avant.** Deux décisions récentes se
+composaient. L'ADR 019 fait demander au navigateur un hôte d'API servi par un
+terminateur TLS à certificat jetable ; l'ADR 020 fait charger la page article
+depuis le navigateur. Sur ce contexte-là, tous les appels échouaient donc en
+erreur de certificat, la page rendait sa coquille « indisponible », et il ne
+restait qu'un seul `a[href="/login"]` — celui de la barre. **Le test serait passé
+au vert parce que la page n'avait rien chargé.** Aucune des deux décisions n'est
+en cause seule ; c'est leur composition qui a ouvert le trou, et rien ne l'a
+signalé.
+
+**Règle à appliquer.** Quand un correctif fait passer au vert un test qui
+échouait, vérifier **ce que la page a effectivement rendu**, pas seulement le
+verdict. Un faux négatif ne se distingue d'un vrai vert par aucun signal dans la
+sortie de la suite : les deux affichent `passed`. La question à poser est « quel
+état minimal de l'application suffirait à satisfaire cette assertion ? » — si la
+réponse est « une page vide », l'assertion ne prouve rien.
+
+**Corollaire sur la portée des options.** Une option de configuration de test se
+lit avec sa **portée**, jamais seulement avec son nom. Ici, deux portées
+distinctes existaient pour la même intention : le contexte (`use`) et le
+navigateur (`launchOptions`). Seule la seconde survit à un contexte fabriqué par
+un test, et c'est celle-là qu'il fallait. Le contrôle qui aurait attrapé ça plus
+tôt est celui qu'on ne pense jamais à écrire : opposer le harnais à un cas où il
+doit **échouer**, et constater qu'il échoue — exactement ce que
+`verify-e2e-gate.sh` fait déjà pour un autre mode de panne.
 ## 2026-08-06 — Un rendu conditionnel sur un champ nullable supprime la preuve au lieu de la normaliser
 
 **Contexte.** Le profil rendait sa bio par `{bio && <p>{bio}</p>}`. Une écriture

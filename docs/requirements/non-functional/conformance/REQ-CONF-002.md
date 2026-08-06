@@ -35,6 +35,10 @@ acceptance_criteria:
     given: "l'hôte figé par la suite, qui désigne une démo publique"
     when: "le harnais démarre"
     then: "il est résolu vers l'API de ce run et le relais est vérifié avant le lancement — aucune requête du navigateur ne quitte le poste, y compris celles qu'aucun mock n'intercepte"
+  - id: AC-8
+    given: "un test de la suite qui crée son propre contexte via `browser.newContext()`"
+    when: "la page chargée appelle l'hôte d'API relayé en TLS par le harnais"
+    then: "l'appel aboutit et la page rend son contenu — la tolérance au certificat jetable est portée au niveau du navigateur, pas seulement du contexte fabriqué par la config"
 implementation:
   files:
     - apps/web/conformance/UPSTREAM.md
@@ -48,11 +52,11 @@ implementation:
     - scripts/verify-e2e-gate.sh
     - scripts/verify-conformance-drift.sh
 related:
-  issues: [10, 11]
+  issues: [10, 11, 16]
   requirements:
     - REQ-CONF-001
     - REQ-WEB-007
-  adrs: ["014", "018", "019"]
+  adrs: ["014", "018", "019", "020"]
 ---
 
 # REQ-CONF-002 — Confronter le front aux parcours e2e officiels, contre l'API réelle
@@ -105,6 +109,26 @@ le navigateur demande cet hôte, et le harnais le résout vers l'API du run. AC-
 est le critère de **sûreté** de ce montage — sans lui, une requête qu'aucun mock
 n'intercepte partirait vers la démo publique et la modifierait.
 
+**Le harnais peut aussi mentir dans l'autre sens.** AC-8 ferme un faux
+**négatif**, découvert en corrigeant les échecs de `comments.spec.ts`. Les
+options du bloc `use` de la configuration Playwright — `ignoreHTTPSErrors` en
+particulier — sont appliquées par la fixture `_contextFactory`, donc aux seuls
+contextes que la configuration fabrique. Quatre tests de la suite créent le leur
+avec `browser.newContext()` et n'en héritent pas. Composé avec l'ADR 019 (l'hôte
+d'API servi par un terminateur à certificat jetable) et l'ADR 020 (la page
+article charge son contenu depuis le navigateur), cela donnait : tous les appels
+de ces pages en erreur de certificat, la coquille « indisponible » rendue à la
+place du contenu, et des assertions de non-visibilité qui passaient **parce que**
+la page n'avait rien chargé.
+
+C'est exactement ce que la [rule 02](../../../../.claude/rules/02-workflow-dev.md)
+nomme : un vert obtenu sur un artefact qui n'est pas celui qu'on croit tester. Le
+correctif vit dans **notre** configuration et jamais dans la suite — un argument
+de lancement, porté par le navigateur, donc hérité par tout contexte. Il épingle
+l'empreinte SPKI du certificat de ce run plutôt que d'accepter n'importe quel
+certificat : le run reste hors ligne par la règle de résolution dans les deux
+cas, mais dire *ce* certificat coûte une commande `openssl` et une variable.
+
 AC-5 enfin acte que ce contrôle démarre en **rapport** et non en gate
 ([ADR 018](../../../adr/018-conformite-e2e-suite-officielle-vendoree.md)) : la
 suite pilote un navigateur réel, ses modes d'échec incluent des situations qui ne
@@ -144,6 +168,13 @@ l'autre interroge l'hôte figé — résolu comme le navigateur le résoudra —
 vérifie que c'est bien l'API de ce run qui répond. Les deux **arrêtent le run**
 en cas d'échec, plutôt que de laisser la suite produire un diagnostic qui ne
 parlerait pas de la vraie cause.
+
+AC-8 n'a pas de test unitaire possible : la propriété porte sur ce qu'un
+navigateur réel accorde à un contexte qu'un test fabrique, et rien en dessous du
+navigateur ne peut en répondre. `test-e2e.sh` arrête le run si l'empreinte est
+vide — un drapeau vide n'épingle rien tout en ayant l'air de le faire — et la
+preuve est l'exécution de `comments.spec.ts`, dont l'assertion anonyme
+n'atteignait jamais une page chargée avant ce correctif.
 
 **AC-5 n'est pas couvert par un test, et c'est délibéré** — comme l'AC-5 de
 [REQ-CONF-001](REQ-CONF-001.md), et pour une raison voisine. Le prouver
