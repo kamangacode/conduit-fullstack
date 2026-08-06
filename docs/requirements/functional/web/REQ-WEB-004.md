@@ -44,9 +44,9 @@ acceptance_criteria:
     when: "la réponse arrive"
     then: "aucune navigation n'a lieu : le formulaire reste affiché avec sa saisie et son message"
   - id: AC-10
-    given: "le profil visé (ancien ou nouveau username selon qu'il y a renommage), ou un article dont ce compte est l'auteur, déjà en cache juste avant l'enregistrement"
+    given: "le profil visé (ancien ou nouveau username selon qu'il y a renommage), un article dont ce compte est l'auteur, ou un fil de commentaires où il a écrit, déjà en cache juste avant l'enregistrement"
     when: "l'enregistrement réussit"
-    then: "la page de profil affichée ensuite montre les valeurs tout juste enregistrées, jamais une copie — profil ou auteur d'article — lue avant l'enregistrement"
+    then: "toute copie du compte encore en cache est marquée périmée : aucun écran affiché ensuite ne montre une valeur — profil, auteur d'article ou auteur de commentaire — lue avant l'enregistrement"
 implementation:
   files:
     - apps/web/src/components/SettingsForm.tsx
@@ -66,6 +66,7 @@ related:
   adrs:
     - "012"
     - "015"
+    - "017"
 ---
 
 # REQ-WEB-004 — Mettre à jour son compte depuis la page de paramètres
@@ -117,15 +118,17 @@ déplacer : l'entrée à invalider n'est pas seulement celle du nouveau username
 l'ancien — la plus susceptible d'être encore fraîche, l'utilisateur venant
 justement de son propre profil.
 
-Le profil n'est pas la seule copie du compte en cache. Chaque article embarque
-un instantané de son auteur (username, bio, image) plutôt qu'une référence —
-c'est le format de l'API, pas un choix du front — et cet instantané vit à la
-fois dans le détail d'un article et dans les flux qui le listent. N'invalider
-que `profileQueryKey` laisserait ces copies périmées visibles ailleurs qu'à
-l'écran de profil : la méta d'un article déjà en cache continuerait d'afficher
-l'ancienne bio ou l'ancien avatar. `invalidateAuthorCaches`
-(`apps/web/src/lib/content-query.ts`) couvre les trois familles de clés d'un
-même geste, sur l'ancien username comme sur le nouveau.
+Le profil n'est pas la seule copie du compte en cache. Un article **comme un
+commentaire** embarque un instantané de son auteur (username, bio, image) plutôt
+qu'une référence — c'est le format de l'API, pas un choix du front — et cet
+instantané vit dans le détail d'un article, dans les flux qui le listent et dans
+le fil de commentaires qui l'accompagne. N'invalider que `profileQueryKey`
+laisserait ces copies périmées visibles ailleurs qu'à l'écran de profil : la méta
+d'un article déjà en cache, ou l'avatar sous un commentaire, continuerait
+d'afficher l'ancienne valeur. `invalidateAuthorCaches`
+(`apps/web/src/lib/content-query.ts`) couvre les quatre familles de clés d'un
+même geste — profil, détail d'article, flux, commentaires — sur l'ancien username
+comme sur le nouveau.
 
 ## Règles
 
@@ -134,7 +137,9 @@ même geste, sur l'ancien username comme sur le nouveau.
   ([REQ-USER-001](../user/REQ-USER-001.md)).
 - Champ vide ⇒ clé absente de la requête, jamais chaîne vide. Effacer une valeur
   **renseignée** reste un changement : la clé part avec la chaîne vide, que
-  `updateUserDtoSchema` normalise en `null` (ADR 004).
+  `updateUserDtoSchema` normalise en `null` (ADR 017, qui amende l'ADR 004 sur ce
+  point précis en déplaçant la normalisation du vide de la persistance vers le
+  contrat partagé).
 - La navigation vers le profil appartient à la **page**, pas au formulaire :
   `SettingsForm` ne connaît ni l'API ni le routeur, et ne doit pas l'apprendre.
 - Markup RealWorld : `.settings-page`, formulaire à cinq champs, bouton de

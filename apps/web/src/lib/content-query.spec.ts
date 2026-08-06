@@ -1,7 +1,13 @@
-import type { Article, ArticlesResponse, Profile } from '@repo/shared'
+import type { Article, ArticlesResponse, Comment, Profile } from '@repo/shared'
 import { QueryClient } from '@tanstack/react-query'
 import { describe, expect, it } from 'vitest'
-import { articleQueryKey, invalidateAuthorCaches, profileQueryKey } from './content-query'
+import {
+  articleQueryKey,
+  commentsQueryKey,
+  invalidateAuthorCaches,
+  profileQueryKey,
+} from './content-query'
+import { feedQueryKey } from './feed-query'
 
 /**
  * Tests de REQ-WEB-004 AC-10, côté cache plutôt que côté page : la politique
@@ -32,6 +38,26 @@ function feedOf(...usernames: string[]): ArticlesResponse {
     articlesCount: usernames.length,
   }
 }
+
+function commentBy(username: string, id = 1): Comment {
+  return {
+    id,
+    createdAt: '2024-01-01T00:00:00.000Z',
+    updatedAt: '2024-01-01T00:00:00.000Z',
+    body: 'Un commentaire',
+    author: { ...jacob, username },
+  }
+}
+
+/**
+ * La clé de flux vient de `feedQueryKey`, jamais recopiée à la main.
+ *
+ * L'écrire ici en dur laisserait les deux suites au vert le jour où la clé
+ * change de forme, pendant que `invalidateAuthorCaches` cesserait d'invalider le
+ * moindre flux — c'est-à-dire exactement le défaut silencieux que ce test croit
+ * couvrir.
+ */
+const globalFeedKey = feedQueryKey({ feed: { kind: 'global' }, page: 1 })
 
 const newClient = () => new QueryClient({ defaultOptions: { queries: { retry: false } } })
 
@@ -75,22 +101,45 @@ describe('REQ-WEB-004 AC-10 — invalidateAuthorCaches', () => {
     // il apparaît aussi dans les listes (accueil, profil) qui l'embarquent —
     // le même instantané d'auteur y est dupliqué par l'API.
     const queryClient = newClient()
-    const feedKey = ['articles', { kind: 'global' }, 1]
-    queryClient.setQueryData(feedKey, feedOf('quelquun-dautre', 'jacob'))
+    queryClient.setQueryData(globalFeedKey, feedOf('quelquun-dautre', 'jacob'))
 
     invalidateAuthorCaches(queryClient, ['jacob'])
 
-    expect(queryClient.getQueryState(feedKey)?.isInvalidated).toBe(true)
+    expect(queryClient.getQueryState(globalFeedKey)?.isInvalidated).toBe(true)
   })
 
   it('laisse intact un flux dont aucun article n’est du compte visé', () => {
     const queryClient = newClient()
-    const feedKey = ['articles', { kind: 'global' }, 1]
-    queryClient.setQueryData(feedKey, feedOf('quelquun-dautre'))
+    queryClient.setQueryData(globalFeedKey, feedOf('quelquun-dautre'))
 
     invalidateAuthorCaches(queryClient, ['jacob'])
 
-    expect(queryClient.getQueryState(feedKey)?.isInvalidated).toBe(false)
+    expect(queryClient.getQueryState(globalFeedKey)?.isInvalidated).toBe(false)
+  })
+
+  it('invalide un fil de commentaires où le compte visé a écrit', () => {
+    // Le commentaire embarque le **même** instantané de profil que l'article
+    // (`commentSchema.author` est un `profileSchema`), et `CommentSection` en
+    // rend l'avatar : l'oublier laissait l'ancien avatar sous un commentaire
+    // pendant tout le `staleTime` — le symptôme que AC-10 ferme.
+    const queryClient = newClient()
+    queryClient.setQueryData(commentsQueryKey('un-article'), [
+      commentBy('quelquun-dautre', 1),
+      commentBy('jacob', 2),
+    ])
+
+    invalidateAuthorCaches(queryClient, ['jacob'])
+
+    expect(queryClient.getQueryState(commentsQueryKey('un-article'))?.isInvalidated).toBe(true)
+  })
+
+  it('laisse intact un fil où le compte visé n’a pas écrit', () => {
+    const queryClient = newClient()
+    queryClient.setQueryData(commentsQueryKey('un-article'), [commentBy('quelquun-dautre')])
+
+    invalidateAuthorCaches(queryClient, ['jacob'])
+
+    expect(queryClient.getQueryState(commentsQueryKey('un-article'))?.isInvalidated).toBe(false)
   })
 
   it('ne plante pas sur une entrée jamais chargée', () => {

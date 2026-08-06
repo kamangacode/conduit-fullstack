@@ -1,5 +1,6 @@
-import type { Article, ArticlesResponse } from '@repo/shared'
+import type { Article, ArticlesResponse, Comment } from '@repo/shared'
 import type { Query, QueryClient } from '@tanstack/react-query'
+import { FEED_QUERY_PREFIX } from './feed-query'
 
 /**
  * Clés de cache des ressources chargées **depuis le navigateur** ([ADR 020]).
@@ -40,15 +41,16 @@ export function profileQueryKey(username: string): readonly unknown[] {
  * Invalide, pour un ou plusieurs usernames, **toutes** les entrées de cache qui
  * portent une copie de leur compte — pas seulement `profileQueryKey`.
  *
- * Chaque article embarque un instantané de son auteur (username, bio, image)
- * plutôt qu'une référence : c'est le format de l'API (PRD §8 « Multiple
- * Articles » et « Single Article »), pas un choix du front. Cet instantané vit
- * dans deux familles de clés distinctes de celle du profil : `articleQueryKey`
- * (détail) et les clés de flux préfixées `articles` (`feedQueryKey`, listes de
- * l'accueil comme du profil). N'invalider que le profil laisserait ces copies
- * périmées visibles partout où l'auteur apparaît déjà en cache — la méta d'un
- * article qu'il a écrit, une carte dans un flux — jusqu'à l'expiration
- * naturelle de `staleTime`.
+ * Un article **comme un commentaire** embarque un instantané de son auteur
+ * (username, bio, image) plutôt qu'une référence : c'est le format de l'API
+ * (PRD §8 « Multiple Articles », « Single Article », « Single Comment »), pas un
+ * choix du front. Cet instantané vit donc dans trois familles de clés distinctes
+ * de celle du profil : `articleQueryKey` (détail), les clés de flux préfixées
+ * `FEED_QUERY_PREFIX` (`feedQueryKey`, listes de l'accueil comme du profil) et
+ * `commentsQueryKey` (fil d'un article). N'invalider que le profil laisserait
+ * ces copies périmées visibles partout où l'auteur apparaît déjà en cache — la
+ * méta d'un article qu'il a écrit, une carte dans un flux, son avatar sous un
+ * commentaire — jusqu'à l'expiration naturelle de `staleTime`.
  *
  * Vit ici, à côté des clés qu'elle invalide, plutôt que dans la page qui
  * déclenche l'enregistrement (REQ-WEB-004) : quelles ressources dénormalisent
@@ -78,13 +80,18 @@ export function invalidateAuthorCaches(
 }
 
 /**
- * Une entrée `article` (détail) ou `articles` (flux) porte-t-elle, dans les
+ * Une entrée `article` (détail), de flux ou `comments` porte-t-elle, dans les
  * données déjà reçues, un des auteurs visés ?
  *
  * Lit `query.state.data` plutôt que de reconstruire la clé : les flux sont
  * paramétrés par un `FeedKind` que ce module ignore volontairement (couplage
  * que `feed-query.ts` seul justifie), et une entrée sans données n'a de toute
  * façon rien à invalider — elle n'a jamais été chargée.
+ *
+ * Les préfixes `article` et `comments` restent des littéraux : ils sont ceux des
+ * deux constructeurs de clés écrits **juste au-dessus**, donc lisibles d'un même
+ * coup d'œil. Celui des flux ne l'est pas — il appartient à `feed-query.ts` — et
+ * c'est pourquoi lui seul arrive par un import.
  */
 function embedsAuthor(query: Query, usernames: ReadonlySet<string>): boolean {
   const [resource] = query.queryKey
@@ -94,9 +101,16 @@ function embedsAuthor(query: Query, usernames: ReadonlySet<string>): boolean {
     return article !== undefined && usernames.has(article.author.username)
   }
 
-  if (resource === 'articles') {
+  if (resource === FEED_QUERY_PREFIX) {
     const response = query.state.data as ArticlesResponse | undefined
     return (response?.articles ?? []).some((article) => usernames.has(article.author.username))
+  }
+
+  if (resource === 'comments') {
+    // `getComments` déballe l'enveloppe `{ comments: [...] }` : la donnée en
+    // cache est le tableau lui-même, pas la réponse.
+    const comments = query.state.data as Comment[] | undefined
+    return (comments ?? []).some((comment) => usernames.has(comment.author.username))
   }
 
   return false

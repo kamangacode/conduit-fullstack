@@ -64,6 +64,17 @@ export function resolveFeed(input: {
 }
 
 /**
+ * Premier segment de toute clé de flux.
+ *
+ * Exporté parce qu'il n'est pas lu qu'ici : `content-query.ts` reconnaît les
+ * entrées de flux à ce préfixe pour les invalider quand leur auteur change
+ * (REQ-WEB-004 AC-10). Recopié là-bas, il aurait fait d'une chaîne le seul lien
+ * entre deux modules — renommer la clé aurait compilé, gardé les deux suites au
+ * vert, et cessé silencieusement d'invalider le moindre flux.
+ */
+export const FEED_QUERY_PREFIX = 'articles'
+
+/**
  * Clé de cache d'un flux paginé.
  *
  * La page en fait partie : deux pages du même flux sont deux entrées de cache
@@ -71,7 +82,7 @@ export function resolveFeed(input: {
  * qu'on vient de quitter.
  */
 export function feedQueryKey({ feed, page }: FeedRequest): readonly unknown[] {
-  return ['articles', feed, page]
+  return [FEED_QUERY_PREFIX, feed, page]
 }
 
 /**
