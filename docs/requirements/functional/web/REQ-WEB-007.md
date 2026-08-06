@@ -39,6 +39,14 @@ acceptance_criteria:
     given: "un utilisateur connecté"
     when: "la barre de navigation affiche son lien de profil"
     then: "elle porte une image de classe `user-pic`, et les liens éditeur et paramètres portent leurs icônes `ion-*`"
+  - id: AC-9
+    given: "un profil dont la bio vaut `null` ou la chaîne vide"
+    when: "le bloc `.user-info` est rendu"
+    then: "il contient un élément `p` dont le contenu textuel est vide — jamais absent, jamais la chaîne littérale `null`"
+  - id: AC-10
+    given: "un profil dont la bio porte un texte"
+    when: "le bloc `.user-info` est rendu"
+    then: "ce même et unique `p` porte exactement ce texte"
 implementation:
   files:
     - apps/web/public/default-avatar.svg
@@ -56,7 +64,7 @@ implementation:
     - apps/web/src/components/Navbar.spec.tsx
     - apps/web/src/components/ProfileView.spec.tsx
 related:
-  issues: [7]
+  issues: [7, 14]
   requirements:
     - REQ-WEB-002
     - REQ-WEB-003
@@ -109,6 +117,27 @@ l'[ADR 014](../../../adr/014-conformite-au-contrat-de-selecteurs-e2e.md).
 - Les noms d'état sont ceux du contrat (`loading`, `authenticated`,
   `unauthenticated`), même si le vocabulaire interne de la session diffère : la
   traduction se fait à la frontière, une seule fois.
+- **Un champ nullable est normalisé au rendu, pas masqué.** `null` et la chaîne
+  vide sont la même absence, et elle se rend comme un élément **vide** — pas
+  comme un élément supprimé. C'est la règle qu'`avatarUrl` applique déjà à
+  l'image, étendue à la bio par AC-9.
+
+## Nullabilité au rendu (AC-9, AC-10)
+
+Le contrat lit `.user-info p` et attend `''` sur un compte sans bio. Le rendu
+conditionnel — `{bio && <p>{bio}</p>}` — paraît économe et produit exactement
+l'inverse : plus d'élément du tout, donc un sélecteur qui n'aboutit pas, et un
+échec qui désigne la page entière au lieu du champ.
+
+Le symptôme que nomme la suite officielle (« ne pas afficher `null`
+littéralement ») décrit l'autre extrémité du même défaut : interpoler une valeur
+nullable sans la normaliser écrit `null` à l'écran. Les deux fautes viennent de
+la même omission — le champ traverse le contrat sans que le rendu décide de ce
+que vaut son absence — et `?? ''` les ferme ensemble.
+
+AC-10 empêche la sur-correction : normaliser l'absence ne doit ni effacer la
+présence, ni multiplier les paragraphes. `.user-info` en porte **un seul**, ce
+que le contrat suppose en le lisant en mode strict.
 
 ## Hors périmètre
 

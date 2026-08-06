@@ -362,3 +362,37 @@ simultanément « manquant en local » et « ajouté en local ». Un faux positi
 cette forme, répété, apprend à ne plus lire la sortie du contrôle — ce qui coûte
 plus cher que l'absence de contrôle. Toute comparaison de listes entre deux
 langages fixe sa collation (`LC_ALL=C`).
+
+---
+
+## 2026-08-06 — Un rendu conditionnel sur un champ nullable supprime la preuve au lieu de la normaliser
+
+**Contexte.** Le profil rendait sa bio par `{bio && <p>{bio}</p>}`. Une écriture
+courante, qui se relit sans effort et qui paraît même prudente : ne rien afficher
+plutôt qu'un paragraphe vide.
+
+**Le symptôme.** Deux tests de la suite officielle intitulés « should not render
+as literal null » échouaient. Ce titre décrit le défaut d'une **autre**
+implémentation — afficher la chaîne `null` — et le nôtre était l'inverse exact :
+aucun `null` à l'écran, mais **aucun paragraphe du tout**. Le contrat lit
+`.user-info p` et attend `''` ; sans élément, le sélecteur n'aboutit pas, et
+l'échec désigne la page entière au lieu du champ.
+
+**La cause.** Les deux fautes viennent de la même omission : le champ traverse le
+contrat sans que le rendu décide de ce que vaut son **absence**. Interpoler sans
+normaliser écrit `null` à l'écran ; conditionner l'élément supprime le point
+d'observation. `?? ''` ferme les deux, et c'est la règle que `lib/avatar.ts`
+appliquait déjà à l'image — elle n'avait simplement jamais été étendue à la bio,
+faute d'être écrite ailleurs que dans ce fichier.
+
+**Règle à appliquer.** Un champ nullable se normalise **au rendu**, il ne se
+masque pas : l'élément qui le porte reste présent et devient vide. Un lecteur
+comme un test doivent pouvoir **constater** l'absence, pas la déduire de ce
+qu'ils ne trouvent pas. Corollaire côté tests : asserter qu'un élément *contient*
+la chaîne vide, jamais qu'il est absent — les deux assertions se ressemblent et
+ne disent pas la même chose.
+
+**Ce que ça dit du titre d'un test.** Un test de suite partagée nomme un
+**symptôme**, pas une cause. Le lire comme un diagnostic aurait envoyé chercher
+une interpolation fautive qui n'existait pas. C'est l'assertion qui fait foi,
+jamais l'intitulé.

@@ -65,6 +65,56 @@ describe('REQ-WEB-007 — contrat de sélecteurs, page de profil', () => {
       )
     )
   })
+
+  it('AC-9: rend un paragraphe vide, et non aucun paragraphe, sur une bio `null`', async () => {
+    // Le défaut que ce critère ferme : `{bio && <p>…</p>}` supprimait
+    // l'élément. Le contrat lit `.user-info p` et attend `''` — sans élément,
+    // le sélecteur n'aboutit pas, et l'échec désigne la page entière au lieu du
+    // champ. C'est l'état d'un compte neuf, donc celui de tout nouvel inscrit.
+    getProfile.mockResolvedValue({ ...jacob, bio: null })
+
+    const { container } = renderView()
+
+    await waitFor(() => expect(container.querySelector('.user-info p')).not.toBeNull())
+    expect(container.querySelector('.user-info p')?.textContent).toBe('')
+  })
+
+  it('AC-9: rend un paragraphe vide sur une bio effacée (chaîne vide)', async () => {
+    // `''` et `null` sont la **même** absence : l'API normalise la chaîne vide
+    // en `null` (ADR 004), mais le rendu ne doit pas dépendre de ce passage —
+    // une réponse en cache ou une mutation optimiste peut porter `''`.
+    getProfile.mockResolvedValue({ ...jacob, bio: '' })
+
+    const { container } = renderView()
+
+    await waitFor(() => expect(container.querySelector('.user-info p')).not.toBeNull())
+    expect(container.querySelector('.user-info p')?.textContent).toBe('')
+  })
+
+  it('AC-9: n’écrit jamais la chaîne littérale « null » à la place de la bio', async () => {
+    // Le symptôme que nomme le test de conformité : interpoler une valeur
+    // nullable sans la normaliser affiche `null` au visiteur.
+    getProfile.mockResolvedValue({ ...jacob, bio: null })
+
+    const { container } = renderView()
+
+    await waitFor(() => expect(container.querySelector('.user-info p')).not.toBeNull())
+    expect(container.querySelector('.user-info')?.textContent).not.toContain('null')
+  })
+
+  it('AC-10: rend exactement le texte de la bio quand elle est renseignée', async () => {
+    // La contrepartie du critère précédent : normaliser l'absence ne doit pas
+    // effacer la présence. Un seul `<p>` dans `.user-info`, sans quoi le
+    // contrat — qui lit ce sélecteur en mode strict — deviendrait ambigu.
+    getProfile.mockResolvedValue({ ...jacob, bio: 'I work at statefarm' })
+
+    const { container } = renderView()
+
+    await waitFor(() =>
+      expect(container.querySelector('.user-info p')?.textContent).toBe('I work at statefarm')
+    )
+    expect(container.querySelectorAll('.user-info p')).toHaveLength(1)
+  })
 })
 
 describe('REQ-WEB-005 — profil public', () => {

@@ -35,6 +35,18 @@ acceptance_criteria:
     given: "un utilisateur dont la session expire pendant qu'il édite ses paramètres"
     when: "l'enregistrement répond 401 et la session est purgée"
     then: "le formulaire reste affiché avec le message d'expiration et sa saisie, au lieu de disparaître sans explication"
+  - id: AC-8
+    given: "un utilisateur connecté sur /settings qui modifie sa bio, son image ou les deux"
+    when: "l'enregistrement répond 200"
+    then: "la page navigue vers /profile/{username}, en prenant le username du compte renvoyé par l'API et non celui de l'état initial"
+  - id: AC-9
+    given: "un enregistrement qui échoue — 401, 500 ou panne de transport"
+    when: "la réponse arrive"
+    then: "aucune navigation n'a lieu : le formulaire reste affiché avec sa saisie et son message"
+  - id: AC-10
+    given: "un profil déjà présent dans le cache de requêtes"
+    when: "l'enregistrement réussit"
+    then: "l'entrée de cache de ce profil est invalidée, de sorte que la page de profil affiche les valeurs enregistrées et non la copie précédente"
 implementation:
   files:
     - apps/web/src/components/SettingsForm.tsx
@@ -43,13 +55,15 @@ implementation:
     - apps/web/src/components/SettingsForm.spec.tsx
     - apps/web/src/app/settings/page.spec.tsx
 related:
-  issues: [7]
+  issues: [7, 14]
   requirements:
     - REQ-WEB-002
     - REQ-WEB-006
+    - REQ-WEB-007
     - REQ-USER-004
   adrs:
     - "012"
+    - "015"
 ---
 
 # REQ-WEB-004 — Mettre à jour son compte depuis la page de paramètres
@@ -77,12 +91,36 @@ de profil, et une session non rafraîchie afficherait l'ancien jusqu'au prochain
 rechargement — un décalage que l'utilisateur attribue à un échec de
 l'enregistrement.
 
+AC-8 ferme la boucle que AC-4 laissait ouverte. Enregistrer et **rester** sur le
+formulaire ne donne à l'utilisateur aucun signe que quelque chose s'est produit :
+le contrat RealWorld fait donc atterrir sur `/profile/{username}`, où la valeur
+enregistrée est visible. Le username utilisé est celui **de la réponse**, pas
+celui de l'état initial — celui qui vient de se renommer serait sinon envoyé vers
+une page qui n'existe plus.
+
+AC-9 est la contrepartie stricte d'AC-7, et la seule raison pour laquelle ce
+dernier ne régresse pas : la navigation est conditionnée au succès par la
+structure du code — elle suit l'`await` de l'appel, donc un rejet la
+court-circuite — et non par une condition qu'un remaniement pourrait déplacer.
+
+AC-10 traite un effet du cache et non de l'affichage. Le profil est servi par
+TanStack Query avec un `staleTime` de trente secondes
+([ADR 015](../../../adr/015-prefetch-serveur-et-hydratation-des-listes.md)) :
+sans invalidation, l'utilisateur qui enregistre deux fois de suite — renseigner
+une bio, puis l'effacer — arrive sur son profil et y lit encore la valeur
+précédente. Le symptôme se lit comme un enregistrement perdu, alors que l'API a
+bien reçu la mise à jour.
+
 ## Règles
 
 - Route : `/settings` (PRD §5), authentification requise.
 - Validation : `updateUserDtoSchema` de `@repo/shared`
   ([REQ-USER-001](../user/REQ-USER-001.md)).
-- Champ vide ⇒ clé absente de la requête, jamais chaîne vide.
+- Champ vide ⇒ clé absente de la requête, jamais chaîne vide. Effacer une valeur
+  **renseignée** reste un changement : la clé part avec la chaîne vide, que
+  `updateUserDtoSchema` normalise en `null` (ADR 004).
+- La navigation vers le profil appartient à la **page**, pas au formulaire :
+  `SettingsForm` ne connaît ni l'API ni le routeur, et ne doit pas l'apprendre.
 - Markup RealWorld : `.settings-page`, formulaire à cinq champs, bouton de
   déconnexion en pied de page (rule 11).
 - La redirection d'un anonyme se fait côté client, après montage : le serveur ne

@@ -1,8 +1,11 @@
 import type { User } from '@repo/shared'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { ApiError } from '../../lib/api-client'
+import { profileQueryKey } from '../../lib/content-query'
+import { CONNECTION_FAILURE_MESSAGE } from '../../lib/errors'
 import { SessionProvider, TOKEN_STORAGE_KEY, useSession } from '../../lib/session'
 import SettingsPage from './page'
 
@@ -59,14 +62,31 @@ function SessionEcho() {
  * que le jeton, et le compte est redemandé. On injecte donc la réponse plutôt
  * que d'écrire un `User` complet dans le stockage, ce qui ne signifierait plus
  * rien.
+ *
+ * Le cache de requêtes est monté ici comme il l'est par le layout racine : la
+ * page l'utilise pour invalider le profil après enregistrement (AC-10), et sans
+ * fournisseur `useQueryClient` lèverait. Le client est **rendu** à l'appelant
+ * pour que les tests puissent l'amorcer et lire l'état d'une entrée.
  */
-const renderPage = () =>
-  render(
-    <SessionProvider fetchCurrentUser={async () => jake}>
-      <SettingsPage />
-      <SessionEcho />
-    </SessionProvider>
-  )
+const renderPage = () => {
+  // Pas de `gcTime: 0` ici, contrairement aux autres specs : une entrée sans
+  // observateur serait ramassée aussitôt, et le test d'invalidation lirait
+  // `undefined` — un vert qui ne prouve rien. Chaque rendu a son client, donc
+  // rien ne fuit d'un test à l'autre.
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+
+  return {
+    queryClient,
+    ...render(
+      <QueryClientProvider client={queryClient}>
+        <SessionProvider fetchCurrentUser={async () => jake}>
+          <SettingsPage />
+          <SessionEcho />
+        </SessionProvider>
+      </QueryClientProvider>
+    ),
+  }
+}
 
 beforeEach(() => {
   push.mockClear()
@@ -165,5 +185,88 @@ describe('REQ-WEB-004 — page de paramètres', () => {
     renderPage()
 
     await waitFor(() => expect(push).toHaveBeenCalledWith('/login'))
+  })
+
+  it('AC-8: emmène sur le profil du compte **renvoyé par l’API** après un succès', async () => {
+    // Le doublé renvoie `jake-renomme` alors que le formulaire porte `jake` :
+    // c'est ce décalage qui rend le test probant. Naviguer d'après l'état
+    // initial enverrait celui qui vient de se renommer vers une page qui
+    // n'existe plus, et le test resterait vert si les deux coïncidaient.
+    window.localStorage.setItem(TOKEN_STORAGE_KEY, jake.token)
+    renderPage()
+    const bio = await screen.findByPlaceholderText('Short bio about you')
+
+    await userEvent.type(bio, 'I work at statefarm')
+    await userEvent.click(screen.getByRole('button', { name: 'Update Settings' }))
+
+    await waitFor(() => expect(push).toHaveBeenCalledWith('/profile/jake-renomme'))
+  })
+
+  it('AC-8: encode le username dans le segment d’URL', async () => {
+    // Le username vient d'une saisie libre : l'insérer brut produirait une URL
+    // cassée dès le premier caractère réservé.
+    updateUser.mockResolvedValue({ ...jake, username: 'jake bis' })
+    window.localStorage.setItem(TOKEN_STORAGE_KEY, jake.token)
+    renderPage()
+    const bio = await screen.findByPlaceholderText('Short bio about you')
+
+    await userEvent.type(bio, 'I work at statefarm')
+    await userEvent.click(screen.getByRole('button', { name: 'Update Settings' }))
+
+    await waitFor(() => expect(push).toHaveBeenCalledWith('/profile/jake%20bis'))
+  })
+
+  it('AC-9: ne navigue nulle part quand l’enregistrement répond 401', async () => {
+    // Le pendant d'AC-7 : le message ne sert à rien si la page a déjà quitté
+    // l'écran. Une navigation au 401 ferait disparaître à la fois la saisie et
+    // son explication.
+    updateUser.mockRejectedValue(new ApiError(401, {}))
+    window.localStorage.setItem(TOKEN_STORAGE_KEY, jake.token)
+    renderPage()
+    const bio = await screen.findByPlaceholderText('Short bio about you')
+
+    await userEvent.type(bio, 'I work at statefarm')
+    await userEvent.click(screen.getByRole('button', { name: 'Update Settings' }))
+
+    await waitFor(() => expect(screen.getByText(/session has expired/)).toBeInTheDocument())
+    expect(push).not.toHaveBeenCalledWith(expect.stringContaining('/profile/'))
+  })
+
+  it('AC-9: ne navigue nulle part quand le transport échoue', async () => {
+    // Rien n'est revenu de l'API : le compte n'a peut-être pas été enregistré,
+    // et atterrir sur un profil inchangé laisserait croire l'inverse.
+    updateUser.mockRejectedValue(new TypeError('Failed to fetch'))
+    window.localStorage.setItem(TOKEN_STORAGE_KEY, jake.token)
+    renderPage()
+    const bio = await screen.findByPlaceholderText('Short bio about you')
+
+    await userEvent.type(bio, 'I work at statefarm')
+    await userEvent.click(screen.getByRole('button', { name: 'Update Settings' }))
+
+    await waitFor(() => expect(screen.getByText(CONNECTION_FAILURE_MESSAGE)).toBeInTheDocument())
+    expect(push).not.toHaveBeenCalledWith(expect.stringContaining('/profile/'))
+    expect(screen.getByDisplayValue('I work at statefarm')).toBeInTheDocument()
+  })
+
+  it('AC-10: invalide l’entrée de cache du profil avant d’y naviguer', async () => {
+    // Sans cela, `staleTime: 30s` sert la copie précédente : renseigner une bio
+    // puis l'effacer ramènerait l'utilisateur sur un profil qui affiche encore
+    // l'ancienne valeur — un enregistrement qui se lit comme perdu.
+    window.localStorage.setItem(TOKEN_STORAGE_KEY, jake.token)
+    const { queryClient } = renderPage()
+    queryClient.setQueryData(profileQueryKey('jake-renomme'), {
+      username: 'jake-renomme',
+      bio: 'valeur précédente',
+      image: null,
+      following: false,
+    })
+    const bio = await screen.findByPlaceholderText('Short bio about you')
+
+    await userEvent.type(bio, 'I work at statefarm')
+    await userEvent.click(screen.getByRole('button', { name: 'Update Settings' }))
+
+    await waitFor(() =>
+      expect(queryClient.getQueryState(profileQueryKey('jake-renomme'))?.isInvalidated).toBe(true)
+    )
   })
 })
