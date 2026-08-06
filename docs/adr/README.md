@@ -32,6 +32,7 @@ elle porte la mécanique : gabarit, numérotation, statuts, vérification.
 | [017](017-messages-du-contrat-dans-shared.md) | Les messages d'erreur du contrat vivent dans `packages/shared` | Accepted (amende 004) | 2026-08-05 |
 | [018](018-conformite-e2e-suite-officielle-vendoree.md) | Conformité e2e du front : suite Playwright officielle vendorée, en rapport avant d'être un gate | Accepted (étend 016) | 2026-08-06 |
 | [019](019-alignement-de-l-hote-d-api-pour-la-suite-e2e.md) | Aligner l'hôte d'API du navigateur sur celui que la suite e2e intercepte, et le résoudre vers l'API du run | Accepted (précise 018) | 2026-08-06 |
+| [020](020-chargement-client-des-pages-de-contenu.md) | Charger l'article, le profil et l'éditeur depuis le navigateur, et non plus au rendu serveur | Accepted (amende 012 et 015) | 2026-08-06 |
 
 ## Écrire un ADR
 

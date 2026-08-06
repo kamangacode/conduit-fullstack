@@ -30,23 +30,26 @@ acceptance_criteria:
   - id: AC-6
     given: "un username que ne porte aucun compte"
     when: "la page est demandée"
-    then: "une page 404 est rendue, et non un profil vide"
+    then: "la coquille « profil introuvable » est rendue, et non un profil vide"
 implementation:
   files:
     - apps/web/src/components/FollowButton.tsx
-    - apps/web/src/app/profile/[username]/page.tsx
+    - apps/web/src/components/ProfileView.tsx
+    - apps/web/src/app/profile-page.tsx
   tests:
     - apps/web/src/components/FollowButton.spec.tsx
-    - apps/web/src/app/profile-page.spec.tsx
+    - apps/web/src/components/ProfileView.spec.tsx
 related:
-  issues: [7]
+  issues: [7, 12]
   requirements:
     - REQ-WEB-001
     - REQ-WEB-002
+    - REQ-WEB-018
     - REQ-PROFILE-002
     - REQ-PROFILE-003
   adrs:
     - "012"
+    - "020"
 ---
 
 # REQ-WEB-005 — Consulter un profil public et suivre son auteur
@@ -76,11 +79,16 @@ l'action.
 ## Règles
 
 - Route : `/profile/:username` (PRD §5).
-- Contenu public rendu côté serveur, appel API **sans jeton** (ADR 012).
+- Le profil est demandé **par le navigateur** depuis l'[ADR 020] ; la liste
+  d'articles garde son préchargement serveur, **sans jeton** (ADR 012 et 015).
 - **R-5** : `following` vaut `false` pour un anonyme ; l'état affiché après
   hydratation est celui que l'API renvoie pour le lecteur.
 - Markup RealWorld : `.profile-page`, `.user-info`, `.action-btn` (rule 11).
-- Username inconnu : 404 ([REQ-PROFILE-002](../profile/REQ-PROFILE-002.md) AC-3).
+- Username inconnu : l'API répond 404
+  ([REQ-PROFILE-002](../profile/REQ-PROFILE-002.md) AC-3) et le front en fait une
+  coquille « profil introuvable ». **Le statut HTTP de la page, lui, est 200** :
+  la réponse est partie avant que l'absence soit connue, conséquence assumée de
+  l'[ADR 020](../../../adr/020-chargement-client-des-pages-de-contenu.md).
 
 ## Hors périmètre
 

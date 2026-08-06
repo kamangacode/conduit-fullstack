@@ -1,19 +1,11 @@
-import { notFound } from 'next/navigation'
-import { ArticleEditor } from '../../../components/ArticleEditor'
-import { ApiError } from '../../../lib/api-client'
-import { createServerApiClient } from '../../../lib/server-api-client'
+import { ArticleEditorLoader } from '../../../components/ArticleEditorLoader'
 
 /**
- * Route `/editor/:slug` — modification d'un article existant.
+ * Route `/editor/:slug` — modification d'un article existant (REQ-WEB-014).
  *
- * L'article est chargé **côté serveur** : son contenu est public, et le
- * pré-remplissage doit être présent au premier rendu plutôt que d'apparaître
- * après un aller-retour, sous les doigts de l'auteur.
- *
- * L'autorisation reste côté API : un utilisateur qui ouvrirait l'éditeur sur
- * l'article d'un autre verra bien les champs — ils sont publics — mais
- * l'enregistrement sera refusé (REQ-ARTICLE-005). Masquer le formulaire ne
- * serait pas une sécurité, seulement une politesse ; l'API fait autorité.
+ * Adaptateur de deux lignes depuis l'[ADR 020] : l'article est demandé par le
+ * navigateur, et le chargement — avec ses états d'attente et d'échec — vit dans
+ * `ArticleEditorLoader`.
  */
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params
@@ -23,15 +15,5 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
 export default async function Page({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params
 
-  try {
-    const article = await createServerApiClient().getArticle(decodeURIComponent(slug))
-    return <ArticleEditor article={article} />
-  } catch (error) {
-    // Un slug inconnu produit une vraie page introuvable ; toute autre erreur
-    // remonte, pour ne pas déguiser une panne d'API en article inexistant.
-    if (error instanceof ApiError && error.status === 404) {
-      notFound()
-    }
-    throw error
-  }
+  return <ArticleEditorLoader slug={decodeURIComponent(slug)} />
 }

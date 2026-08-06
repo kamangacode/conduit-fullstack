@@ -34,30 +34,33 @@ acceptance_criteria:
   - id: AC-7
     given: "un slug inconnu"
     when: "la page est demandée"
-    then: "une vraie page introuvable est rendue, pas un article vide"
+    then: "la coquille « article introuvable » est rendue, pas un article vide"
   - id: AC-8
     given: "une panne de l'API autre qu'un article absent"
     when: "la page est demandée"
-    then: "l'erreur remonte plutôt que d'être déguisée en article introuvable"
+    then: "elle est annoncée comme une indisponibilité, jamais déguisée en article introuvable"
 implementation:
   files:
     - apps/web/src/components/ArticleBody.tsx
     - apps/web/src/components/ArticleMeta.tsx
+    - apps/web/src/components/ArticleView.tsx
     - "apps/web/src/app/article/[slug]/page.tsx"
   tests:
     - apps/web/src/components/ArticleBody.spec.tsx
     - apps/web/src/components/ArticleMeta.spec.tsx
-    - "apps/web/src/app/article/[slug]/page.spec.tsx"
+    - apps/web/src/components/ArticleView.spec.tsx
 related:
-  issues: [8]
+  issues: [8, 12]
   requirements:
     - REQ-WEB-008
     - REQ-WEB-011
+    - REQ-WEB-018
     - REQ-ARTICLE-004
     - REQ-ARTICLE-006
   adrs:
     - "012"
     - "013"
+    - "020"
 ---
 
 # REQ-WEB-012 — Afficher un article, son corps Markdown et les actions de son auteur

@@ -47,14 +47,14 @@ implementation:
     - apps/web/src/components/AuthForm.tsx
     - apps/web/src/components/SettingsForm.tsx
     - apps/web/src/components/Navbar.tsx
-    - "apps/web/src/app/profile/[username]/page.tsx"
+    - apps/web/src/components/ProfileView.tsx
   tests:
     - apps/web/src/lib/avatar.spec.ts
     - apps/web/src/lib/session.spec.tsx
     - apps/web/src/components/AuthForm.spec.tsx
     - apps/web/src/components/SettingsForm.spec.tsx
     - apps/web/src/components/Navbar.spec.tsx
-    - apps/web/src/app/profile-page.spec.tsx
+    - apps/web/src/components/ProfileView.spec.tsx
 related:
   issues: [7]
   requirements:

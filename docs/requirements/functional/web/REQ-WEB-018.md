@@ -31,12 +31,16 @@ implementation:
   files:
     - apps/web/src/components/ArticlePageNotice.tsx
     - apps/web/src/components/ProfilePageNotice.tsx
+    - apps/web/src/components/ArticleView.tsx
+    - apps/web/src/components/ProfileView.tsx
     - "apps/web/src/app/article/[slug]/not-found.tsx"
     - "apps/web/src/app/article/[slug]/error.tsx"
     - "apps/web/src/app/profile/[username]/not-found.tsx"
     - "apps/web/src/app/profile/[username]/error.tsx"
   tests:
     - apps/web/src/components/PageNotice.spec.tsx
+    - apps/web/src/components/ArticleView.spec.tsx
+    - apps/web/src/components/ProfileView.spec.tsx
 related:
   issues: [11, 12]
   requirements:
@@ -46,6 +50,7 @@ related:
     - REQ-WEB-015
   adrs:
     - "012"
+    - "020"
 ---
 
 # REQ-WEB-018 — Garder une page de contenu lisible quand l'API refuse ou ne répond pas
@@ -66,17 +71,26 @@ deux branches — l'absence produit aujourd'hui la page 404 du framework, et la
 panne produit son écran d'erreur. Dans les deux cas, une page RealWorld a été
 remplacée par une page qui ne l'est pas.
 
-La distinction porte jusque dans le statut HTTP, et c'est pourquoi elle est tenue
-par deux fichiers de route distincts plutôt que par une branche dans la page : un
-slug inconnu répond **404**, une API en rade répond **500**. Confondre les deux
-apprendrait à un moteur d'indexation qu'un article existant n'existe pas, pour la
-seule raison que la base était indisponible au moment de sa visite.
+La distinction portait jusque dans le statut HTTP : deux fichiers de route
+distincts, un slug inconnu répondant **404** et une API en rade **500**.
+L'[ADR 020](../../../adr/020-chargement-client-des-pages-de-contenu.md) a
+supprimé cette moitié-là. Ces pages chargent désormais depuis le navigateur, donc
+la réponse HTTP est partie avant que l'absence soit connue : **le statut est 200
+dans les deux cas**, et seule la distinction visible subsiste. Elle reste la plus
+importante des deux pour le lecteur, mais la perte est réelle et l'ADR la nomme.
+
+`not-found.tsx` et `error.tsx` restent en place pour ce qui échoue encore côté
+serveur — un paramètre de route invalide, une panne du rendu lui-même — et
+rendent les mêmes coquilles. Un seul markup pour les deux chemins : deux copies
+divergeraient, et c'est exactement le motif que l'ADR 015 avait déjà écarté
+ailleurs.
 
 ## Règles
 
-- Un slug ou un username inconnu produit une **vraie** 404
-  ([REQ-WEB-005](REQ-WEB-005.md) AC-6) : la coquille rendue ne change pas le
-  statut, elle change ce que le visiteur lit.
+- L'API répond bien **404** sur un slug ou un username inconnu ; c'est le statut
+  de la **page** qui ne le reflète plus, le chargement ayant lieu côté navigateur
+  ([ADR 020](../../../adr/020-chargement-client-des-pages-de-contenu.md)). Ce que
+  la coquille change reste ce que le visiteur lit.
 - Les coquilles suivent le markup RealWorld (rule 11) et portent les classes que
   le contrat de sélecteurs vise (`.article-page`, `.profile-page`) : une page
   d'erreur qui perd ces classes est une page que la suite e2e ne reconnaît plus

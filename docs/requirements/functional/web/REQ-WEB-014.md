@@ -40,6 +40,7 @@ implementation:
     - apps/web/src/components/ArticleEditor.tsx
     - apps/web/src/app/editor/page.tsx
     - "apps/web/src/app/editor/[slug]/page.tsx"
+    - apps/web/src/components/ArticleEditorLoader.tsx
   tests:
     - apps/web/src/components/ArticleEditor.spec.tsx
 related:
