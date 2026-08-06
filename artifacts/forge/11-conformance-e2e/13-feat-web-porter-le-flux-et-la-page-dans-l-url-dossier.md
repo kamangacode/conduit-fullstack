@@ -12,6 +12,30 @@ requirements:
 
 # Porter le flux et la page dans l'URL
 
+## 0. Décisions arbitrées à la porte Shape (2026-08-06)
+
+Deux points que l'analyse laissait ouverts ont été tranchés par le propriétaire du dépôt. Ils ne
+sont pas à re-débattre en implémentation.
+
+**Forme des contrôles de pagination — formulaire GET, pas `router.push`.** La suite vendorée vise
+`.pagination button:has-text("2")` et `.page-item:has(button…)` (`url-navigation.spec.ts:128,134`)
+alors que `Pagination.tsx` rend un `<Link className="page-link">`, donc un `<a>`. Un `button` dans
+un `a` étant du HTML invalide, le markup doit changer — mais **pas** vers un composant client à
+`onClick={router.push}` comme l'analyse le proposait. Chaque contrôle devient un
+`<form method="get">` portant un `<button name="page" value="N">` : le contrat obtient son `button`,
+la navigation reste une vraie navigation, et elle continue de fonctionner sans JavaScript. Le lien
+explorable n'est donc **pas** sacrifié, contrairement à ce qu'annonçait la section 8 — mettre à jour
+cette zone d'ombre en conséquence. C'est le sujet de l'ADR 023.
+
+**Conflit REQ / suite vendorée — la suite l'emporte, et la règle s'écrit.** REQ-WEB-009 AC-2 et AC-3
+contredisent le contrat (AC-3 prescrit un repli vers le flux global là où la suite exige une
+redirection vers `/login` ; AC-2 annonce « Your Feed » actif par défaut là où
+`url-navigation.spec.ts:87` exige « Global Feed » actif sur `/`). Les deux critères sont **réécrits
+pour suivre le contrat**, et la règle générale — quand une exigence du dépôt et la suite vendorée
+divergent, c'est la suite qui fait foi — est consignée en ADR, dans le prolongement de l'ADR 018 qui
+avait fait de la suite le contrat. Traiter ce conflit-ci sans écrire la règle laisserait le suivant
+se rejouer de zéro.
+
 ## 1. Problème
 
 Le flux affiché et la page courante ne sont pas entièrement portés par l'URL : `/?feed=following`
