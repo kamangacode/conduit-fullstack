@@ -80,7 +80,15 @@ export function ProfileView({ username, tab, page }: ProfileViewProps) {
                 alt={profile.data.username}
               />
               <h4>{profile.data.username}</h4>
-              {profile.data.bio && <p>{profile.data.bio}</p>}
+              {/* Paragraphe **inconditionnel** (REQ-WEB-007 AC-9). Ne le rendre
+                  que sur une bio renseignée paraît économe, mais c'est le
+                  défaut d'affichage classique du champ nullable : le contrat lit
+                  `.user-info p` et attend une chaîne vide, or un élément absent
+                  n'est pas une chaîne vide — c'est un sélecteur qui n'aboutit
+                  pas. `?? ''` traite `null` et `''` comme la même absence,
+                  exactement la règle que `avatarUrl` applique déjà à l'image, et
+                  n'écrit jamais la chaîne littérale `null` à l'écran. */}
+              <p>{profile.data.bio ?? ''}</p>
               <FollowButton profile={profile.data} />
             </div>
           </div>
