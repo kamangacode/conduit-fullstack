@@ -21,6 +21,14 @@ lance et on tient un projet full-stack de A à Z*.
     - [Domain-Driven Design (DDD)](#domain-driven-design-ddd)
     - [Clean Architecture](#clean-architecture)
     - [Principes SOLID](#principes-solid)
+- [Stratégie de tests et discipline de code](#stratégie-de-tests-et-discipline-de-code)
+    - [Tests end-to-end](#tests-end-to-end)
+    - [Couverture de tests](#couverture-de-tests)
+    - [Qualité du code](#qualité-du-code)
+    - [Traçabilité](#traçabilité)
+    - [Requirements as code](#requirements-as-code)
+    - [Sécurité by design](#sécurité-by-design)
+    - [Documentation as code](#documentation-as-code)
 - [La boîte à outils](#la-boîte-à-outils)
 - [Démarrage rapide](#démarrage-rapide)
 - [Commandes](#commandes)
@@ -198,6 +206,109 @@ l'hexagonal et la règle de dépendance. Où les voir concrètement :
 | **D**IP, inversion des dépendances | Le domaine définit l'abstraction (le port), l'infrastructure en dépend. Use case de haut niveau et adapter Prisma de bas niveau dépendent tous deux du même port. | [DIP](https://www.kamanga.fr/fr/architecture-craft/principe-inversion-dependances-dip-java-guide-complet) |
 
 Vue d'ensemble : [Les principes SOLID expliqués](https://www.kamanga.fr/fr/architecture-craft/principes-solid-java-exemples).
+
+## Stratégie de tests et discipline de code
+
+Les règles de développement du projet ne vivent pas seulement dans une doc : elles sont
+**outillées et exécutées**. Voici les grands principes que je m'impose, et comment chacun
+est câblé dans le repo.
+
+### Tests end-to-end
+
+Le principe : distinguer **conformité** et **régression**. La suite de conformité est
+copiée verbatim de l'amont RealWorld ; on ne l'édite jamais, et on n'assouplit pas non plus
+sa config. Une assertion qui échoue est un défaut du front, pas un test à corriger.
+
+Dans ce repo :
+
+- 12 fichiers de specs, 128 tests Playwright, vendorés au SHA épinglé dans [`apps/web/conformance/UPSTREAM.md`](apps/web/conformance/UPSTREAM.md).
+- La config n'étend que ce que l'amont autorise ([`apps/web/playwright.config.ts`](apps/web/playwright.config.ts)) : relever un `timeout` ferait passer un test que le contrat déclare en échec.
+- Le vrai levier sur le front est le contrat de sélecteurs ([`SELECTORS.md`](apps/web/conformance/e2e/SELECTORS.md), [ADR 014](docs/adr/014-conformite-au-contrat-de-selecteurs-e2e.md)).
+- Un garde-fou refuse un run vert et creux : [`scripts/verify-e2e-gate.sh`](scripts/verify-e2e-gate.sh) exige un nombre de tests collectés non nul. Le tout tourne dans le job CI `conformance`, avec la décision fondatrice en [ADR 018](docs/adr/018-conformite-e2e-suite-officielle-vendoree.md).
+
+À lire : [Les frameworks de tests](https://www.kamanga.fr/fr/dette-technique/decouvrir-frameworks-tests-java).
+
+### Couverture de tests
+
+Le principe : une couverture élevée **par couche**, mesurée sans service externe, si bien
+que le tableau local est exactement celui de la CI. Vitest mesure ; Playwright reste hors
+couverture par construction (parcours utilisateur, pas de mesure ligne à ligne).
+
+Dans ce repo :
+
+- Chaque couche a son type de test obligatoire : domaine proche de 100% (unit, zéro mock), use cases autour de 90% (ports mockés), adapters testés en intégration contre une vraie base.
+- `pnpm test:coverage` puis `pnpm coverage:summary` produisent la même synthèse en local et en CI, sans upload externe ([ADR 006](docs/adr/006-couverture-sans-service-externe.md)).
+- Le graphe d'injection est verrouillé par un boot-smoke qui compile le vrai module DB-free et vérifie chaque collaborateur non-null ([`app-module.boot.spec.ts`](apps/api/src/app-module.boot.spec.ts)).
+- Anti-tautologie : un test qui passe encore quand on supprime la ligne testée est à réécrire (convention de revue).
+
+À lire : [La Definition of Done](https://www.kamanga.fr/fr/dette-technique/definition-of-done-qualite).
+
+### Qualité du code
+
+Le principe : intercepter la dette **avant** le commit, pas en revue. Deux signaux tiennent
+la porte : la longueur de fonction et la complexité cognitive.
+
+Dans ce repo :
+
+- Verrou bloquant en CI : `noExcessiveCognitiveComplexity` en `error` dans [`biome.json`](biome.json). Toute fonction au-dessus du seuil casse `pnpm lint`.
+- Fonction de plus de 50 lignes signalée, non-null assertion et `as any` proscrits en production (narrowing explicite ou interface dédiée à la place).
+- Un script de garde empêche de redescendre une règle en `warn` en douce : la sévérité `error` est vérifiée en pre-push et en CI.
+
+À lire : [Le verrou de complexité cognitive](https://www.kamanga.fr/fr/dette-technique/verrou-complexite-cognitive-code-ia).
+
+### Traçabilité
+
+Le principe : relier chaque exigence aux tests qui la prouvent, et rendre ce lien
+**mesurable** plutôt que déclaratif.
+
+Dans ce repo :
+
+- Convention de nommage : le `describe` racine porte l'ID du REQ, chaque `it()` un critère (`AC-1: ...`). Un test prouve donc un critère précis, pas une intention vague.
+- Une matrice de traçabilité exigences vers tests est générée en CI (`pnpm requirements:matrix`), avec la liste des orphelins ([ADR 005](docs/adr/005-matrice-de-tracabilite-generee.md)).
+- Rapport, pas encore gate : la couverture fonctionnelle est publiée dans le résumé du run, en attendant un seuil calibré.
+
+À lire : [User stories et requirements](https://www.kamanga.fr/fr/pratiques-agiles/user-stories-vs-requirements-guide-complet).
+
+### Requirements as code
+
+Le principe : les exigences sont versionnées **comme du code**, avec un frontmatter validé
+et un cycle de vie explicite. Un REQ qui se dit `implemented` sans fichier ni test associé
+fait échouer la validation.
+
+Dans ce repo :
+
+- Les REQ vivent dans [`docs/requirements/`](docs/requirements/README.md) (functional et non-functional), un ID jamais réutilisé, une priorité MoSCoW, un `status` de `draft` à `implemented`.
+- Le frontmatter est validé par un schéma Zod ([`docs/requirements/_scripts/`](docs/requirements/_scripts)) : `pnpm requirements:validate` est bloquant en pre-commit et en CI (job `requirements`).
+- `pnpm requirements:verify` prouve que le validateur **sait rougir** sur des fixtures cassées, pour éviter un gate qui ne bloque jamais.
+
+À lire : [La Definition of Ready](https://www.kamanga.fr/fr/pratiques-agiles/definition-of-ready-bugs-sprint).
+
+### Sécurité by design
+
+Le principe : la sécurité est câblée dans chaque couche, pas ajoutée en audit final. Toute
+décision touchant l'auth, le chiffrement ou les données personnelles se documente en ADR.
+
+Dans ce repo :
+
+- **Fail-fast au boot** : les variables d'environnement sont validées au démarrage ([`apps/api/src/config/env.ts`](apps/api/src/config/env.ts)) ; une config manquante empêche le boot, pas une 500 trois requêtes plus tard.
+- **Anti-IDOR** : l'appartenance est filtrée dans la requête SQL (`WHERE id = ? AND authorId = ?`), jamais par un check applicatif après coup.
+- **Server-side authority** : l'auteur d'un article vient toujours du JWT vérifié, jamais d'un champ du body.
+- **Défense des secrets** en profondeur : pre-commit anti-`.env`, scan de secrets et de CVE en CI. Modèle de menace documenté dans [`docs/security/threat-model.md`](docs/security/threat-model.md). Le choix du 403 (plutôt que 404) est tracé en [ADR 008](docs/adr/008-permission-manquante-403.md).
+
+À lire : [Le Référentiel Craft](https://www.kamanga.fr/referentiel-craft).
+
+### Documentation as code
+
+Le principe : la doc vit dans `docs/` et se traite avec la rigueur du code. Les décisions
+difficiles à inverser deviennent des ADR immuables ; on les supersède, on ne les efface pas.
+
+Dans ce repo :
+
+- [`docs/adr/`](docs/adr/README.md) pour les décisions d'architecture (index + gabarit), avec un job CI `adr` qui valide la convention.
+- `docs/architecture/`, `docs/guides/`, `docs/standards/`, `docs/requirements/` : chaque type de savoir a sa place, en Markdown versionné.
+- Règle simple : toute PR se pose la question « la documentation est-elle à jour ? », et un changement d'architecture crée son ADR avant la PR.
+
+À lire : [L'Architecture Decision Record](https://www.kamanga.fr/fr/architecture-craft/adr-architecture-decision-record).
 
 ## La boîte à outils
 
