@@ -496,20 +496,46 @@ jobs:
     needs:
       [detect-changes, quality, adr, requirements, typecheck, test, integration, conformance, build]
     steps:
-      - name: Vérifie qu'aucun job requis n'a échoué
+      # Liste **blanche**, et c'est tout l'intérêt : seuls `success` et `skipped`
+      # laissent passer, tout autre statut — connu ou non — fait échouer le check.
+      #
+      # La garde précédente listait les statuts interdits (`failure`, `cancelled`).
+      # Elle a laissé passer un run vert le 2026-08-06 alors que cinq jobs requis
+      # (build, test, integration, requirements, adr) n'avaient jamais tourné :
+      # faute de runner, GitHub leur avait donné le statut `abandoned`, absent de
+      # la liste. Le seul check requis par la protection de branche annonçait donc
+      # « tous les jobs requis sont passés » pour un run où la moitié n'avait pas
+      # démarré (run 31127768013).
+      #
+      # Une liste noire échoue **ouverte** sur l'inattendu, et l'inattendu est
+      # précisément ce contre quoi un gate existe. `skipped` reste accepté parce
+      # qu'il est produit délibérément par `detect-changes` sur un diff sans code
+      # (une PR de doc pure ne doit pas être bloquée) : c'est le seul statut
+      # non-`success` dont on sait qu'il ne cache rien.
+      - name: Vérifie que tout job requis a réussi ou a été délibérément skippé
         run: |
-          for r in \
-            "${{ needs.quality.result }}" \
-            "${{ needs.adr.result }}" \
-            "${{ needs.requirements.result }}" \
-            "${{ needs.integration.result }}" \
-            "${{ needs.conformance.result }}" \
-            "${{ needs.typecheck.result }}" \
-            "${{ needs.test.result }}" \
-            "${{ needs.build.result }}"; do
-            if [ "$r" = "failure" ] || [ "$r" = "cancelled" ]; then
-              echo "Un job requis a échoué (statut: $r)."
-              exit 1
-            fi
+          failed=0
+          for pair in \
+            "quality=${{ needs.quality.result }}" \
+            "adr=${{ needs.adr.result }}" \
+            "requirements=${{ needs.requirements.result }}" \
+            "integration=${{ needs.integration.result }}" \
+            "conformance=${{ needs.conformance.result }}" \
+            "typecheck=${{ needs.typecheck.result }}" \
+            "test=${{ needs.test.result }}" \
+            "build=${{ needs.build.result }}"; do
+            job="${pair%%=*}"
+            r="${pair#*=}"
+            case "$r" in
+              success|skipped) ;;
+              *)
+                echo "::error::Job requis « $job » : statut « $r » (attendu success ou skipped)."
+                failed=1
+                ;;
+            esac
           done
+          if [ "$failed" -ne 0 ]; then
+            echo "Au moins un job requis n'a pas réussi. Ce run n'atteste rien."
+            exit 1
+          fi
           echo "Tous les jobs requis sont passés (ou skippés faute de changement de code)."
