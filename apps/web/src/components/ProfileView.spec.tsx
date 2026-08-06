@@ -80,8 +80,10 @@ describe('REQ-WEB-007 — contrat de sélecteurs, page de profil', () => {
   })
 
   it('AC-9: rend un paragraphe vide sur une bio effacée (chaîne vide)', async () => {
-    // `''` et `null` sont la **même** absence : l'API normalise la chaîne vide
-    // en `null` (ADR 004), mais le rendu ne doit pas dépendre de ce passage —
+    // `''` et `null` sont la **même** absence : le contrat partagé normalise la
+    // chaîne vide en `null` (ADR 017, qui amende l'ADR 004 sur ce point en
+    // déplaçant la normalisation de la persistance vers `packages/shared`),
+    // mais le rendu ne doit pas dépendre de ce passage —
     // une réponse en cache ou une mutation optimiste peut porter `''`.
     getProfile.mockResolvedValue({ ...jacob, bio: '' })
 
