@@ -7,7 +7,7 @@ import { useEffect, useState } from 'react'
 import { SettingsForm } from '../../components/SettingsForm'
 import type { ApiClient } from '../../lib/api-client'
 import { useApi } from '../../lib/api-provider'
-import { profileQueryKey } from '../../lib/content-query'
+import { invalidateAuthorCaches } from '../../lib/content-query'
 import { useSession } from '../../lib/session'
 
 /**
@@ -110,26 +110,21 @@ async function applyChanges(changes: UpdateUserDto, deps: SaveDeps): Promise<voi
   // décalage que l'utilisateur attribue à un échec de l'enregistrement.
   deps.signIn(updated)
 
-  // Le profil vit dans le cache de requêtes avec `staleTime: 30s` (AC-10).
-  // Sans invalidation, l'utilisateur qui enregistre deux fois de suite —
-  // renseigner une bio, puis l'effacer — arriverait sur son profil et y lirait
-  // la valeur précédente : une entrée encore fraîche est servie sans requête.
-  // Le symptôme se lit comme un enregistrement perdu.
+  // La politique de fraîcheur du cache — quelles clés un compte modifié rend
+  // périmées — vit à côté des clés elles-mêmes (`content-query.ts`), pas ici :
+  // voir `invalidateAuthorCaches`. Elle couvre le profil (AC-10) et les copies
+  // dénormalisées de l'auteur (méta d'article, flux), sur l'ancien username
+  // comme sur le nouveau en cas de renommage.
   //
-  // Un renommage invalide **deux** clés, pas une seule. La nouvelle
-  // (`updated.username`) n'a le plus souvent aucune entrée à invalider — sa
-  // page n'a jamais été visitée — donc ce n'est pas elle qui présente le
-  // risque. C'est l'**ancienne** (`deps.previousUsername`) qui peut porter une
-  // entrée encore fraîche (l'utilisateur venait par exemple de son propre
-  // profil) : la laisser en cache y afficherait la bio d'avant l'enregistrement
-  // tant que `staleTime` court, sur une URL que le compte renommé a quittée.
-  await Promise.all([
-    deps.queryClient.invalidateQueries({ queryKey: profileQueryKey(deps.previousUsername) }),
-    deps.queryClient.invalidateQueries({ queryKey: profileQueryKey(updated.username) }),
-  ])
+  // Délibérément non attendue : la navigation ne doit pas dépendre d'un
+  // rafraîchissement de cache en arrière-plan, potentiellement lent ou sans
+  // fin (voir le commentaire de la fonction).
+  invalidateAuthorCaches(deps.queryClient, [deps.previousUsername, updated.username])
 
   // Le username **de la réponse**, jamais celui de l'état initial : celui qui
   // vient de se renommer serait envoyé vers une page qui n'existe plus.
-  // `encodeURIComponent` parce que le segment vient d'une saisie libre.
+  // `encodeURIComponent` parce que le segment vient d'une saisie libre, et
+  // parce que les routes `/profile/:username` ne le décodent plus qu'une fois
+  // — la leur, automatique (voir leur commentaire).
   deps.router.push(`/profile/${encodeURIComponent(updated.username)}`)
 }

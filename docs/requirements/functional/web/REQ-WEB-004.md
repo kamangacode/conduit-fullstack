@@ -44,16 +44,18 @@ acceptance_criteria:
     when: "la réponse arrive"
     then: "aucune navigation n'a lieu : le formulaire reste affiché avec sa saisie et son message"
   - id: AC-10
-    given: "le profil visé (ancien ou nouveau username selon qu'il y a renommage) déjà consulté juste avant l'enregistrement"
+    given: "le profil visé (ancien ou nouveau username selon qu'il y a renommage), ou un article dont ce compte est l'auteur, déjà en cache juste avant l'enregistrement"
     when: "l'enregistrement réussit"
-    then: "la page de profil affichée ensuite montre les valeurs tout juste enregistrées, jamais la copie lue avant l'enregistrement"
+    then: "la page de profil affichée ensuite montre les valeurs tout juste enregistrées, jamais une copie — profil ou auteur d'article — lue avant l'enregistrement"
 implementation:
   files:
     - apps/web/src/components/SettingsForm.tsx
     - apps/web/src/app/settings/page.tsx
+    - apps/web/src/lib/content-query.ts
   tests:
     - apps/web/src/components/SettingsForm.spec.tsx
     - apps/web/src/app/settings/page.spec.tsx
+    - apps/web/src/lib/content-query.spec.ts
 related:
   issues: [7, 14]
   requirements:
@@ -114,6 +116,16 @@ déplacer : l'entrée à invalider n'est pas seulement celle du nouveau username
 (souvent absente du cache, une page jamais visitée), mais aussi celle de
 l'ancien — la plus susceptible d'être encore fraîche, l'utilisateur venant
 justement de son propre profil.
+
+Le profil n'est pas la seule copie du compte en cache. Chaque article embarque
+un instantané de son auteur (username, bio, image) plutôt qu'une référence —
+c'est le format de l'API, pas un choix du front — et cet instantané vit à la
+fois dans le détail d'un article et dans les flux qui le listent. N'invalider
+que `profileQueryKey` laisserait ces copies périmées visibles ailleurs qu'à
+l'écran de profil : la méta d'un article déjà en cache continuerait d'afficher
+l'ancienne bio ou l'ancien avatar. `invalidateAuthorCaches`
+(`apps/web/src/lib/content-query.ts`) couvre les trois familles de clés d'un
+même geste, sur l'ancien username comme sur le nouveau.
 
 ## Règles
 
