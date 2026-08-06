@@ -30,7 +30,26 @@ export function toMessages(
     return [genericMessages[error.status] ?? 'request failed']
   }
 
-  // Ni une réponse de l'API, ni un statut : réseau coupé, DNS, CORS. Rien que
-  // l'utilisateur puisse corriger en changeant sa saisie.
-  return ['unable to reach the server']
+  // Ni une réponse de l'API, ni un statut : réseau coupé, DNS, CORS, corps
+  // illisible. Rien que l'utilisateur puisse corriger en changeant sa saisie —
+  // et rien que le contrat §10 puisse décrire, puisque rien n'est revenu.
+  return [CONNECTION_FAILURE_MESSAGE]
 }
+
+/**
+ * Message des échecs de transport (REQ-WEB-017 AC-1).
+ *
+ * **Sa formulation est un élément de contrat**, pas un choix de ton : la suite
+ * e2e officielle l'assert littéralement, au même titre qu'un sélecteur
+ * (REQ-WEB-007). La reformuler casserait la suite sans rien casser dans
+ * l'application — le mode d'échec exact que le contrat de sélecteurs documente.
+ *
+ * Il n'a en revanche rien à faire dans `@repo/shared` : l'ADR 017 y range les
+ * messages que **l'API émet**, et celui-ci décrit précisément le cas où elle
+ * n'émet rien.
+ *
+ * Exporté pour que les tests le désignent au lieu de le recopier : une copie
+ * dans une assertion laisserait la suite verte au premier changement de
+ * formulation, ce qui est exactement ce que ce message ne doit pas permettre.
+ */
+export const CONNECTION_FAILURE_MESSAGE = 'Unable to connect to the server, please try again'

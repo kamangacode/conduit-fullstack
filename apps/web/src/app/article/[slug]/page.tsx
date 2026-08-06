@@ -37,11 +37,23 @@ async function fetchArticle(slug: string): Promise<Article | null> {
   }
 }
 
+/**
+ * Titre de l'onglet.
+ *
+ * L'échec est avalé **ici et pas dans la page** (REQ-WEB-018 AC-2) : le titre
+ * est produit avant le rendu, donc une exception levée à cet endroit précède la
+ * frontière d'erreur du segment et emporterait la coquille avec elle. La page,
+ * elle, laisse remonter — c'est ce qui déclenche `error.tsx`.
+ */
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params
-  const article = await fetchArticle(slug)
 
-  return { title: article ? `${article.title} — Conduit` : 'Article introuvable — Conduit' }
+  try {
+    const article = await fetchArticle(slug)
+    return { title: article ? `${article.title} — Conduit` : 'Article introuvable — Conduit' }
+  } catch {
+    return { title: 'Article indisponible — Conduit' }
+  }
 }
 
 /**

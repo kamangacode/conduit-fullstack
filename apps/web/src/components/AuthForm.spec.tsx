@@ -2,6 +2,7 @@ import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { ApiError } from '../lib/api-client'
+import { CONNECTION_FAILURE_MESSAGE } from '../lib/errors'
 import { AuthForm } from './AuthForm'
 
 /** Tests écrits depuis les critères de REQ-WEB-003, avant l'implémentation. */
@@ -17,6 +18,34 @@ const renderForm = (mode: 'login' | 'register' = 'login') =>
 beforeEach(() => {
   push.mockClear()
   submit.mockReset().mockResolvedValue(undefined)
+})
+
+describe('REQ-WEB-017 — traduction partagée des échecs', () => {
+  it('AC-4: rend le message commun quand la connexion ne joint pas le serveur', async () => {
+    submit.mockRejectedValue(new TypeError('Failed to fetch'))
+    renderForm('login')
+
+    await userEvent.type(screen.getByLabelText('Email'), 'jake@jake.jake')
+    await userEvent.type(screen.getByLabelText('Password'), 'jakejake')
+    await userEvent.click(screen.getByRole('button', { name: 'Sign in' }))
+
+    await waitFor(() => expect(screen.getByText(CONNECTION_FAILURE_MESSAGE)).toBeInTheDocument())
+    // Le formulaire reste utilisable : un échec de transport est transitoire,
+    // et réafficher une page vide obligerait à tout ressaisir.
+    expect(screen.getByRole('button', { name: 'Sign in' })).toBeEnabled()
+  })
+
+  it('AC-4: rend le même message depuis l’inscription', async () => {
+    submit.mockRejectedValue(new TypeError('Failed to fetch'))
+    renderForm('register')
+
+    await userEvent.type(screen.getByLabelText('Username'), 'jake')
+    await userEvent.type(screen.getByLabelText('Email'), 'jake@jake.jake')
+    await userEvent.type(screen.getByLabelText('Password'), 'jakejake')
+    await userEvent.click(screen.getByRole('button', { name: 'Sign up' }))
+
+    await waitFor(() => expect(screen.getByText(CONNECTION_FAILURE_MESSAGE)).toBeInTheDocument())
+  })
 })
 
 describe('REQ-WEB-003 — formulaires d’authentification', () => {

@@ -41,8 +41,24 @@ const ANONYMOUS_LINKS: readonly NavLink[] = [
   { href: '/register', label: 'Sign up' },
 ]
 
+/**
+ * Barre du mode indisponible (REQ-WEB-016 AC-4).
+ *
+ * **Seul l'accueil**, et surtout pas « Sign in » : proposer de se reconnecter
+ * revient à affirmer que la session a expiré, alors que le jeton est conservé et
+ * qu'on ne sait justement pas ce qu'il vaut. L'utilisateur suivrait le conseil,
+ * et le formulaire échouerait pour la même raison que la vérification.
+ *
+ * Les liens du compte sont tout aussi exclus : ils supposent un compte résolu,
+ * et `/settings` ou `/editor` n'ont rien à afficher sans lui.
+ */
+const UNAVAILABLE_LINKS: readonly NavLink[] = [{ href: '/', label: 'Home' }]
+
+/** Libellé de l'indicateur. Le contrat e2e cherche le mot « Connecting ». */
+const RECONNECTING_LABEL = 'Connecting…'
+
 export function Navbar() {
-  const { user } = useSession()
+  const { user, status } = useSession()
   const pathname = usePathname()
 
   const links: readonly NavLink[] = user
@@ -56,7 +72,9 @@ export function Navbar() {
           avatar: avatarUrl(user.image),
         },
       ]
-    : ANONYMOUS_LINKS
+    : status === 'unavailable'
+      ? UNAVAILABLE_LINKS
+      : ANONYMOUS_LINKS
 
   return (
     <nav className="navbar navbar-light">
@@ -98,6 +116,19 @@ export function Navbar() {
               </Link>
             </li>
           ))}
+          {/* L'indicateur vit **dans** la barre, pas dans une bannière à part :
+              c'est là que l'utilisateur cherche son identité, donc là que son
+              absence l'interroge. `role="status"` en fait une région annoncée
+              par les lecteurs d'écran quand elle apparaît — l'information est
+              exactement du type que ce rôle décrit, et elle serait autrement
+              invisible pour eux. */}
+          {status === 'unavailable' && (
+            <li className="nav-item">
+              <span className="nav-link" role="status">
+                {RECONNECTING_LABEL}
+              </span>
+            </li>
+          )}
         </ul>
       </div>
     </nav>

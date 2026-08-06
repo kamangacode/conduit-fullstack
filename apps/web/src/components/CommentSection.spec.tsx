@@ -2,6 +2,8 @@ import type { Comment, User } from '@repo/shared'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { ApiError } from '../lib/api-client'
+import { CONNECTION_FAILURE_MESSAGE } from '../lib/errors'
 import { SessionProvider, TOKEN_STORAGE_KEY } from '../lib/session'
 import { CommentSection } from './CommentSection'
 
@@ -153,7 +155,36 @@ describe('REQ-WEB-013 — commentaires', () => {
     await userEvent.type(field, 'Merci !')
     await userEvent.click(screen.getByRole('button', { name: 'Post Comment' }))
 
-    await waitFor(() => expect(screen.getByText(/unable to post/)).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByText(CONNECTION_FAILURE_MESSAGE)).toBeInTheDocument())
     expect(postedComments(container)).toHaveLength(1)
+  })
+})
+
+describe('REQ-WEB-017 — traduction partagée des échecs', () => {
+  it('AC-4: rend le message commun quand la publication ne joint pas le serveur', async () => {
+    addComment.mockRejectedValue(new TypeError('Failed to fetch'))
+    signedIn()
+    renderSection()
+    const field = await screen.findByPlaceholderText('Write a comment...')
+
+    await userEvent.type(field, 'Merci !')
+    await userEvent.click(screen.getByRole('button', { name: 'Post Comment' }))
+
+    // Le message figé qui vivait dans ce composant disait la même chose pour
+    // toutes les causes, et une autre chose que les quatre autres formulaires.
+    await waitFor(() => expect(screen.getByText(CONNECTION_FAILURE_MESSAGE)).toBeInTheDocument())
+  })
+
+  it('AC-2: laisse parler l’API quand elle a répondu', async () => {
+    addComment.mockRejectedValue(new ApiError(422, { body: ["can't be blank"] }))
+    signedIn()
+    renderSection()
+    const field = await screen.findByPlaceholderText('Write a comment...')
+
+    await userEvent.type(field, 'Merci !')
+    await userEvent.click(screen.getByRole('button', { name: 'Post Comment' }))
+
+    await waitFor(() => expect(screen.getByText("body can't be blank")).toBeInTheDocument())
+    expect(screen.queryByText(CONNECTION_FAILURE_MESSAGE)).not.toBeInTheDocument()
   })
 })

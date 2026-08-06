@@ -29,12 +29,12 @@ acceptance_criteria:
     then: "il obtient l'état anonyme sans erreur — l'accès au stockage n'a lieu qu'après montage côté client"
   - id: AC-6
     given: "un jeton conservé mais refusé par l'API"
-    when: "la réhydratation du démarrage répond 401"
+    when: "la réhydratation du démarrage reçoit un verdict d'autorité (statut 4xx)"
     then: "le jeton est effacé du stockage et la visite se poursuit en anonyme"
   - id: AC-7
     given: "un jeton conservé et une API momentanément injoignable"
     when: "la réhydratation du démarrage échoue sans réponse d'autorité"
-    then: "le jeton est conservé — la visite se poursuit en anonyme, mais un rechargement ultérieur retrouve la session"
+    then: "le jeton est conservé et la session entre en mode indisponible plutôt qu'en anonyme (REQ-WEB-016)"
 implementation:
   files:
     - apps/web/src/lib/session.tsx
@@ -50,6 +50,7 @@ related:
     - REQ-WEB-004
     - REQ-WEB-006
     - REQ-WEB-007
+    - REQ-WEB-016
   adrs:
     - "012"
     - "014"
@@ -77,11 +78,18 @@ l'[ADR 014](../../../adr/014-conformite-au-contrat-de-selecteurs-e2e.md) : le
 stockage ne contient plus que **le jeton**, sous la clé que le contrat E2E
 impose, et le compte courant est redemandé à l'API au démarrage. La réhydratation
 devient donc un appel réseau, avec les deux échecs qu'un appel réseau connaît — et
-ils n'appellent pas la même réponse. Un **401** est une réponse d'autorité : le
-jeton est refusé, le garder ne sert personne. Une **panne réseau** n'en est pas
-une, et purger sur ce signal transformerait une coupure de trente secondes en
-déconnexion de tous les visiteurs. C'est la distinction que AC-6 et AC-7 rendent
-opposable.
+ils n'appellent pas la même réponse. Un **4xx** est une réponse d'autorité : la
+requête que ce jeton a permis d'émettre a été examinée et refusée, le garder ne
+sert personne. Une **panne réseau** n'en est pas une, et purger sur ce signal
+transformerait une coupure de trente secondes en déconnexion de tous les
+visiteurs. C'est la distinction que AC-6 et AC-7 rendent opposable.
+
+AC-6 visait d'abord le seul **401**. La suite e2e officielle a montré que la
+frontière utile est la **classe** du statut et non ce code précis : un 403 ou un
+404 sur `GET /user` ne deviendront pas vrais en réessayant, et conserver le jeton
+ferait rejouer indéfiniment un appel qu'aucune de ces réponses ne validera.
+L'état visible de l'échec sans verdict — le mode indisponible dont AC-7 fixe
+désormais la sortie — est décrit par [REQ-WEB-016](REQ-WEB-016.md).
 
 AC-4 ferme une situation qui, sans elle, se règle par un rechargement manuel :
 un jeton expiré reste dans le stockage, l'interface affiche la barre de

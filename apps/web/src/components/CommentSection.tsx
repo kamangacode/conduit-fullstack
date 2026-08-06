@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { type FormEvent, useState } from 'react'
 import { useApi } from '../lib/api-provider'
 import { avatarUrl } from '../lib/avatar'
+import { toMessages } from '../lib/errors'
 import { formatDate } from '../lib/format-date'
 import { useSession } from '../lib/session'
 import { ErrorMessages } from './ErrorMessages'
@@ -73,6 +74,12 @@ export function CommentSection({ slug, initialComments }: CommentSectionProps) {
  * mode d'échec que l'indicateur de chargement qui portait la classe des aperçus
  * d'article.
  */
+/** Messages génériques propres au dépôt de commentaire (voir `lib/errors.ts`). */
+const COMMENT_MESSAGES: Readonly<Record<number, string>> = {
+  401: 'your session has expired, please sign in again',
+  500: 'something went wrong, please try again',
+}
+
 function CommentForm({
   slug,
   authorImage,
@@ -104,8 +111,13 @@ function CommentForm({
     try {
       onPosted(await api.addComment(slug, parsed.data))
       setBody('')
-    } catch {
-      setErrors(['unable to post this comment'])
+    } catch (error) {
+      // Traduction **partagée** (REQ-WEB-017 AC-4) : le message figé qui vivait
+      // ici disait « unable to post this comment » quelle que soit la cause, y
+      // compris quand l'API avait répondu et expliqué son refus. Il masquait
+      // donc la seule information utile, et il divergeait de ce que les autres
+      // formulaires affichent pour le même échec.
+      setErrors(toMessages(error, COMMENT_MESSAGES))
     } finally {
       setPending(false)
     }

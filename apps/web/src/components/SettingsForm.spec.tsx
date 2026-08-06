@@ -3,6 +3,7 @@ import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { ApiError } from '../lib/api-client'
+import { CONNECTION_FAILURE_MESSAGE } from '../lib/errors'
 import { SettingsForm } from './SettingsForm'
 
 /** Tests écrits depuis les critères de REQ-WEB-004, avant l'implémentation. */
@@ -24,6 +25,19 @@ const renderForm = (user: User = jake) =>
 beforeEach(() => {
   save.mockReset().mockResolvedValue(undefined)
   signOut.mockReset()
+})
+
+describe('REQ-WEB-017 — traduction partagée des échecs', () => {
+  it('AC-4: rend le message commun quand l’enregistrement ne joint pas le serveur', async () => {
+    save.mockRejectedValue(new TypeError('Failed to fetch'))
+    renderForm()
+
+    await userEvent.type(screen.getByLabelText('Your Name'), '-bis')
+    await userEvent.click(screen.getByRole('button', { name: 'Update Settings' }))
+
+    await waitFor(() => expect(screen.getByText(CONNECTION_FAILURE_MESSAGE)).toBeInTheDocument())
+    expect(screen.getByRole('button', { name: 'Update Settings' })).toBeEnabled()
+  })
 })
 
 describe('REQ-WEB-004 — page de paramètres', () => {

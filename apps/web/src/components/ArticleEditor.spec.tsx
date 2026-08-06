@@ -3,6 +3,7 @@ import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { ApiError } from '../lib/api-client'
+import { CONNECTION_FAILURE_MESSAGE } from '../lib/errors'
 import { SessionProvider, TOKEN_STORAGE_KEY } from '../lib/session'
 import { ArticleEditor } from './ArticleEditor'
 
@@ -57,6 +58,28 @@ beforeEach(() => {
   push.mockClear()
   createArticle.mockReset().mockResolvedValue({ ...existing, slug: 'nouveau-slug' })
   updateArticle.mockReset().mockResolvedValue({ ...existing, slug: 'titre-renomme' })
+})
+
+describe('REQ-WEB-017 — traduction partagée des échecs', () => {
+  it('AC-4: rend le message commun quand la publication ne joint pas le serveur', async () => {
+    createArticle.mockRejectedValue(new TypeError('Failed to fetch'))
+    signedIn()
+    renderEditor()
+    const publish = await publishButton()
+
+    await userEvent.type(screen.getByPlaceholderText('Article Title'), 'Un titre')
+    await userEvent.type(screen.getByPlaceholderText("What's this article about?"), 'Un résumé')
+    await userEvent.type(
+      screen.getByPlaceholderText('Write your article (in markdown)'),
+      'Un corps'
+    )
+    await userEvent.click(publish)
+
+    await waitFor(() => expect(screen.getByText(CONNECTION_FAILURE_MESSAGE)).toBeInTheDocument())
+    // La saisie est conservée : la reperdre punirait l'auteur d'une panne
+    // qui ne lui appartient pas.
+    expect(screen.getByDisplayValue('Un titre')).toBeInTheDocument()
+  })
 })
 
 describe('REQ-WEB-014 — éditeur d’article', () => {
