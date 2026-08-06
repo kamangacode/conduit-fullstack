@@ -31,6 +31,10 @@ acceptance_criteria:
     given: "un utilisateur connecté"
     when: "il actionne la déconnexion depuis cette page"
     then: "la session est fermée et il repasse en anonyme"
+  - id: AC-7
+    given: "un utilisateur dont la session expire pendant qu'il édite ses paramètres"
+    when: "l'enregistrement répond 401 et la session est purgée"
+    then: "le formulaire reste affiché avec le message d'expiration et sa saisie, au lieu de disparaître sans explication"
 implementation:
   files:
     - apps/web/src/components/SettingsForm.tsx
