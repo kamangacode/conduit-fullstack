@@ -39,7 +39,7 @@ implementation:
     - apps/web/src/components/FollowButton.spec.tsx
     - apps/web/src/app/profile-page.spec.tsx
 related:
-  issues: [5]
+  issues: [7]
   requirements:
     - REQ-WEB-001
     - REQ-WEB-002

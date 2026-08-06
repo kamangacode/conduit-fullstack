@@ -39,7 +39,7 @@ implementation:
     - apps/web/src/components/SettingsForm.spec.tsx
     - apps/web/src/app/settings/page.spec.tsx
 related:
-  issues: [5]
+  issues: [7]
   requirements:
     - REQ-WEB-002
     - REQ-WEB-006

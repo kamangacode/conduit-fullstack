@@ -49,7 +49,7 @@ implementation:
   tests:
     - apps/web/src/lib/api-client.spec.ts
 related:
-  issues: [6]
+  issues: [8]
   requirements:
     - REQ-WEB-001
     - REQ-ARTICLE-002

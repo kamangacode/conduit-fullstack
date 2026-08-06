@@ -38,7 +38,7 @@ implementation:
     - scripts/verify-conformance-drift.sh
     - scripts/verify-conformance-gate.sh
 related:
-  issues: [8]
+  issues: [10]
   requirements:
     - REQ-ERROR-002
     - REQ-USER-005

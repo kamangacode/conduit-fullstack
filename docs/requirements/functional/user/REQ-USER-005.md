@@ -35,7 +35,7 @@ implementation:
     - packages/shared/src/errors/contract-messages.spec.ts
     - apps/api/test/integration/auth-http.integration.spec.ts
 related:
-  issues: [8]
+  issues: [10]
   requirements:
     - REQ-USER-004
     - REQ-ERROR-002

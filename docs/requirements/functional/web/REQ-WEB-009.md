@@ -46,7 +46,7 @@ implementation:
     - apps/web/src/components/FeedList.spec.tsx
     - apps/web/src/components/PopularTags.spec.tsx
 related:
-  issues: [6]
+  issues: [8]
   requirements:
     - REQ-WEB-008
     - REQ-WEB-010

@@ -47,7 +47,7 @@ implementation:
     - apps/api/test/integration/article-persistence.integration.spec.ts
     - apps/api/test/integration/article-http.integration.spec.ts
 related:
-  issues: [4]
+  issues: [6]
   requirements:
     - REQ-ARTICLE-001
     - REQ-ARTICLE-003

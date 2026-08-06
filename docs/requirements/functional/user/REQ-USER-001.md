@@ -33,7 +33,7 @@ implementation:
   tests:
     - packages/shared/src/model/user.spec.ts
 related:
-  issues: [2]
+  issues: [4]
   requirements:
     - REQ-PROFILE-001
     - REQ-ERROR-001

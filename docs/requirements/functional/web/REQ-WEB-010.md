@@ -39,7 +39,7 @@ implementation:
     - apps/web/src/lib/pagination.spec.ts
     - apps/web/src/components/Pagination.spec.tsx
 related:
-  issues: [6]
+  issues: [8]
   requirements:
     - REQ-WEB-008
     - REQ-WEB-009

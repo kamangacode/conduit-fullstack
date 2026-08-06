@@ -43,7 +43,7 @@ implementation:
   tests:
     - apps/web/src/components/ArticleEditor.spec.tsx
 related:
-  issues: [6]
+  issues: [8]
   requirements:
     - REQ-WEB-008
     - REQ-WEB-012

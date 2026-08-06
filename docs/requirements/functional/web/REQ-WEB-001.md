@@ -34,7 +34,7 @@ implementation:
   tests:
     - apps/web/src/lib/api-client.spec.ts
 related:
-  issues: [5]
+  issues: [7]
   requirements:
     - REQ-WEB-002
     - REQ-ERROR-001

@@ -31,7 +31,7 @@ implementation:
   tests:
     - scripts/verify-type-boundary.sh
 related:
-  issues: [7]
+  issues: [9]
   requirements:
     - REQ-WEB-008
     - REQ-ERROR-001

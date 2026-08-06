@@ -34,7 +34,7 @@ implementation:
   tests:
     - apps/web/src/components/Navbar.spec.tsx
 related:
-  issues: [5]
+  issues: [7]
   requirements:
     - REQ-WEB-002
     - REQ-WEB-004

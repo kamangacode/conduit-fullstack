@@ -21,7 +21,7 @@ implementation:
   tests:
     - packages/shared/src/model/tag.spec.ts
 related:
-  issues: [2]
+  issues: [4]
   requirements:
     - REQ-ARTICLE-001
   adrs: []

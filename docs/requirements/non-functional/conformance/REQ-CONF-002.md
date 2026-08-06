@@ -38,7 +38,7 @@ implementation:
     - scripts/verify-e2e-gate.sh
     - scripts/verify-conformance-drift.sh
 related:
-  issues: [8]
+  issues: [10, 11]
   requirements:
     - REQ-CONF-001
     - REQ-WEB-007
@@ -146,7 +146,7 @@ manques distincts plutôt que cinquante défauts indépendants :
 
 | Fichiers | Échecs | Ce que le contrat exige et que le front ne fait pas |
 |---|---|---|
-| `error-handling`, `user-fetch-errors` | 25 | Rendre lisibles les pannes réseau et les 4xx/5xx (dont un mode « indisponible » qui conserve le jeton) |
+| `error-handling`, `user-fetch-errors` | 24 | Rendre lisibles les pannes réseau et les 4xx/5xx (dont un mode « indisponible » qui conserve le jeton) |
 | `url-navigation`, `navigation` | 11 | Porter le flux et la page **dans l'URL** (`?feed=following`, `?page=N`) |
 | `settings`, `null-fields` | 8 | Mettre à jour bio et image, et ne jamais rendre `null` littéralement |
 | `social` | 4 | Suivi, profil d'autrui, articles favoris, flux personnalisé |

@@ -49,7 +49,7 @@ implementation:
     - apps/web/src/components/ArticleMeta.spec.tsx
     - "apps/web/src/app/article/[slug]/page.spec.tsx"
 related:
-  issues: [6]
+  issues: [8]
   requirements:
     - REQ-WEB-008
     - REQ-WEB-011

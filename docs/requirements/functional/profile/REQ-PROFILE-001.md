@@ -21,7 +21,7 @@ implementation:
   tests:
     - packages/shared/src/model/profile.spec.ts
 related:
-  issues: [2]
+  issues: [4]
   requirements:
     - REQ-USER-001
   adrs: []

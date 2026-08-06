@@ -44,7 +44,7 @@ implementation:
     - apps/api/test/integration/auth-http.integration.spec.ts
     - apps/api/test/integration/article-http.integration.spec.ts
 related:
-  issues: [8]
+  issues: [10]
   requirements:
     - REQ-ERROR-001
     - REQ-AUTH-001

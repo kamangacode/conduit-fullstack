@@ -44,7 +44,7 @@ implementation:
     - apps/web/src/lib/session.spec.tsx
     - apps/web/src/lib/api-provider.spec.tsx
 related:
-  issues: [5]
+  issues: [7]
   requirements:
     - REQ-WEB-001
     - REQ-WEB-004

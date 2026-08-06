@@ -43,7 +43,7 @@ implementation:
     - apps/web/src/components/ArticlesToggle.spec.tsx
     - apps/web/src/app/profile-page.spec.tsx
 related:
-  issues: [6]
+  issues: [8]
   requirements:
     - REQ-WEB-005
     - REQ-WEB-009

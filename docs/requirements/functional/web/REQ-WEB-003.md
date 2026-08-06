@@ -40,7 +40,7 @@ implementation:
   tests:
     - apps/web/src/components/AuthForm.spec.tsx
 related:
-  issues: [5]
+  issues: [7]
   requirements:
     - REQ-WEB-001
     - REQ-WEB-002
