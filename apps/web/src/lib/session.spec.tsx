@@ -369,6 +369,22 @@ describe('REQ-WEB-007 — contrat de sélecteurs, stockage et interface de débo
     expect(window.__conduit_debug__?.getCurrentUser()).toBeNull()
   })
 
+  it('AC-6: rapporte le jeton conservé avant même que la session soit résolue', async () => {
+    // La fenêtre de réhydratation dure le temps d'une requête (ADR 014). Un
+    // outil externe qui interroge pendant cette fenêtre — ce que fait la suite
+    // amont juste après un rechargement — lirait `null` si l'interface rapportait
+    // l'instantané de session, et conclurait que le jeton a été purgé. Le test
+    // qui l'a révélé était instable : vert ou rouge selon la vitesse du poste.
+    window.localStorage.setItem(TOKEN_STORAGE_KEY, 'jwt.token.here')
+    fetchCurrentUser.mockReturnValue(new Promise(() => {}))
+
+    renderProbe()
+
+    await waitFor(() => expect(window.__conduit_debug__).toBeDefined())
+    expect(window.__conduit_debug__?.getAuthState()).toBe('loading')
+    expect(window.__conduit_debug__?.getToken()).toBe('jwt.token.here')
+  })
+
   it('AC-7: rapporte « authenticated » une fois la session ouverte', async () => {
     window.localStorage.setItem(TOKEN_STORAGE_KEY, 'jwt.token.here')
 

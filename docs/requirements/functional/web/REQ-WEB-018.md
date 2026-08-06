@@ -18,11 +18,11 @@ acceptance_criteria:
   - id: AC-3
     given: "une route de profil dont le username n'existe pas"
     when: "la page se rend"
-    then: "la coquille `.profile-page` et son bloc `.user-info` sont rendus avec un message d'absence"
+    then: "la coquille `.profile-page` est rendue avec un message d'absence, sans imbriquer `.user-info` que le sélecteur du contrat rendrait alors ambigu"
   - id: AC-4
     given: "une route de profil et une API qui refuse ou ne répond pas"
     when: "la page se rend"
-    then: "la coquille `.profile-page` et son bloc `.user-info` sont rendus avec un message d'indisponibilité"
+    then: "la même coquille est rendue avec un message d'indisponibilité"
   - id: AC-5
     given: "l'une de ces quatre coquilles"
     when: "elle se rend"
@@ -78,9 +78,15 @@ seule raison que la base était indisponible au moment de sa visite.
   ([REQ-WEB-005](REQ-WEB-005.md) AC-6) : la coquille rendue ne change pas le
   statut, elle change ce que le visiteur lit.
 - Les coquilles suivent le markup RealWorld (rule 11) et portent les classes que
-  le contrat de sélecteurs vise (`.article-page`, `.profile-page`,
-  `.user-info`) : une page d'erreur qui perd ces classes est une page que la
-  suite e2e ne reconnaît plus comme la page demandée.
+  le contrat de sélecteurs vise (`.article-page`, `.profile-page`) : une page
+  d'erreur qui perd ces classes est une page que la suite e2e ne reconnaît plus
+  comme la page demandée.
+- La coquille de profil **n'imbrique pas** `.user-info`. Le contrat la localise
+  par `.profile-page, .user-info`, un sélecteur à deux branches évalué en mode
+  strict : porter les deux le rend ambigu et fait échouer les trois tests
+  concernés sur « resolved to 2 elements », un message qui ne désigne pas sa
+  cause. La page de profil réelle, elle, imbrique bien les deux — c'est le
+  gabarit — et aucun test ne l'y localise par ce sélecteur.
 - Absence et indisponibilité ne partagent pas leur message. « Cet article
   n'existe pas » affiché pendant une panne est faux, et il l'est au moment où il
   coûte le plus cher.

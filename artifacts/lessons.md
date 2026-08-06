@@ -8,6 +8,53 @@
 
 ---
 
+## 2026-08-06 — `$!` rend le sous-shell, pas le serveur : un run e2e a éprouvé le front du run précédent
+
+**Symptôme.** Après avoir aligné l'URL d'API du navigateur sur l'hôte que la
+suite intercepte (ADR 019), la relance des deux fichiers concernés rendait **45
+tests rouges** — c'est-à-dire tous. Les messages décrivaient des défauts de
+conformité plausibles : messages d'erreur absents, formulaires qui ne réagissent
+pas.
+
+**Ce n'était pas le front qu'on testait.** Perdue au milieu de la sortie, une
+trace `EADDRINUSE` sur le port 3100. Le `next start` de ce run n'avait jamais
+démarré ; le port répondait quand même, parce qu'un serveur d'un run précédent
+l'occupait toujours. Le `wait_for` du script, qui interroge l'URL et non le
+processus, a donc conclu que le front était prêt — et la suite s'est exécutée
+contre un artefact **compilé avec l'ancienne URL d'API**, exactement celle dont
+on venait de démontrer qu'elle empêche les mocks de matcher.
+
+**Cause racine.** `test-e2e.sh` lance ses serveurs dans des sous-shells :
+
+```sh
+( cd apps/web; … pnpm exec next start … ) &
+web_pid=$!
+```
+
+`$!` rend le PID du **sous-shell**, pas celui de `next`. Le trap tuait donc le
+parent et laissait l'enfant vivant, orphelin, toujours à l'écoute. Le run
+précédent s'était terminé « proprement » en laissant deux serveurs derrière lui,
+et rien dans son code de sortie ne le disait.
+
+**Correction.** Deux garde-fous, dans cet ordre d'importance :
+
+1. **Refus au démarrage** si l'un des trois ports est déjà occupé. C'est le
+   contrôle qui compte : il transforme une dégradation silencieuse en erreur
+   nommée, et il protège aussi contre un serveur laissé par autre chose que ce
+   script.
+2. **Nettoyage par port** dans le trap, en plus du `kill` des PID enregistrés :
+   ce qui écoute encore sur les ports du run est arrêté.
+
+**Le motif à retenir.** *Attendre qu'un port réponde ne prouve pas que le
+processus qu'on vient de lancer est celui qui répond.* Le même raisonnement vaut
+pour une base de données, un cache ou une file : la disponibilité d'une adresse
+n'est pas l'identité de ce qui s'y trouve. C'est une variante de la leçon
+`initdb` (serveur temporaire pris pour le définitif) — et la deuxième fois que
+ce dépôt se fait piéger par une sonde qui interroge une **adresse** au lieu d'un
+**processus**.
+
+---
+
 ## 2026-08-05 — Un commentaire dans `biome.json` désactive la config **sans rien dire**
 
 **Symptôme.** En ajoutant deux exclusions à `files.includes`, chacune précédée

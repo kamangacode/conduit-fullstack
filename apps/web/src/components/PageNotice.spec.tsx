@@ -45,14 +45,21 @@ describe('REQ-WEB-018 — coquilles de page quand l’API refuse ou ne répond p
   })
 
   it('AC-5: chaque coquille porte les classes que le contrat de sélecteurs vise', () => {
-    // `.user-info` compte autant que `.profile-page` : la suite e2e accepte
-    // l'une **ou** l'autre, mais le bloc intérieur est ce qui donne à l'écran la
-    // forme d'une page de profil plutôt qu'un message flottant.
     const article = render(<ArticlePageNotice kind="unavailable" />).container
     const profile = render(<ProfilePageNotice kind="unavailable" />).container
 
     expect(article.querySelector('.article-page .banner')).not.toBeNull()
-    expect(profile.querySelector('.profile-page .user-info')).not.toBeNull()
+    expect(profile.querySelector('.profile-page')).not.toBeNull()
+  })
+
+  it('AC-3: la coquille de profil n’imbrique pas `.user-info`', () => {
+    // Le contrat localise cette page par `.profile-page, .user-info`, évalué en
+    // **mode strict** : porter les deux fait échouer les trois tests concernés
+    // sur « resolved to 2 elements ». La première version portait les deux, pour
+    // « garder la forme d'une page de profil » — les tests l'ont contredite.
+    const { container } = render(<ProfilePageNotice kind="missing" />)
+
+    expect(container.querySelectorAll('.profile-page, .user-info')).toHaveLength(1)
   })
 
   it('AC-5: chaque coquille propose un retour vers l’accueil', () => {

@@ -13,6 +13,12 @@
 #   - **local** : le script démarre le service `postgres-test` du docker-compose ;
 #   - **CI** : la base vient d'un service du job, qui pose `E2E_DATABASE_URL`.
 #
+# Un quatrième processus s'est ajouté depuis : un **terminateur TLS** qui sert
+# l'hôte d'API figé par deux fichiers de la suite vendorée et le relaie vers
+# l'API de ce run (ADR 019). Sans lui, les `page.route()` de ces fichiers ne
+# matchent jamais et leurs 24 tests éprouvent l'API réelle au lieu des pannes
+# qu'ils décrivent.
+#
 # Item F7b du plan d'outillage. Exigence : REQ-CONF-002.
 
 set -euo pipefail
@@ -36,6 +42,19 @@ PG_DB="${POSTGRES_E2E_DB:-conduit_e2e}"
 WEB_PORT="${E2E_WEB_PORT:-3100}"
 API_PORT="${E2E_API_PORT:-3101}"
 API_BASE_URL="http://localhost:${API_PORT}/api"
+
+# Hôte figé par deux fichiers de la suite vendorée, et port du terminateur TLS
+# qui le sert (ADR 019).
+#
+# `error-handling.spec.ts` et `user-fetch-errors.spec.ts` écrivent leurs mocks
+# sur `https://api.realworld.show/api` en dur, là où les helpers lisent
+# `API_BASE`. Un `page.route()` filtrant sur l'URL demandée, ces interceptions ne
+# matchent que si le **navigateur** demande cet hôte. On le lui fait demander, et
+# Chromium le résout vers le terminateur, qui relaie vers l'API de ce run — donc
+# jamais vers la démo publique.
+MOCKED_API_HOST="${E2E_MOCKED_API_HOST:-api.realworld.show}"
+TLS_PORT="${E2E_TLS_PORT:-3102}"
+BROWSER_API_URL="https://${MOCKED_API_HOST}/api"
 
 manages_docker=0
 
@@ -69,21 +88,66 @@ fi
 
 api_pid=""
 web_pid=""
+tls_pid=""
+tls_dir=""
+
+# Processus qui écoute sur un port, ou rien.
+listening_on() {
+  command -v lsof > /dev/null 2>&1 || return 0
+  lsof -ti "tcp:$1" -sTCP:LISTEN 2> /dev/null
+}
 
 cleanup() {
   local status=$?
-  for pid in "$web_pid" "$api_pid"; do
+  for pid in "$web_pid" "$tls_pid" "$api_pid"; do
     if [ -n "$pid" ] && kill -0 "$pid" 2> /dev/null; then
       kill "$pid" 2> /dev/null || true
       wait "$pid" 2> /dev/null || true
     fi
   done
+
+  # **Puis les ports, et ce second passage n'est pas une ceinture de sécurité.**
+  # `$!` rend le PID du sous-shell, pas celui du serveur qu'il lance : tuer le
+  # premier laisse le second vivant, orphelin, et toujours à l'écoute. Un run
+  # ultérieur trouvait alors le port occupé, échouait à démarrer **son** front —
+  # et la suite s'exécutait contre celui du run précédent, compilé avec une autre
+  # URL d'API. Le symptôme était une cascade d'échecs de conformité parfaitement
+  # crédibles, sur un artefact qui n'était pas celui qu'on croyait tester.
+  for port in "$WEB_PORT" "$TLS_PORT" "$API_PORT"; do
+    for pid in $(listening_on "$port"); do
+      kill "$pid" 2> /dev/null || true
+    done
+  done
+  # Le certificat jetable ne survit pas au run : le laisser traîner ferait
+  # ressembler un artefact de test à une clé oubliée, exactement ce que le
+  # garde-fou `secret-guard` cherche.
+  [ -n "$tls_dir" ] && rm -rf "$tls_dir"
   exit "$status"
 }
-# Deux serveurs à arrêter, et le trap couvre l'interruption autant que l'échec :
-# sans lui, un Ctrl-C laisserait deux processus orphelins occuper leurs ports, et
+# Trois serveurs à arrêter, et le trap couvre l'interruption autant que l'échec :
+# sans lui, un Ctrl-C laisserait des processus orphelins occuper leurs ports, et
 # le run suivant échouerait pour une raison sans rapport avec la conformité.
 trap cleanup EXIT INT TERM
+
+# Aucun port occupé au démarrage — refus explicite plutôt que dégradation
+# silencieuse.
+#
+# Sans ce contrôle, un serveur resté d'un run précédent fait échouer le
+# `next start` de celui-ci (EADDRINUSE), mais le port répond quand même : le
+# `wait_for` passe, la suite s'exécute, et elle éprouve **le front de l'autre
+# run** — compilé avec une autre URL d'API. Le diagnostic obtenu ne parle alors
+# de rien de réel. Constaté sur ce dépôt : 45 tests rouges attribués à tort à la
+# conformité.
+for port_check in "$WEB_PORT:le front" "$API_PORT:l'API" "$TLS_PORT:le terminateur TLS"; do
+  port="${port_check%%:*}"
+  label="${port_check#*:}"
+  if [ -n "$(listening_on "$port")" ]; then
+    echo "ERREUR: le port $port ($label) est déjà occupé."
+    echo "        Un run précédent a probablement laissé un serveur derrière lui."
+    echo "        Libère-le : lsof -ti tcp:$port -sTCP:LISTEN | xargs kill"
+    exit 1
+  fi
+done
 
 if [ "$manages_docker" -eq 1 ]; then
   echo "→ attente de la base..."
@@ -135,9 +199,14 @@ pnpm --filter @repo/api exec prisma db execute --url "$DATABASE_URL" --stdin <<<
 # La variable est déclarée dans `turbo.json` (`build.env`) pour entrer dans la
 # clé de cache : sans ça, l'artefact d'un build précédent — construit avec une
 # autre URL — serait resservi tel quel (REQ-CONF-002 AC-4).
-export NEXT_PUBLIC_API_URL="$API_BASE_URL"
+#
+# Sa valeur est l'hôte **que la suite intercepte** et non l'API locale
+# (ADR 019) : c'est le navigateur qui la consomme, et deux fichiers de la suite
+# n'interceptent que celui-là. Le rendu serveur, lui, garde l'URL directe via
+# `SERVER_API_URL` — sans quoi il interrogerait la démo publique.
+export NEXT_PUBLIC_API_URL="$BROWSER_API_URL"
 
-echo "→ build de l'API et du front (URL d'API : $API_BASE_URL)..."
+echo "→ build de l'API et du front (URL navigateur : $BROWSER_API_URL, URL serveur : $API_BASE_URL)..."
 # Par turbo : la tâche `build` déclare `^build` et `db:generate`, donc le graphe
 # fournit `@repo/shared` et le client Prisma. Un `pnpm --filter build` direct les
 # contournerait — patron qui a cassé la CI deux fois dans ce dépôt.
@@ -145,15 +214,17 @@ pnpm exec turbo run build --filter=@repo/api --filter=@repo/web
 
 # describe REQ-CONF-002
 # it AC-4: le bundle client servi porte l'URL de l'API de ce run, pas celle par défaut
+# it AC-6: le bundle client porte l'hôte que la suite vendorée intercepte
 #
 # On vérifie l'**artefact**, pas l'intention. L'`export` ci-dessus peut être juste
 # et le bundle faux : c'est exactement ce que produit un cache qui ignore la
 # variable, et le symptôme serait alors 128 échecs muets sur la vraie cause. Trois
 # lignes ici valent la demi-heure de diagnostic qu'elles évitent.
 echo "→ vérification de l'URL d'API figée dans le bundle client..."
-if ! grep -rqF "$API_BASE_URL" apps/web/.next/static 2> /dev/null; then
-  echo "ERREUR: l'URL « $API_BASE_URL » est absente du bundle client compilé."
-  echo "        Le front servi interrogerait une autre API que celle de ce run."
+if ! grep -rqF "$BROWSER_API_URL" apps/web/.next/static 2> /dev/null; then
+  echo "ERREUR: l'URL « $BROWSER_API_URL » est absente du bundle client compilé."
+  echo "        Le front servi interrogerait une autre API que celle de ce run,"
+  echo "        et les mocks des deux fichiers qui figent cet hôte ne matcheraient pas."
   echo "        Cause probable : NEXT_PUBLIC_API_URL absente de turbo.json"
   echo "        (tâche build, clé « env »), donc un artefact de cache resservi."
   exit 1
@@ -195,11 +266,62 @@ wait_for() {
 
 wait_for "l'API" "${API_BASE_URL}/tags" "$api_pid"
 
+# ── Terminateur TLS de l'hôte figé par la suite (ADR 019) ────────────────────
+#
+# Certificat auto-signé, régénéré à chaque run dans un répertoire temporaire, et
+# jamais installé dans un magasin de confiance : seul le navigateur de test
+# l'accepte (`ignoreHTTPSErrors` dans `playwright.config.ts`).
+echo "→ certificat jetable pour ${MOCKED_API_HOST}..."
+tls_dir="$(mktemp -d)"
+openssl req -x509 -newkey rsa:2048 -sha256 -days 1 -nodes \
+  -keyout "$tls_dir/key.pem" -out "$tls_dir/cert.pem" \
+  -subj "/CN=${MOCKED_API_HOST}" \
+  -addext "subjectAltName=DNS:${MOCKED_API_HOST}" > /dev/null 2>&1
+
+echo "→ démarrage du terminateur TLS sur le port ${TLS_PORT}..."
+node scripts/e2e-tls-terminator.mjs \
+  --port "$TLS_PORT" \
+  --upstream "http://localhost:${API_PORT}" \
+  --cert "$tls_dir/cert.pem" \
+  --key "$tls_dir/key.pem" &
+tls_pid=$!
+
+# describe REQ-CONF-002
+# it AC-7: l'hôte intercepté par la suite est résolu vers l'API de ce run, jamais vers l'internet
+#
+# `--resolve` reproduit exactement ce que fera Chromium : le nom d'hôte de la
+# suite, résolu vers le terminateur local. Si cette vérification échoue, tout ce
+# qui suit interrogerait la démo publique — en la modifiant — et la suite
+# éprouverait le front de ce dépôt contre les données de quelqu'un d'autre.
+echo "→ vérification du relais TLS vers l'API locale..."
+tls_ok=0
+for _ in $(seq 1 30); do
+  if curl -sfk --resolve "${MOCKED_API_HOST}:${TLS_PORT}:127.0.0.1" \
+    "https://${MOCKED_API_HOST}:${TLS_PORT}/api/tags" > /dev/null 2>&1; then
+    tls_ok=1
+    break
+  fi
+  if ! kill -0 "$tls_pid" 2> /dev/null; then
+    echo "ERREUR: le terminateur TLS s'est arrêté avant d'être prêt."
+    exit 1
+  fi
+  sleep 1
+done
+if [ "$tls_ok" -ne 1 ]; then
+  echo "ERREUR: ${MOCKED_API_HOST} n'est pas relayé vers l'API locale après 30 s."
+  echo "        Le navigateur atteindrait la démo publique au lieu de cette API."
+  exit 1
+fi
+
 echo "→ démarrage du front sur le port ${WEB_PORT}..."
 (
   cd apps/web
+  # Deux URL, à dessein (ADR 019) : le navigateur consomme celle inlinée au
+  # build, le processus de rendu appelle l'API directement — pas de DNS public,
+  # pas de TLS, et surtout aucune chance de sortir du poste.
   NODE_ENV=production \
-    NEXT_PUBLIC_API_URL="$API_BASE_URL" \
+    NEXT_PUBLIC_API_URL="$BROWSER_API_URL" \
+    SERVER_API_URL="$API_BASE_URL" \
     pnpm exec next start --port "$WEB_PORT"
 ) &
 web_pid=$!
@@ -210,8 +332,18 @@ wait_for "le front" "http://localhost:${WEB_PORT}/" "$web_pid"
 # it AC-1: les 12 fichiers de specs officiels sont exécutés, sans exclusion de notre fait
 echo "→ exécution de la suite e2e officielle..."
 # `API_BASE` est lu par `conformance/e2e/helpers/config.ts` : les helpers créent
-# comptes et articles **par l'API**, sans passer par l'interface. Sans cette
-# variable, ils viseraient `https://api.realworld.show/api` — la démo publique —
-# et la suite testerait le front de ce dépôt contre les données d'un autre.
+# comptes et articles **par l'API**, sans passer par l'interface. Ils tournent
+# dans Node, hors du navigateur, donc hors de portée de la règle de résolution —
+# ils visent l'API directement. Sans cette variable, ils viseraient
+# `https://api.realworld.show/api` — la démo publique — et la suite testerait le
+# front de ce dépôt contre les données d'un autre.
+#
+# Les arguments reçus sont transmis à Playwright (`bash scripts/test-e2e.sh
+# error-handling.spec.ts` pour rejouer un seul fichier). Sans argument, la suite
+# entière s'exécute : aucun filtre par défaut, donc aucune exclusion de notre
+# fait (AC-1).
 cd apps/web
-API_BASE="$API_BASE_URL" pnpm exec playwright test
+API_BASE="$API_BASE_URL" \
+  E2E_MOCKED_API_HOST="$MOCKED_API_HOST" \
+  E2E_TLS_PORT="$TLS_PORT" \
+  pnpm exec playwright test "$@"

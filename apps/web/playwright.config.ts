@@ -23,6 +23,22 @@ import { baseConfig } from './conformance/e2e/playwright.base'
  */
 const webPort = process.env.E2E_WEB_PORT ?? '3100'
 
+/**
+ * Hôte d'API que la suite vendorée **fige** dans deux de ses fichiers, et port
+ * local du terminateur TLS qui le sert (ADR 019).
+ *
+ * `error-handling.spec.ts` et `user-fetch-errors.spec.ts` écrivent leurs mocks
+ * sur `https://api.realworld.show/api` en dur, là où les helpers lisent la
+ * variable `API_BASE`. Un `page.route()` filtrant sur l'URL demandée, ces
+ * interceptions ne matchent que si le **navigateur** demande cet hôte-là.
+ *
+ * On le lui fait donc demander, et on le résout vers l'API de ce run. Les deux
+ * valeurs sont lues de l'environnement pour que `test-e2e.sh` reste le seul
+ * endroit qui choisit un port.
+ */
+const mockedApiHost = process.env.E2E_MOCKED_API_HOST ?? 'api.realworld.show'
+const tlsPort = process.env.E2E_TLS_PORT ?? '3102'
+
 export default defineConfig({
   ...baseConfig,
 
@@ -34,6 +50,21 @@ export default defineConfig({
   use: {
     ...baseConfig.use,
     baseURL: `http://localhost:${webPort}`,
+
+    // Le certificat du terminateur est auto-signé et jetable (ADR 019). Cette
+    // option ne touche **aucune** assertion : elle dit au navigateur de test
+    // d'accepter un certificat qu'il est le seul à voir, et qui n'existe que le
+    // temps du run. Sans elle, chaque appel du front finirait en erreur TLS —
+    // un échec qui ne parlerait pas de conformité.
+    ignoreHTTPSErrors: true,
+
+    launchOptions: {
+      // La règle de résolution est ce qui garde le run **hors ligne** : sans
+      // elle, les requêtes non interceptées par un `page.route()` partiraient
+      // vers la vraie démo publique, et la suite éprouverait le front de ce
+      // dépôt contre les données de quelqu'un d'autre — en les modifiant.
+      args: [`--host-resolver-rules=MAP ${mockedApiHost} 127.0.0.1:${tlsPort}`],
+    },
   },
 
   // `list` pour que l'échec soit lisible dans les logs d'un job de CI sans

@@ -425,7 +425,13 @@ function useDebugInterface(session: SessionState) {
 
   useEffect(() => {
     window.__conduit_debug__ = {
-      getToken: () => sessionRef.current.token,
+      // Le **stockage**, pas l'instantané de session. Les deux coïncident sauf
+      // pendant la fenêtre de réhydratation, où la session n'a pas encore résolu
+      // son jeton alors qu'il est bien conservé : un outil externe qui interroge
+      // à ce moment-là lirait `null` et conclurait à une purge. C'est ce qui
+      // rendait instable le test amont qui recharge la page puis lit le jeton —
+      // vert ou rouge selon la vitesse du poste.
+      getToken: () => readStoredToken(),
       getAuthState: () => DEBUG_STATES[sessionRef.current.status],
       getCurrentUser: () => sessionRef.current.user,
     }

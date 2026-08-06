@@ -27,11 +27,21 @@ acceptance_criteria:
     given: "le job de CI qui exécute la suite e2e"
     when: "la suite échoue"
     then: "le job remonte le signal sans faire échouer la CI et n'entre pas dans l'agrégat `ci-success` — la bascule en gate est un geste ultérieur et délibéré, pas un oubli"
+  - id: AC-6
+    given: "deux fichiers de la suite qui figent l'hôte d'API dans leurs interceptions"
+    when: "le front est construit pour l'exécution e2e"
+    then: "le bundle client porte cet hôte, faute de quoi aucun de leurs `page.route()` ne matche et leurs tests éprouvent l'API réelle au lieu des pannes décrites"
+  - id: AC-7
+    given: "l'hôte figé par la suite, qui désigne une démo publique"
+    when: "le harnais démarre"
+    then: "il est résolu vers l'API de ce run et le relais est vérifié avant le lancement — aucune requête du navigateur ne quitte le poste, y compris celles qu'aucun mock n'intercepte"
 implementation:
   files:
     - apps/web/conformance/UPSTREAM.md
     - apps/web/playwright.config.ts
     - scripts/test-e2e.sh
+    - scripts/e2e-tls-terminator.mjs
+    - apps/web/src/lib/env.ts
     - turbo.json
     - .github/workflows/ci.yml
   tests:
@@ -42,7 +52,7 @@ related:
   requirements:
     - REQ-CONF-001
     - REQ-WEB-007
-  adrs: ["014", "018"]
+  adrs: ["014", "018", "019"]
 ---
 
 # REQ-CONF-002 — Confronter le front aux parcours e2e officiels, contre l'API réelle
@@ -82,6 +92,19 @@ défaut puis servi pour l'e2e enverrait ses requêtes ailleurs, et les échecs
 ressembleraient à des défauts de conformité. AC-4 vérifie l'artefact plutôt que
 l'intention.
 
+**La suite suppose de son environnement plus qu'elle ne le dit.** Deux de ses
+douze fichiers — `error-handling.spec.ts` et `user-fetch-errors.spec.ts` — figent
+l'hôte d'API dans leurs interceptions (`https://api.realworld.show/api`) là où
+les helpers lisent une variable. Un `page.route()` filtrant sur l'URL demandée,
+leurs mocks ne s'appliquent que si le **navigateur** demande cet hôte : tant que
+le front visait l'API locale, leurs 24 tests éprouvaient l'API réelle au lieu des
+pannes qu'ils décrivent, et aucune correction du front ne pouvait les rendre
+verts. AC-6 et AC-7 portent la réponse de
+l'[ADR 019](../../../adr/019-alignement-de-l-hote-d-api-pour-la-suite-e2e.md) :
+le navigateur demande cet hôte, et le harnais le résout vers l'API du run. AC-7
+est le critère de **sûreté** de ce montage — sans lui, une requête qu'aucun mock
+n'intercepte partirait vers la démo publique et la modifierait.
+
 AC-5 enfin acte que ce contrôle démarre en **rapport** et non en gate
 ([ADR 018](../../../adr/018-conformite-e2e-suite-officielle-vendoree.md)) : la
 suite pilote un navigateur réel, ses modes d'échec incluent des situations qui ne
@@ -115,7 +138,12 @@ produit le gate qu'on désactive six mois plus tard (rule 21, étape 3).
 AC-1 est prouvé par l'exécution elle-même. AC-2 et AC-4 sont prouvés par
 `verify-e2e-gate.sh`, qui oppose la suite à un front factice et vérifie
 l'artefact compilé. AC-3 est prouvé par le mode « fichier imbriqué retouché »
-de `verify-conformance-drift.sh`.
+de `verify-conformance-drift.sh`. AC-6 et AC-7 sont prouvés dans `test-e2e.sh`
+lui-même, avant que la suite ne démarre : l'un inspecte le bundle compilé,
+l'autre interroge l'hôte figé — résolu comme le navigateur le résoudra — et
+vérifie que c'est bien l'API de ce run qui répond. Les deux **arrêtent le run**
+en cas d'échec, plutôt que de laisser la suite produire un diagnostic qui ne
+parlerait pas de la vraie cause.
 
 **AC-5 n'est pas couvert par un test, et c'est délibéré** — comme l'AC-5 de
 [REQ-CONF-001](REQ-CONF-001.md), et pour une raison voisine. Le prouver

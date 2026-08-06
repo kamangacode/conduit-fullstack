@@ -1,5 +1,5 @@
 import { type ApiClient, createApiClient } from './api-client'
-import { API_BASE_URL } from './env'
+import { SERVER_API_BASE_URL } from './env'
 
 /**
  * Client API des Server Components — **anonyme par construction**.
@@ -15,6 +15,11 @@ import { API_BASE_URL } from './env'
  *   servir une version mise en cache afficherait un état périmé juste après une
  *   modification.
  *
+ * L'URL vient de `SERVER_API_BASE_URL` et non de `API_BASE_URL` : le processus
+ * de rendu n'atteint pas forcément l'API par le chemin que le navigateur
+ * emprunte. Les deux coïncident par défaut, et l'exécution e2e est le premier
+ * contexte où ils divergent ([ADR 019]).
+ *
  * Ce littéral était recopié à l'identique dans six Server Components. L'ADR 015
  * a pourtant écarté une option entière au motif que deux chemins parallèles
  * dérivent sans que rien ne le rappelle — le même raisonnement s'applique ici,
@@ -23,7 +28,7 @@ import { API_BASE_URL } from './env'
  */
 export function createServerApiClient(): ApiClient {
   return createApiClient({
-    baseUrl: API_BASE_URL,
+    baseUrl: SERVER_API_BASE_URL,
     getToken: () => null,
     fetchImpl: (input, init) => fetch(input, { ...init, cache: 'no-store' }),
   })
