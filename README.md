@@ -16,6 +16,11 @@ lance et on tient un projet full-stack de A à Z*.
 - [Le projet Conduit (RealWorld)](#le-projet-conduit-realworld)
 - [Le parti pris](#le-parti-pris)
 - [Architecture](#architecture)
+- [Le backend en profondeur](#le-backend-en-profondeur)
+    - [Architecture hexagonale (ports et adapters)](#architecture-hexagonale-ports-et-adapters)
+    - [Domain-Driven Design (DDD)](#domain-driven-design-ddd)
+    - [Clean Architecture](#clean-architecture)
+    - [Principes SOLID](#principes-solid)
 - [La boîte à outils](#la-boîte-à-outils)
 - [Démarrage rapide](#démarrage-rapide)
 - [Commandes](#commandes)
@@ -125,6 +130,74 @@ graph LR
 
 Le `domain` de l'API reste **pur** : aucun import de NestJS ni de Prisma. La discipline
 hexagonale n'est pas troquée contre la facilité du full-stack.
+
+## Le backend en profondeur
+
+Le cœur de `apps/api` n'est pas un empilement de bonnes intentions. Trois cadres qui se
+recouvrent y sont posés concrètement, et les principes SOLID en découlent presque
+mécaniquement. Voici lesquels, et surtout où les lire dans le code.
+
+### Architecture hexagonale (ports et adapters)
+
+Le principe : le cœur métier ne dépend d'aucune technologie. Il expose des **ports**
+(interfaces), et l'infrastructure fournit des **adapters** qui les implémentent. On peut
+remplacer la base, le hasher de mots de passe ou la lib de tokens sans toucher une ligne de
+domaine.
+
+Dans ce repo :
+
+- Les ports vivent dans le domaine : [`domain/user/ports/user-repository.port.ts`](apps/api/src/domain/user/ports/user-repository.port.ts), [`password-hasher.port.ts`](apps/api/src/domain/user/ports/password-hasher.port.ts), [`token-service.port.ts`](apps/api/src/domain/user/ports/token-service.port.ts).
+- Les adapters vivent dans l'infrastructure : [`prisma-user.repository.ts`](apps/api/src/infrastructure/persistence/prisma-user.repository.ts), [`argon2-password-hasher.ts`](apps/api/src/infrastructure/security/argon2-password-hasher.ts), [`jose-token.service.ts`](apps/api/src/infrastructure/security/jose-token.service.ts).
+- Le domaine ne connaît ni Prisma ni NestJS : aucun `import` technique dans [`domain/`](apps/api/src/domain).
+
+À lire : [Architecture hexagonale, exemples et bonnes pratiques](https://www.kamanga.fr/fr/architecture-craft/architecture-hexagonale-java-exemples-bonnes-pratiques).
+
+### Domain-Driven Design (DDD)
+
+Le principe : modéliser le logiciel avec le vocabulaire du métier, en s'appuyant sur des
+building blocks tactiques (Aggregate, Value Object, Domain Error, Repository) et un
+découpage en bounded contexts.
+
+Dans ce repo :
+
+- **Bounded contexts** : un sous-dossier de domaine par concept RealWorld ([`user`](apps/api/src/domain/user), [`article`](apps/api/src/domain/article), [`comment`](apps/api/src/domain/comment), [`profile`](apps/api/src/domain/profile), [`tag`](apps/api/src/domain/tag)).
+- **Aggregate Root** immuable : [`domain/article/article.ts`](apps/api/src/domain/article/article.ts), dont les méthodes métier (`favorite`, `addTag`) retournent un nouvel `Article` ou lèvent une erreur de domaine.
+- **Value Object** validé au constructeur : [`domain/article/slug.ts`](apps/api/src/domain/article/slug.ts).
+- **Domain Error** pure, code d'erreur porté par le domaine : [`domain/shared/errors/domain.error.ts`](apps/api/src/domain/shared/errors/domain.error.ts).
+- **Ubiquitous language** : le code parle `slug`, `favorite`, `follow`, `feed`, `tagList`, exactement comme la spec.
+- **Shared Kernel** : `packages/shared` porte les DTOs et schémas, consommés par l'API et le web sans redéfinition.
+
+À lire : [Découvrir le Domain-Driven Design](https://www.kamanga.fr/fr/architecture-craft/decouvrir-domain-driven-design-ddd-avantages-exemples-java).
+
+### Clean Architecture
+
+Le principe : la **règle de dépendance** (Robert C. Martin). Les dépendances pointent
+toujours vers l'intérieur ; les use cases orchestrent le domaine sans rien savoir du web ni
+de la base.
+
+Dans ce repo, quatre couches :
+
+1. [`domain/`](apps/api/src/domain) : entités, value objects, ports, erreurs. TypeScript pur.
+2. [`application/`](apps/api/src/application) : un use case par action, dépendant seulement de ports ([`create-article.use-case.ts`](apps/api/src/application/article/create-article.use-case.ts), [`favorite-article.use-case.ts`](apps/api/src/application/article/favorite-article.use-case.ts)).
+3. [`infrastructure/`](apps/api/src/infrastructure) : adapters, et la traduction erreur de domaine vers code HTTP dans [`domain-exception.filter.ts`](apps/api/src/infrastructure/filters/domain-exception.filter.ts). L'infra traduit, le domaine reste pur.
+4. [`interface/`](apps/api/src/interface) : controllers NestJS qui valident (Zod), mappent et délèguent, sans logique métier.
+
+À lire : [Clean Architecture, les 3 règles qui comptent](https://www.kamanga.fr/fr/architecture-craft/clean-architecture-3-regles).
+
+### Principes SOLID
+
+Ils ne sont pas plaqués après coup : ils tombent presque tout seuls dès qu'on tient
+l'hexagonal et la règle de dépendance. Où les voir concrètement :
+
+| Principe | Où, dans ce repo | Article |
+|---|---|---|
+| **S**RP, responsabilité unique | Un use case = une action. Le dossier [`application/article/`](apps/api/src/application/article) sépare create, update, delete, get, list, favorite, chacun dans son fichier. | [SRP](https://www.kamanga.fr/fr/architecture-craft/principe-srp-software-craftsmanship-exemples-java) |
+| **O**CP, ouvert/fermé | Ajouter un adapter (autre store, autre hasher) n'oblige à modifier ni le domaine ni les use cases : le port est le point d'extension. | [OCP](https://www.kamanga.fr/fr/architecture-craft/principe-ocp-software-craftsmanship-exemples-java) |
+| **L**SP, substitution de Liskov | L'adapter réel et un faux de test satisfont le même port et restent interchangeables ([`argon2-password-hasher.ts`](apps/api/src/infrastructure/security/argon2-password-hasher.ts) derrière [`password-hasher.port.ts`](apps/api/src/domain/user/ports/password-hasher.port.ts)). | [LSP](https://www.kamanga.fr/fr/architecture-craft/principe-substitution-liskov-lsp-java) |
+| **I**SP, ségrégation des interfaces | Lecture et écriture d'un article sont deux ports distincts : [`article-repository.port.ts`](apps/api/src/domain/article/ports/article-repository.port.ts) (écriture) et [`article-query.port.ts`](apps/api/src/domain/article/ports/article-query.port.ts) (lecture). | [ISP](https://www.kamanga.fr/fr/architecture-craft/principe-isp-software-craftsmanship-exemples-java) |
+| **D**IP, inversion des dépendances | Le domaine définit l'abstraction (le port), l'infrastructure en dépend. Use case de haut niveau et adapter Prisma de bas niveau dépendent tous deux du même port. | [DIP](https://www.kamanga.fr/fr/architecture-craft/principe-inversion-dependances-dip-java-guide-complet) |
+
+Vue d'ensemble : [Les principes SOLID expliqués](https://www.kamanga.fr/fr/architecture-craft/principes-solid-java-exemples).
 
 ## La boîte à outils
 
