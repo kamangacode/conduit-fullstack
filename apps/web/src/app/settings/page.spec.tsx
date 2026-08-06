@@ -2,7 +2,7 @@ import type { User } from '@repo/shared'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest'
 import { ApiError } from '../../lib/api-client'
 import { profileQueryKey } from '../../lib/content-query'
 import { CONNECTION_FAILURE_MESSAGE } from '../../lib/errors'
@@ -307,5 +307,40 @@ describe('REQ-WEB-004 — page de paramètres', () => {
 
     await waitFor(() => expect(push).toHaveBeenCalledWith('/profile/jake-renomme'))
     expect(queryClient.getQueryState(profileQueryKey('jake'))?.isInvalidated).toBe(true)
+  })
+
+  it('AC-8: ne présente pas comme un échec de connexion une suite locale qui casse après un succès', async () => {
+    // Le défaut trouvé en revue : `signIn` écrit dans `localStorage`, qui lève
+    // en navigation privée ou sur quota dépassé. Cette écriture ayant lieu
+    // **après** que l'API a répondu 200, l'exception remontait pourtant jusqu'au
+    // `catch` de `SettingsForm`, où `toMessages` ne la reconnaît pas comme une
+    // `ApiError` et se rabat sur le message de panne réseau. L'utilisateur
+    // lisait « impossible de joindre le serveur » sur un compte parfaitement
+    // enregistré, et était invité à recommencer.
+    window.localStorage.setItem(TOKEN_STORAGE_KEY, jake.token)
+    renderPage()
+    const bio = await screen.findByPlaceholderText('Short bio about you')
+
+    const setItem = vi.spyOn(window.localStorage, 'setItem').mockImplementation(() => {
+      throw new DOMException('Storage quota exceeded', 'QuotaExceededError')
+    })
+    // L'erreur est journalisée à dessein : on la tait ici pour ne pas polluer la
+    // sortie des tests, tout en vérifiant plus bas qu'elle n'a pas été perdue.
+    const logged = vi.spyOn(console, 'error').mockImplementation(() => {})
+    onTestFinished(() => {
+      setItem.mockRestore()
+      logged.mockRestore()
+    })
+
+    await userEvent.type(bio, 'I work at statefarm')
+    await userEvent.click(screen.getByRole('button', { name: 'Update Settings' }))
+
+    // AC-8 tient malgré la panne locale : l'enregistrement a réussi, donc on
+    // atterrit sur le profil.
+    await waitFor(() => expect(push).toHaveBeenCalledWith('/profile/jake-renomme'))
+    expect(screen.queryByText(CONNECTION_FAILURE_MESSAGE)).not.toBeInTheDocument()
+    // Et l'erreur n'est pas avalée : sans trace, le prochain à chercher pourquoi
+    // la session ne suit pas n'aurait ni pile ni message.
+    expect(logged).toHaveBeenCalled()
   })
 })
