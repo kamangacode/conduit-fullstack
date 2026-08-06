@@ -45,7 +45,7 @@ implementation:
     - apps/api/test/integration/auth-persistence.integration.spec.ts
     - apps/api/test/integration/auth-http.integration.spec.ts
 related:
-  issues: [3]
+  issues: [5]
   requirements:
     - REQ-USER-001
     - REQ-USER-002

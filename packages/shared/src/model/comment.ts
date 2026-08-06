@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { requiredText } from './contract-fields'
 import { profileSchema } from './profile'
 
 /**
@@ -45,7 +46,7 @@ export type CommentsResponse = z.infer<typeof commentsResponseSchema>
  * commenter au nom d'un autre.
  */
 export const createCommentDtoSchema = z.object({
-  body: z.string().trim().min(1),
+  body: requiredText(),
 })
 
 export type CreateCommentDto = z.infer<typeof createCommentDtoSchema>

@@ -45,6 +45,22 @@ Passer un REQ en `status: implemented` **engage** : le contrôle exige alors des
 `implementation.files` et `implementation.tests` renseignés, et refuse tout
 chemin qui n'existe pas sur le disque.
 
+### `related.issues` désigne des issues GitHub
+
+Les entiers de `related.issues` sont des numéros d'**issues de ce dépôt**, tels
+qu'ils apparaissent dans l'URL. Le schéma ne valide que « entier positif » — il
+ne peut pas vérifier qu'une issue existe, et rien ne le fera à sa place. Écrire
+un numéro au jugé produit donc une référence morte que seul un lecteur détectera,
+en cliquant.
+
+Un piège vaut d'être connu : **GitHub numérote les issues et les pull requests
+dans une seule séquence.** Une PR ouverte avant la première issue consomme le
+numéro 1. C'est ce qui est arrivé ici — les huit issues du découpage initial
+portent les numéros 3 à 10, décalées de deux par les PR qui les précèdent. Le
+décalage a été absorbé une fois pour toutes en réalignant les 44 exigences ; il
+n'y a pas de règle « +2 » à appliquer, seulement des numéros à lire sur GitHub
+avant de les écrire ici.
+
 ## Toolchain
 
 ```bash

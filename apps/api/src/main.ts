@@ -4,7 +4,7 @@ import { NestFactory } from '@nestjs/core'
 
 import { AppModule } from './app.module'
 import { type Env, parseEnv } from './config/env'
-import { applyHttpConventions } from './interface/http-prefix'
+import { applyHttpConventions } from './interface/http-conventions'
 
 /**
  * Point d'entrée de l'API.
@@ -32,8 +32,9 @@ async function bootstrap(): Promise<void> {
   const app = await NestFactory.create(AppModule)
   // Les conventions HTTP sont posées par une fonction partagée avec les tests
   // d'intégration : les écrire ici seulement les rendrait invisibles à une suite
-  // qui construit sa propre application (voir `applyHttpConventions`).
-  applyHttpConventions(app)
+  // qui construit sa propre application (voir `applyHttpConventions`). L'origine
+  // CORS vient de l'environnement validé : le navigateur du front en dépend.
+  applyHttpConventions(app, { corsOrigin: env.CORS_ORIGIN })
   await app.listen(env.PORT)
 }
 

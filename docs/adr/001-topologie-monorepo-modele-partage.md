@@ -51,9 +51,17 @@ front comme back. Le compilateur TypeScript est le contrat.
 - Une règle de modèle = une définition. Impossible de faire diverger silencieusement le front et le back.
 - Zéro étape de génération de client ; le refactoring traverse les trois workspaces d'un coup, guidé par le typecheck.
 - Cache Turbo : les tâches non impactées ne re-tournent pas.
+- **La propriété est vérifiée, pas seulement annoncée** (ajout du 2026-08-05,
+  item F6) : [`scripts/verify-type-boundary.sh`](../../scripts/verify-type-boundary.sh)
+  renomme un champ du modèle partagé et constate que `apps/api` **et**
+  `apps/web` refusent tous deux de compiler, puis restaure. Lancé en pre-push et
+  dans le job CI `Typecheck`, il porte l'exigence REQ-ARCH-001. Sans lui, la
+  première phrase de cette section resterait une affirmation — et deviendrait
+  fausse en silence le jour où quelqu'un recopierait un type au lieu de
+  l'importer.
 
 ### Negative
-- Discipline requise : tout type Conduit doit vivre dans `shared`, jamais redéfini dans `api` ou `web` (garde-fou de frontière hexagonale à outiller — dependency-cruiser, Phase 1).
+- Discipline requise : tout type Conduit doit vivre dans `shared`, jamais redéfini dans `api` ou `web` (garde-fou de frontière hexagonale à outiller — dependency-cruiser, Phase 1). *La partie « un changement se propage bien aux deux côtés » est désormais mécanisée (voir ci-dessus) ; la partie « aucune copie n'existe » ne l'est pas encore et reste un point de vigilance en revue.*
 - Couplage de version entre `api` et `web` : ils avancent ensemble dans le même dépôt (acceptable ici — un seul front, un seul service).
 
 ### Neutral

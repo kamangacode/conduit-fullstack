@@ -71,12 +71,18 @@ jobs:
               - 'scripts/check-adr-index.sh'
             requirements:
               - 'docs/requirements/**'
-              - 'scripts/verify-requirements-validator.sh'
               # Le validateur vérifie l'existence des fichiers référencés par les
               # REQ : supprimer un test cité par un REQ `implemented` doit faire
               # échouer ce job, donc tout changement de code le déclenche aussi.
               - 'apps/**'
               - 'packages/**'
+              # `scripts/**` en entier, et pas seulement les vérificateurs du
+              # référentiel : plusieurs exigences non fonctionnelles ont leur
+              # preuve dans un script shell (REQ-ARCH-001, REQ-CONF-001), donc
+              # en supprimer un doit rougir ici. Le filtre ne listait que
+              # `verify-requirements-validator.sh`, ce qui laissait ces preuves
+              # supprimables sans que le job ne se déclenche.
+              - 'scripts/**'
 
   quality:
     name: Quality (lint + knip + boundaries)
@@ -181,6 +187,12 @@ jobs:
           key: turbo-typecheck-${{ github.sha }}
           restore-keys: turbo-typecheck-
       - run: pnpm typecheck
+      # Vérification active de la thèse du dépôt : casser le modèle partagé doit
+      # faire échouer `apps/api` ET `apps/web` (REQ-ARCH-001). Placée après le
+      # typecheck ordinaire, dont elle réutilise le cache — et qui sert de
+      # référence : le script refuse de conclure si le dépôt ne compile pas déjà.
+      - name: Frontière typée bout-en-bout (vérification active)
+        run: bash scripts/verify-type-boundary.sh
 
   test:
     name: Test
@@ -275,6 +287,165 @@ jobs:
           TEST_DATABASE_URL: postgresql://conduit:conduit@localhost:5432/conduit_test?schema=public
         run: pnpm test:integration
 
+  conformance:
+    name: Conformance (suite RealWorld officielle)
+    runs-on: ubuntu-latest
+    needs: detect-changes
+    if: needs.detect-changes.outputs.code == 'true'
+    services:
+      # Base dédiée, distincte de celle du job `integration` : la suite
+      # officielle exige une base vierge, et son nom doit contenir
+      # « conformance » — la garde du script refuse de vider une base qui ne
+      # s'annonce pas jetable.
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: conduit
+          POSTGRES_PASSWORD: conduit
+          POSTGRES_DB: conduit_conformance
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U conduit -d conduit_conformance"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      # Hurl n'est pas un paquet npm : c'est un binaire, installé depuis la
+      # release amont épinglée. Sans épinglage, une évolution de son format de
+      # sortie ferait rougir un gate sans qu'aucune ligne du dépôt n'ait bougé.
+      - name: Installer Hurl
+        run: |
+          curl -sfLO https://github.com/Orange-OpenSource/hurl/releases/download/8.0.1/hurl_8.0.1_amd64.deb
+          sudo dpkg -i hurl_8.0.1_amd64.deb
+          rm hurl_8.0.1_amd64.deb
+      # Le gate : la suite officielle, en entier, contre l'artefact compilé.
+      # Aucune dépendance réseau une fois la copie vendorée en place, donc rien
+      # ici ne peut rougir à cause d'un tiers indisponible.
+      - name: Suite de conformité RealWorld
+        env:
+          CONFORMANCE_DATABASE_URL: postgresql://conduit:conduit@localhost:5432/conduit_conformance?schema=public
+        run: pnpm conformance
+      # Le rapport, non bloquant, et volontairement APRÈS le gate : il dépend du
+      # réseau, et faire rougir la CI de chaque PR parce qu'un tiers a publié un
+      # commit ce matin produirait le gate qu'on désactive six mois plus tard
+      # (rule 21, étape 3 : on mesure le bruit avant de gater). Le script, lui,
+      # rend bien un code non nul sur une retouche locale — c'est la CI qui
+      # choisit de ne pas encore en faire un gate.
+      - name: Dérive de la copie vendorée (rapport)
+        continue-on-error: true
+        run: pnpm conformance:drift
+      # Le contrôle du contrôle : éprouve que la détection de dérive sait
+      # échouer. Un contrôle dont on n'a jamais constaté qu'il rougit ne protège
+      # rien, et celui-ci garde la seule triche capable de vider la suite de son
+      # sens. Non bloquant pour la même raison de dépendance réseau.
+      - name: Modes de défaillance du contrôle de dérive
+        continue-on-error: true
+        run: pnpm conformance:verify
+
+  e2e:
+    name: E2E (suite Playwright officielle — rapport)
+    runs-on: ubuntu-latest
+    needs: detect-changes
+    if: needs.detect-changes.outputs.code == 'true'
+    # **Ce job ne bloque pas, et son absence du `needs` de `ci-success` est
+    # délibérée** (REQ-CONF-002 AC-5, ADR 018). La suite pilote un navigateur réel
+    # à travers l'hydratation de Next : ses modes d'échec incluent des situations
+    # qui ne disent rien de la conformité (un `waitForURL` qui expire sur un
+    # runner chargé). Poser le gate avant d'avoir mesuré ce bruit, c'est choisir
+    # un seuil au jour 1 — et six mois plus tard, c'est le job qu'on désactive,
+    # emportant avec lui les échecs qui, eux, disaient quelque chose.
+    #
+    # La bascule en gate est inscrite au plan d'outillage comme item distinct :
+    # elle se fait après quelques runs réels, pas de mémoire.
+    services:
+      # Troisième base dédiée, distincte de `conduit_test` (intégration) et
+      # `conduit_conformance` (Hurl). Son nom doit contenir « e2e » : la garde du
+      # script refuse de vider une base qui ne s'annonce pas jetable.
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: conduit
+          POSTGRES_PASSWORD: conduit
+          POSTGRES_DB: conduit_e2e
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U conduit -d conduit_e2e"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      # `--with-deps` installe les bibliothèques système du navigateur, que le
+      # runner ne porte pas toutes. Le script les réinstallerait sans, et
+      # échouerait au lancement pour une raison sans rapport avec le front.
+      - name: Installer le navigateur Playwright
+        run: pnpm --filter @repo/web exec playwright install --with-deps chromium
+      # Le contrôle du contrôle, et il vient **avant** la suite : il vérifie que
+      # le harnais collecte réellement des tests et qu'il sait rougir. Sans lui,
+      # un `testDir` erroné rendrait « 0 test, code 0 » — le vert le plus creux
+      # qu'un dépôt puisse afficher, et celui qu'on croirait.
+      - name: Modes de défaillance du harnais e2e
+        continue-on-error: true
+        run: bash scripts/verify-e2e-gate.sh
+      - name: Suite e2e RealWorld (rapport)
+        continue-on-error: true
+        env:
+          E2E_DATABASE_URL: postgresql://conduit:conduit@localhost:5432/conduit_e2e?schema=public
+        # `pipefail` explicite : le shell par défaut des runners est `bash -e`,
+        # sans lui. Le code de sortie du run serait donc celui de `tee`, donc 0,
+        # et l'étape s'afficherait verte quel qu'ait été le verdict — le
+        # `continue-on-error` ci-dessus deviendrait décoratif et l'échec
+        # invisible jusque dans le journal.
+        run: |
+          set -o pipefail
+          pnpm conformance:e2e 2>&1 | tee /tmp/e2e.log
+      # Un rapport que personne ne lit ne rapporte rien. Le job ne bloque pas :
+      # sans ce résumé, connaître le verdict imposerait d'ouvrir le journal d'un
+      # job vert, ce que personne ne fait. Les comptes remontent donc dans le
+      # résumé du run, comme la couverture des tests et celle des exigences —
+      # lisible depuis la PR, sans permission d'écriture.
+      - name: Verdict e2e (résumé de run)
+        if: always()
+        run: |
+          {
+            echo "## Conformité e2e RealWorld (rapport, non bloquant)"
+            echo ""
+            if grep -qE '^\s+[0-9]+ (passed|failed|flaky)' /tmp/e2e.log 2> /dev/null; then
+              grep -E '^\s+[0-9]+ (passed|failed|flaky|skipped)' /tmp/e2e.log \
+                | sed -E 's/^\s*/- /'
+            else
+              echo "_La suite n'a pas atteint son terme : voir le journal du job._"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+      # Les traces et captures d'écran sont ce qui rend un échec e2e
+      # diagnosticable sans reproduire le run : sans elles, le rapport se réduit
+      # à un nom de test et une ligne.
+      - name: Rapport Playwright (artefact)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: |
+            apps/web/playwright-report/
+            apps/web/test-results/
+          retention-days: 14
+          if-no-files-found: ignore
+
   build:
     name: Build
     runs-on: ubuntu-latest
@@ -322,7 +493,8 @@ jobs:
     # produire un statut, même si des jobs amont sont skippés (diff sans code).
     if: always()
     runs-on: ubuntu-latest
-    needs: [detect-changes, quality, adr, requirements, typecheck, test, integration, build]
+    needs:
+      [detect-changes, quality, adr, requirements, typecheck, test, integration, conformance, build]
     steps:
       - name: Vérifie qu'aucun job requis n'a échoué
         run: |
@@ -331,6 +503,7 @@ jobs:
             "${{ needs.adr.result }}" \
             "${{ needs.requirements.result }}" \
             "${{ needs.integration.result }}" \
+            "${{ needs.conformance.result }}" \
             "${{ needs.typecheck.result }}" \
             "${{ needs.test.result }}" \
             "${{ needs.build.result }}"; do

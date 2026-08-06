@@ -22,6 +22,15 @@ elle porte la mécanique : gabarit, numérotation, statuts, vérification.
 | [007](007-authentification-argon2id-jose.md) | Authentification : argon2id et jose derrière des ports du domaine | Accepted | 2026-08-05 |
 | [008](008-permission-manquante-403.md) | Permission manquante : 403 conforme au contrat, plutôt que 404 | Accepted | 2026-08-05 |
 | [009](009-conflit-unicite-409.md) | Violation d'unicité : 409 Conflict plutôt que 422 | Accepted | 2026-08-05 |
+| [010](010-unicite-du-slug-article.md) | Unicité du slug d'article : suffixe incrémental résolu par la contrainte | Accepted | 2026-08-05 |
+| [011](011-lecture-des-listes-port-dedie.md) | Lecture des listes d'articles : port de lecture dédié, séparé de l'écriture | Accepted | 2026-08-05 |
+| [012](012-rendu-hybride-et-session-client.md) | Rendu hybride et session portée par le client | Accepted | 2026-08-05 |
+| [013](013-rendu-markdown-sur-par-construction.md) | Rendu Markdown sûr par construction, sans assainissement à appeler | Accepted | 2026-08-05 |
+| [014](014-conformite-au-contrat-de-selecteurs-e2e.md) | Conformité au contrat de sélecteurs E2E : jeton seul persisté, session réhydratée par l'API | Accepted | 2026-08-05 |
+| [015](015-prefetch-serveur-et-hydratation-des-listes.md) | Listes publiques : préchargement serveur et hydratation du cache client | Accepted | 2026-08-05 |
+| [016](016-suite-de-conformite-vendoree.md) | Suite de conformité RealWorld vendorée, avec contrôle de dérive | Accepted | 2026-08-05 |
+| [017](017-messages-du-contrat-dans-shared.md) | Les messages d'erreur du contrat vivent dans `packages/shared` | Accepted (amende 004) | 2026-08-05 |
+| [018](018-conformite-e2e-suite-officielle-vendoree.md) | Conformité e2e du front : suite Playwright officielle vendorée, en rapport avant d'être un gate | Accepted (étend 016) | 2026-08-06 |
 
 ## Écrire un ADR
 

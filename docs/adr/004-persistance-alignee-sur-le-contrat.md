@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted — 2026-08-04, élargi le 2026-08-05 à `User.bio`. Amende [002 — Modèle de données Prisma](002-modele-donnees-prisma.md) sur `Comment.id` et `User.bio` ; les autres décisions de l'ADR 002 restent valides.
+Accepted — 2026-08-04, élargi le 2026-08-05 à `User.bio`. Amende [002 — Modèle de données Prisma](002-modele-donnees-prisma.md) sur `Comment.id` et `User.bio` ; les autres décisions de l'ADR 002 restent valides. Amendé par [017 — Les messages d'erreur du contrat vivent dans `packages/shared`](017-messages-du-contrat-dans-shared.md), qui déplace la normalisation d'un champ nullable vide de la persistance vers le contrat partagé.
 
 ## Context
 

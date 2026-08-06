@@ -35,7 +35,7 @@ implementation:
     - packages/shared/src/errors/error-codes.spec.ts
     - packages/shared/src/errors/validation-errors.spec.ts
 related:
-  issues: [2, 3]
+  issues: [4, 5]
   requirements:
     - REQ-USER-001
     - REQ-USER-002

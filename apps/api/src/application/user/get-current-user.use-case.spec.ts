@@ -1,3 +1,4 @@
+import { CONTRACT_MESSAGES } from '@repo/shared'
 import { describe, expect, it } from 'vitest'
 import {
   aUserProps,
@@ -67,7 +68,9 @@ describe('REQ-USER-004 — lecture du compte courant', () => {
       useCase.execute({ userId: '00000000-0000-4000-8000-999999999999' })
     ).rejects.toMatchObject({
       errorCode: 'unauthorized',
-      response: { errors: { authorization: ['is invalid or missing'] } },
+      // Corps identique à celui qu'un jeton forgé reçoit du guard
+      // (REQ-ERROR-002 AC-4) : c'est cette égalité qui ferme l'oracle.
+      response: { errors: { token: [CONTRACT_MESSAGES.tokenInvalid] } },
     })
   })
 })

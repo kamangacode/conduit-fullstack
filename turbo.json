@@ -21,6 +21,14 @@
     },
     "build": {
       "dependsOn": ["^build", "db:generate"],
+      // `NEXT_PUBLIC_API_URL` entre dans la clé de cache parce que Next l'inline
+      // dans le bundle client **à la compilation**. Sans cette déclaration, deux
+      // builds aux URL différentes auraient la même empreinte : la suite e2e,
+      // qui construit le front avec l'URL de son API de test, se verrait
+      // resservir l'artefact du build précédent — celui qui pointe vers le port
+      // de développement. Les 128 tests échoueraient alors sur un diagnostic qui
+      // ne parle pas de conformité (REQ-CONF-002 AC-4).
+      "env": ["NEXT_PUBLIC_API_URL"],
       "outputs": ["dist/**", ".next/**", "!.next/cache/**"]
     },
     "dev": {

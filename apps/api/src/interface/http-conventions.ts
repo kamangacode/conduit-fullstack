@@ -35,7 +35,32 @@ const UNPREFIXED_PATHS = ['health']
  * été écrite d'après l'implémentation plutôt que d'après le contrat. C'est le
  * patron que la rule 12 décrit : un comportement câblé sur un chemin, absent de
  * son frère. Une seule fonction appelée par les deux ferme le trou.
+ *
+ * Le CORS relève du même patron. Sans en-tête `Access-Control-Allow-Origin`, le
+ * navigateur du front (origine distincte) rejette chaque réponse et n'affiche
+ * qu'un « unable to reach the server », alors que l'API a bien répondu — un
+ * symptôme qu'aucun test supertest ne révèle, car supertest n'applique pas la
+ * politique CORS. Poser l'autorisation ici, dans la fonction partagée, la rend
+ * présente au démarrage réel ; l'origine par défaut (`http://localhost:3000`)
+ * sert les tests, une origine explicite sert la production (voir `env.CORS_ORIGIN`).
  */
-export function applyHttpConventions(app: INestApplication): void {
+
+/** Origine de dev par défaut quand aucune n'est fournie (tests, oubli de config). */
+/** Exportée pour que les tests asserttent la valeur réelle du repli, pas une copie. */
+export const DEFAULT_CORS_ORIGIN = 'http://localhost:3000'
+
+/** Options des conventions HTTP. */
+export interface HttpConventionsOptions {
+  /** Origine(s) autorisée(s) pour les requêtes cross-origin (CORS). */
+  readonly corsOrigin?: string | string[]
+}
+
+export function applyHttpConventions(
+  app: INestApplication,
+  options: HttpConventionsOptions = {}
+): void {
   app.setGlobalPrefix(API_PREFIX, { exclude: UNPREFIXED_PATHS })
+  app.enableCors({
+    origin: options.corsOrigin ?? DEFAULT_CORS_ORIGIN,
+  })
 }

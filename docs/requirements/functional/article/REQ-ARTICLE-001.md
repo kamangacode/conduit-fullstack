@@ -37,7 +37,7 @@ implementation:
   tests:
     - packages/shared/src/model/article.spec.ts
 related:
-  issues: [2]
+  issues: [4]
   requirements:
     - REQ-ARTICLE-002
     - REQ-PROFILE-001

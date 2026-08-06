@@ -117,3 +117,27 @@ pre-push:
       # Vérifie en local que le verrou hard-fail Biome est toujours actif
       # (~5s). Empêche un push qui aurait silencieusement dégradé biome.json.
       run: bash scripts/verify-biome-hardfail.sh
+
+    verify-type-boundary:
+      # Casse volontairement le modèle partagé et vérifie que les DEUX
+      # applications refusent de compiler (REQ-ARCH-001). C'est la thèse du
+      # dépôt : la cohérence front/back est une dépendance de compilation, pas
+      # une intention. Une thèse qu'on n'éprouve pas devient fausse en silence
+      # le jour où quelqu'un recopie un type au lieu de l'importer.
+      #
+      # Le script restaure le modèle **et reconstruit `shared`** par trap, y
+      # compris en cas d'échec : les applications consomment le paquet compilé,
+      # et le laisser cassé rendrait le dépôt inutilisable sans que `git status`
+      # ne montre quoi que ce soit.
+      #
+      # `glob` restreint la tâche aux workspaces qu'elle peut prouver, comme le
+      # filtre `code` de `detect-changes` le fait en CI. Sans lui, le local
+      # était plus large que le distant — un push qui ne touche qu'un ADR payait
+      # une vérification qui n'avait rien à vérifier, et l'en-tête de `ci.yml`
+      # revendique pourtant que la CI est le miroir des garde-fous locaux.
+      glob:
+        - 'packages/shared/**'
+        - 'apps/api/**'
+        - 'apps/web/**'
+        - 'scripts/verify-type-boundary.sh'
+      run: bash scripts/verify-type-boundary.sh

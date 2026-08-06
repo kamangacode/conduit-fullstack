@@ -55,6 +55,30 @@ const envSchema = z.object({
     .string()
     .regex(/^\d+[smhd]$/, 'doit être une durée du type 7d, 24h ou 3600s')
     .default('7d'),
+
+  /**
+   * Origine(s) autorisée(s) pour les requêtes cross-origin du navigateur (CORS).
+   *
+   * Le front (`apps/web`) tourne sur une origine distincte de l'API : sans cette
+   * autorisation, le navigateur bloque chaque `fetch` avant même d'exploiter la
+   * réponse, et le front n'a d'autre symptôme qu'un « unable to reach the
+   * server » — le serveur répond pourtant (201), c'est le navigateur qui rejette
+   * la réponse faute d'en-tête `Access-Control-Allow-Origin`. Défaut : l'origine
+   * de dev. Ce défaut n'a aucune conséquence de sécurité : une origine trop
+   * restrictive bloque, elle ne divulgue rien ; la production doit la poser.
+   *
+   * Format : une ou plusieurs origines séparées par des virgules
+   * (`https://app.example.com,https://admin.example.com`).
+   */
+  CORS_ORIGIN: z
+    .string()
+    .default('http://localhost:3000')
+    .transform((value) =>
+      value
+        .split(',')
+        .map((origin) => origin.trim())
+        .filter((origin) => origin.length > 0)
+    ),
 })
 
 export type Env = z.infer<typeof envSchema>

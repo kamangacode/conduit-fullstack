@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { requiredText } from './contract-fields'
 import { paginationQuerySchema } from './pagination'
 import { profileSchema } from './profile'
 import { tagSchema } from './tag'
@@ -76,9 +77,9 @@ export type ArticlesResponse = z.infer<typeof articlesResponseSchema>
  * s'obtient par `z.input<typeof createArticleDtoSchema>`.
  */
 export const createArticleDtoSchema = z.object({
-  title: z.string().trim().min(1),
-  description: z.string().trim().min(1),
-  body: z.string().trim().min(1),
+  title: requiredText(),
+  description: requiredText(),
+  body: requiredText(),
   tagList: z.array(tagSchema).default([]),
 })
 
@@ -94,9 +95,9 @@ export type CreateArticleRequest = z.infer<typeof createArticleRequestSchema>
  * travail de l'API, pas de ce schéma.
  */
 export const updateArticleDtoSchema = z.object({
-  title: z.string().trim().min(1).optional(),
-  description: z.string().trim().min(1).optional(),
-  body: z.string().trim().min(1).optional(),
+  title: requiredText().optional(),
+  description: requiredText().optional(),
+  body: requiredText().optional(),
   tagList: z.array(tagSchema).optional(),
 })
 
@@ -113,8 +114,8 @@ export type UpdateArticleRequest = z.infer<typeof updateArticleRequestSchema>
  */
 export const listArticlesQuerySchema = paginationQuerySchema.extend({
   tag: tagSchema.optional(),
-  author: z.string().trim().min(1).optional(),
-  favorited: z.string().trim().min(1).optional(),
+  author: requiredText().optional(),
+  favorited: requiredText().optional(),
 })
 
 export type ListArticlesQuery = z.infer<typeof listArticlesQuerySchema>

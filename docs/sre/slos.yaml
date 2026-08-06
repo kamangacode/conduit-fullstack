@@ -1,0 +1,35 @@
+# Objectifs de niveau de service (SLO) — versionnés dans le dépôt.
+#
+# Un SLO est un objectif interne mesurable sur un indicateur (SLI). Il rend la
+# fiabilité arbitrable : l'error budget qu'il définit se dépense consciemment, en
+# nouvelles features ou en travail de fiabilité.
+#
+# Statut : cible de référence pour la vitrine. Le câblage vers un backend de métriques
+# (Prometheus / OpenTelemetry) est prévu avec l'observabilité (item C6) ; ce fichier
+# est la source de vérité des objectifs, pas leur mesure.
+
+service: conduit-api
+
+slos:
+  - name: availability
+    description: "Proportion de requêtes qui ne retournent pas une erreur serveur (5xx)."
+    sli:
+      metric: http_requests_total
+      good_filter: 'status_code !~ "5.."'
+    target: 99.9%          # ≈ 43 min d'indisponibilité autorisée / 30 jours
+    window: 30d
+
+  - name: latency-p99
+    description: "99e percentile de la latence de réponse sous 500 ms."
+    sli:
+      metric: http_request_duration_seconds
+      percentile: 99
+      threshold_ms: 500
+    target: 99.5%
+    window: 30d
+
+# Error budget (availability) :
+#   30 j × 24 h × 60 min × (1 − 0.999) = 43,2 minutes / mois.
+# Politique : si le budget est épuisé, gel des déploiements non correctifs jusqu'à
+# la fin de la fenêtre ou la résorption de la cause. Les seuils d'alerte (burn rate)
+# suivront la mise en place des métriques.

@@ -128,8 +128,11 @@
       "!**/*.css",
       "!**/playwright-report",
       "!**/test-results",
+      "!apps/web/conformance",
       "!**/prisma/migrations",
-      "!**/generated"
+      "!**/generated",
+      "!apps/web/public/default-avatar.svg"
     ]
-  }
+  },
+  "vcs": { "enabled": true, "clientKind": "git", "useIgnoreFile": true }
 }

@@ -33,7 +33,7 @@ implementation:
     - apps/api/src/application/profile/get-profile.use-case.spec.ts
     - apps/api/test/integration/auth-http.integration.spec.ts
 related:
-  issues: [3]
+  issues: [5]
   requirements:
     - REQ-PROFILE-001
     - REQ-PROFILE-003

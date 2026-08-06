@@ -44,7 +44,7 @@ implementation:
     - apps/api/test/integration/auth-persistence.integration.spec.ts
     - apps/api/test/integration/auth-http.integration.spec.ts
 related:
-  issues: [3]
+  issues: [5]
   requirements:
     - REQ-PROFILE-001
     - REQ-PROFILE-002
