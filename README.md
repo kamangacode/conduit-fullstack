@@ -34,6 +34,7 @@ lance et on tient un projet full-stack de A à Z*.
     - [Versioning et release](#versioning-et-release)
     - [Décisions d'architecture (ADR)](#décisions-darchitecture-adr)
     - [Processus de review](#processus-de-review)
+    - [Déploiement et hébergement](#déploiement-et-hébergement)
 - [La boîte à outils](#la-boîte-à-outils)
 - [Démarrage rapide](#démarrage-rapide)
 - [Commandes](#commandes)
@@ -376,6 +377,21 @@ Dans ce repo :
 - La propriété du code est déclarée dans [`.github/CODEOWNERS`](.github/CODEOWNERS), et les portes locales (`pnpm lint`, `typecheck`, `test`) rejouent celles de la CI avant même la review. ✅
 
 À lire : [La revue de code, guide et exemples](https://www.kamanga.fr/fr/dette-technique/revue-de-code-java-guide-exemples).
+
+### Déploiement et hébergement
+
+Le principe : la configuration de production vient de la **plateforme**, jamais du dépôt,
+et on ne déploie que sur une CI verte. Aujourd'hui l'environnement local est containerisé
+et reproductible ; la cible de production est câblée par phases.
+
+Dans ce repo :
+
+- **Local reproductible** : [`docker-compose.yml`](docker-compose.yml) fournit Postgres, Adminer (inspection de la base) et Mailpit (capture des emails de dev). La base de test E2E est un conteneur dédié en `tmpfs`, données en mémoire et vierges à chaque run, isolé de la base de développement. ✅
+- **Migrations idempotentes** : `pnpm --filter @repo/api db:migrate:deploy` applique les migrations en attente sans recréer la base, la commande destinée à tourner avant le démarrage de l'API en production. ✅
+- **Secrets hors dépôt** : aucune valeur de production dans le repo. [`.env.example`](.env.example) documente les variables attendues, pas leurs valeurs ; en production elles viennent de la plateforme. ✅
+- **Cible de production** : `apps/api` sur Railway, `apps/web` sur Vercel, déploiement déclenché sur CI verte, `main` alimenté uniquement par promotion. Le câblage (Dockerfile, config plateforme, workflows de déploiement) reste à poser. 🚧
+
+À lire : [Le Référentiel Craft](https://www.kamanga.fr/referentiel-craft).
 
 ## La boîte à outils
 
