@@ -1,0 +1,41 @@
+# CODEOWNERS — propriété par zone du dépôt.
+#
+# GitHub demande automatiquement la revue du propriétaire d'une zone dès qu'une
+# PR y touche. Le dernier motif correspondant l'emporte : les règles les plus
+# spécifiques sont donc placées en bas.
+#
+# Format : <motif>  <@propriétaire>
+
+# Propriétaire par défaut (toute zone non couverte ci-dessous)
+*                               @kamangacode
+
+# Modèle partagé : cœur du parti pris (une source de vérité front/back).
+# Tout changement ici casse potentiellement les deux applications à la compilation.
+/packages/shared/               @kamangacode
+
+# Backend hexagonal : le domaine doit rester pur (frontières gardées par dependency-cruiser).
+/apps/api/src/domain/           @kamangacode
+/apps/api/src/                  @kamangacode
+
+# Persistance : toute modification exige une migration versionnée.
+/apps/api/prisma/               @kamangacode
+
+# Sécurité : hachage, jetons, garde d'authentification, validation d'environnement.
+/apps/api/src/infrastructure/security/  @kamangacode
+/apps/api/src/interface/auth/           @kamangacode
+/apps/api/src/config/                   @kamangacode
+
+# Frontend RealWorld.
+/apps/web/                      @kamangacode
+
+# Chaîne d'outillage et CI/CD : verrous de qualité, validés avec soin.
+/.github/                       @kamangacode
+/biome.json                     @kamangacode
+/lefthook.yml                   @kamangacode
+/turbo.json                     @kamangacode
+/.dependency-cruiser.cjs        @kamangacode
+/knip.json                      @kamangacode
+
+# Référentiels versionnés : décisions, exigences, documentation.
+/docs/adr/                      @kamangacode
+/docs/requirements/             @kamangacode
