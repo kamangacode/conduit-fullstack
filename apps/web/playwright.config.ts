@@ -39,6 +39,49 @@ const webPort = process.env.E2E_WEB_PORT ?? '3100'
 const mockedApiHost = process.env.E2E_MOCKED_API_HOST ?? 'api.realworld.show'
 const tlsPort = process.env.E2E_TLS_PORT ?? '3102'
 
+/**
+ * Empreinte SHA-256 du SPKI du certificat jetable de ce run, en base64
+ * (REQ-CONF-002 AC-8). Posée par `test-e2e.sh`, qui génère le certificat.
+ *
+ * Elle existe parce que `use.ignoreHTTPSErrors` ne couvre pas tout : les options
+ * du bloc `use` sont appliquées par la fixture `_contextFactory` de Playwright,
+ * donc aux seuls contextes que **la config** fabrique. Quatre tests de la suite
+ * vendorée appellent `browser.newContext()` eux-mêmes (`comments.spec.ts:102`,
+ * `articles.spec.ts:292`, `social.spec.ts:74/165`) : leur contexte naît sans
+ * aucune de ces options, donc sans tolérance au certificat.
+ *
+ * L'effet était un faux **négatif**, le pire des deux. Depuis l'ADR 020, la page
+ * article charge son contenu depuis le navigateur : sur ces contextes, tous ses
+ * appels finissaient en erreur de certificat, la page rendait son mode
+ * « indisponible », et l'assertion passait **parce que** rien n'avait chargé.
+ * Un vert qui ne prouvait rien.
+ *
+ * Les `launchOptions`, elles, sont portées par le **navigateur** : tout contexte
+ * en hérite, y compris ceux qu'un test fabrique. On y épingle donc la clé
+ * publique de ce certificat-ci, et non `--ignore-certificate-errors` qui
+ * accepterait n'importe lequel. Le run reste hors ligne par
+ * `--host-resolver-rules` dans les deux cas ; dire *ce* certificat plutôt que
+ * *n'importe lequel* coûte une commande `openssl` et une variable.
+ */
+const tlsSpki = process.env.E2E_TLS_SPKI
+
+/**
+ * Arguments passés au navigateur.
+ *
+ * La règle de résolution est ce qui garde le run **hors ligne** : sans elle, les
+ * requêtes qu'aucun `page.route()` n'intercepte partiraient vers la vraie démo
+ * publique, et la suite éprouverait le front de ce dépôt contre les données de
+ * quelqu'un d'autre — en les modifiant.
+ *
+ * L'épinglage n'est ajouté que s'il est fourni : lancé hors de `test-e2e.sh`, le
+ * navigateur n'a aucun certificat jetable à accepter, et un drapeau portant une
+ * empreinte vide n'épinglerait rien tout en ayant l'air de le faire.
+ */
+const browserArgs = [`--host-resolver-rules=MAP ${mockedApiHost} 127.0.0.1:${tlsPort}`]
+if (tlsSpki) {
+  browserArgs.push(`--ignore-certificate-errors-spki-list=${tlsSpki}`)
+}
+
 export default defineConfig({
   ...baseConfig,
 
@@ -56,15 +99,13 @@ export default defineConfig({
     // d'accepter un certificat qu'il est le seul à voir, et qui n'existe que le
     // temps du run. Sans elle, chaque appel du front finirait en erreur TLS —
     // un échec qui ne parlerait pas de conformité.
+    //
+    // Elle reste, et l'épinglage `launchOptions` ne la remplace pas : elle
+    // couvre le cas où `E2E_TLS_SPKI` n'est pas fourni, et les deux portées sont
+    // distinctes (contextes de la fixture ici, navigateur entier là).
     ignoreHTTPSErrors: true,
 
-    launchOptions: {
-      // La règle de résolution est ce qui garde le run **hors ligne** : sans
-      // elle, les requêtes non interceptées par un `page.route()` partiraient
-      // vers la vraie démo publique, et la suite éprouverait le front de ce
-      // dépôt contre les données de quelqu'un d'autre — en les modifiant.
-      args: [`--host-resolver-rules=MAP ${mockedApiHost} 127.0.0.1:${tlsPort}`],
-    },
+    launchOptions: { args: browserArgs },
   },
 
   // `list` pour que l'échec soit lisible dans les logs d'un job de CI sans

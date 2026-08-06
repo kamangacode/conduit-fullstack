@@ -25,10 +25,18 @@ import { useSession } from '../lib/session'
  *    contraire de la réalité.
  *
  * Le **libellé** dépend de l'endroit, et le contrat le décrit ainsi : la liste
- * n'affiche que le cœur et le compteur, la page article ajoute
- * « Favorite Article » et met le compteur entre parenthèses. C'est la seule
- * différence entre les deux usages, d'où une variante plutôt que deux
- * composants.
+ * n'affiche que le cœur et le compteur, la page article ajoute un libellé et met
+ * le compteur entre parenthèses. C'est la seule différence entre les deux
+ * usages, d'où une variante plutôt que deux composants.
+ *
+ * Sur la page article, ce libellé **suit l'état** — « Favorite Article » tant
+ * que l'article ne l'est pas, « Unfavorite Article » dès qu'il l'est
+ * (REQ-WEB-012 AC-10 à AC-12). Ce fichier a affirmé l'inverse, au motif que le
+ * gabarit RealWorld ne changerait que la classe : le gabarit ne montre que
+ * l'état non favorisé, il ne pouvait donc ni confirmer ni infirmer, et c'est le
+ * contrat de sélecteurs qui tranche — il liste `Favorite` / `Unfavorite` comme
+ * texte de bouton sur cette page. Le libellé figé rendait le bouton introuvable
+ * **après** le premier clic pour qui cherche « Unfavorite ».
  */
 
 export interface FavoriteButtonProps {
@@ -37,7 +45,7 @@ export interface FavoriteButtonProps {
   readonly favoritesCount: number
   /**
    * `compact` en liste (cœur + compteur), `labelled` sur la page article
-   * (libellé du contrat + compteur entre parenthèses).
+   * (libellé du contrat, fonction de l'état, + compteur entre parenthèses).
    */
   readonly variant?: 'compact' | 'labelled'
   onToggled(next: { favorited: boolean; favoritesCount: number }): void
@@ -96,12 +104,13 @@ export function FavoriteButton({
         </>
       ) : (
         <>
-          {/* Le libellé est celui du contrat de sélecteurs, y compris quand
-              l'article est déjà favorisé : le gabarit RealWorld ne change que
-              la classe du bouton, pas son texte. Le basculer en « Unfavorite »
-              rendrait le bouton introuvable pour la suite après un premier
-              clic. */}
-          <i className="ion-heart" /> Favorite Article{' '}
+          {/* Le libellé vient du contrat de sélecteurs et **suit l'état**, comme
+              la classe : `Favorite Article` non favorisé, `Unfavorite Article`
+              favorisé. Il se lit donc dans les deux sens — le bouton reste
+              trouvable pour qui cherche « Favorite » comme pour qui cherche
+              « Unfavorite », et c'est la classe qui désambiguïse, le second
+              contenant le premier en sous-chaîne. */}
+          <i className="ion-heart" /> {favorited ? 'Unfavorite' : 'Favorite'} Article{' '}
           <span className="counter">({favoritesCount})</span>
         </>
       )}

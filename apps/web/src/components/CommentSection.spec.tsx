@@ -6,8 +6,13 @@ import { ApiError } from '../lib/api-client'
 import { CONNECTION_FAILURE_MESSAGE } from '../lib/errors'
 import { SessionProvider, TOKEN_STORAGE_KEY } from '../lib/session'
 import { CommentSection } from './CommentSection'
+import { Navbar } from './Navbar'
 
 /** Tests écrits depuis les critères de REQ-WEB-013, avant l'implémentation. */
+
+// La barre de navigation est montée par un seul test — celui qui compte les
+// liens de connexion de la page (AC-8) — et elle lit le chemin courant.
+vi.mock('next/navigation', () => ({ usePathname: () => '/article/how-to-train-your-dragon' }))
 
 const addComment = vi.hoisted(() => vi.fn())
 const deleteComment = vi.hoisted(() => vi.fn())
@@ -76,12 +81,18 @@ describe('REQ-WEB-013 — commentaires', () => {
     expect(postedComments(container)).toHaveLength(1)
   })
 
-  it('AC-2: propose la connexion à un anonyme, sans formulaire', () => {
-    renderSection()
+  it('AC-2: indique à l’anonyme que la connexion est requise, sans formulaire', () => {
+    const { container } = renderSection()
 
     expect(screen.queryByRole('button', { name: 'Post Comment' })).not.toBeInTheDocument()
-    expect(screen.getByRole('link', { name: 'Sign in' })).toHaveAttribute('href', '/login')
-    expect(screen.getByRole('link', { name: 'sign up' })).toHaveAttribute('href', '/register')
+    expect(screen.queryByPlaceholderText('Write a comment...')).not.toBeInTheDocument()
+    expect(screen.getByText(/Sign in or sign up to add comments/)).toBeInTheDocument()
+    // Le message explique l'absence de formulaire ; il ne **duplique** pas les
+    // liens d'authentification que la barre porte déjà. C'est le geste honnête
+    // pour tenir AC-8 : rendre le doublon en `<button>` ferait disparaître le
+    // match du contrat sans rien changer au comportement.
+    expect(container.querySelector('a[href="/login"]')).toBeNull()
+    expect(container.querySelector('a[href="/register"]')).toBeNull()
   })
 
   it('AC-3: ajoute le commentaire renvoyé par l’API et vide le champ', async () => {
@@ -157,6 +168,44 @@ describe('REQ-WEB-013 — commentaires', () => {
 
     await waitFor(() => expect(screen.getByText(CONNECTION_FAILURE_MESSAGE)).toBeInTheDocument())
     expect(postedComments(container)).toHaveLength(1)
+  })
+})
+
+describe('REQ-WEB-013 AC-8 — un seul lien de connexion sur la page d’un anonyme', () => {
+  /**
+   * La barre **et** la section, comme sur la page réelle.
+   *
+   * Le contrat de sélecteurs traite `a[href="/login"]` comme un singleton de
+   * page : ses assertions de visibilité sont strictes, donc un locator qui
+   * résout deux éléments lève au lieu de réussir sur le premier. L'invariant est
+   * une propriété de la **page**, pas de la section — le prouver en montant la
+   * section seule laisserait rentrer la régression par la barre, et
+   * réciproquement.
+   */
+  const renderArticlePageChrome = () =>
+    render(
+      <SessionProvider fetchCurrentUser={async () => jake}>
+        <Navbar />
+        <CommentSection slug="how-to-train-your-dragon" initialComments={[existing]} />
+      </SessionProvider>
+    )
+
+  it('AC-8: expose exactement un `a[href="/login"]`, celui de la barre', async () => {
+    const { container } = renderArticlePageChrome()
+
+    await waitFor(() =>
+      expect(container.querySelector('.navbar a[href="/login"]')).toBeInTheDocument()
+    )
+    expect(container.querySelectorAll('a[href="/login"]')).toHaveLength(1)
+  })
+
+  it('AC-8: ne propose aucun champ de commentaire à l’anonyme', async () => {
+    const { container } = renderArticlePageChrome()
+
+    await waitFor(() =>
+      expect(container.querySelector('.navbar a[href="/login"]')).toBeInTheDocument()
+    )
+    expect(container.querySelector('textarea[placeholder="Write a comment..."]')).toBeNull()
   })
 })
 

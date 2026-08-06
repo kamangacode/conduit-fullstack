@@ -43,18 +43,31 @@ acceptance_criteria:
     given: "un lecteur qui n'est pas l'auteur"
     when: "la page article s'affiche"
     then: "le bouton `Favorite Article` du contrat de sélecteurs lui est proposé avec le compteur, et l'actionner appelle l'API pour cet article"
+  - id: AC-10
+    given: "un lecteur connecté qui n'est pas l'auteur, sur un article qu'il n'a pas favorisé"
+    when: "il actionne le bouton de favori et que l'API répond"
+    then: "le bouton porte la classe `btn-primary` et le libellé `Unfavorite Article`, avec le compteur issu de la réponse"
+  - id: AC-11
+    given: "un article déjà favorisé par le lecteur"
+    when: "la page article est rendue, puis le bouton actionné et l'API répond"
+    then: "le bouton porte `btn-primary` et `Unfavorite Article` avant tout clic, puis repasse à `btn-outline-primary` et `Favorite Article`"
+  - id: AC-12
+    given: "une bascule de favori sur la page article qui échoue"
+    when: "l'API renvoie une erreur"
+    then: "la classe et le libellé restent ceux d'avant le clic — le libellé ne dérive pas de l'état plus que le compteur"
 implementation:
   files:
     - apps/web/src/components/ArticleBody.tsx
     - apps/web/src/components/ArticleMeta.tsx
     - apps/web/src/components/ArticleView.tsx
+    - apps/web/src/components/FavoriteButton.tsx
     - "apps/web/src/app/article/[slug]/page.tsx"
   tests:
     - apps/web/src/components/ArticleBody.spec.tsx
     - apps/web/src/components/ArticleMeta.spec.tsx
     - apps/web/src/components/ArticleView.spec.tsx
 related:
-  issues: [8, 12]
+  issues: [8, 12, 16]
   requirements:
     - REQ-WEB-008
     - REQ-WEB-011
@@ -100,6 +113,22 @@ résultat, une panne n'en est pas un. Les confondre afficherait « cet article
 n'existe pas » pendant une indisponibilité — un message faux, au moment le plus
 coûteux pour le lecteur.
 
+AC-10 à AC-12 ferment un manque qu'AC-9 laissait ouvert sans le vouloir : il
+demandait que le bouton **existe**, pas qu'il **dise l'état**. Le composant
+faisait donc basculer la classe seule et figeait le libellé à
+« Favorite Article », avec un commentaire qui affirmait que le gabarit RealWorld
+ne changeait que la classe. Le gabarit statique ne montre que l'état non
+favorisé : il ne pouvait ni confirmer ni infirmer, et c'est le contrat de
+sélecteurs qui tranche — il liste `Favorite` / `Unfavorite` comme texte de bouton
+sur cette page. Un article favorisé s'annonçait donc « à favoriser ».
+
+Les trois critères se répartissent le travail de façon délibérée : AC-10 couvre
+la transition, AC-11 le **rendu initial** — un libellé qui ne basculerait qu'au
+clic mentirait au rechargement — et AC-12 l'échec. Ce dernier n'est pas une
+redite d'AC-6 de [REQ-WEB-011](REQ-WEB-011.md) : il étend au libellé la règle
+déjà tenue par le compteur, à savoir que **rien** de ce que le bouton affiche ne
+peut dériver d'un état local que l'API n'a pas confirmé.
+
 ## Règles
 
 - Le corps est rendu **côté client**, comme la spec le demande explicitement
@@ -109,7 +138,11 @@ coûteux pour le lecteur.
 - Le markup suit `templates.md` §Article : `.article-page`, `.banner`,
   `.article-content`, `.article-meta`, `.tag-list` (rule 11).
 - Les textes de boutons viennent du contrat de sélecteurs E2E
-  (`Delete Article`, `Edit Article`).
+  (`Delete Article`, `Edit Article`, `Favorite Article` / `Unfavorite Article`).
+- Sur la page article, **classe et libellé disent le même état** et viennent tous
+  deux de la réponse de l'API. Le gabarit statique ne montrant qu'un seul des
+  deux états, c'est `SELECTORS.md` qui fait foi sur ce point, pas
+  `templates.md`.
 
 ## Hors périmètre
 

@@ -43,10 +43,19 @@ export function CommentSection({ slug, initialComments }: CommentSectionProps) {
             onPosted={(comment) => setComments((current) => [comment, ...current])}
           />
         ) : (
-          <p>
-            <Link href="/login">Sign in</Link> or <Link href="/register">sign up</Link> to add
-            comments on this article.
-          </p>
+          // Invite **sans lien** (REQ-WEB-013 AC-2, AC-8). Le contrat de
+          // sélecteurs traite `a[href="/login"]` comme un singleton de page :
+          // toutes ses assertions de visibilité sont strictes et la barre de
+          // navigation porte déjà ce lien, à un endroit stable et testé
+          // ailleurs. Deux affordances pour la même route rendaient donc le
+          // locator ambigu, et la page article était la seule à en porter deux.
+          //
+          // Le geste honnête est de retirer le doublon, pas de le déguiser : un
+          // `<button>` qui navigue vers `/login` ferait disparaître le match
+          // sans rien changer au comportement — c'est réécrire l'assertion par
+          // un autre chemin (ADR 018). La phrase reste, elle explique l'absence
+          // de formulaire ; l'affordance vit dans la barre.
+          <p>Sign in or sign up to add comments on this article.</p>
         )}
 
         {comments.map((comment) => (

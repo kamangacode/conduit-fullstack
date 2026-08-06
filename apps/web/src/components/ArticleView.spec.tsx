@@ -92,8 +92,12 @@ describe('REQ-WEB-012 — page article', () => {
 
     // Session anonyme dans ce test : la section montre alors l'invitation à se
     // connecter plutôt que le formulaire (REQ-WEB-013). C'est bien elle qui est
-    // rendue, et c'est ce que ce critère vérifie ici.
-    await waitFor(() => expect(screen.getByRole('link', { name: 'Sign in' })).toBeInTheDocument())
+    // rendue, et c'est ce que ce critère vérifie ici. L'invite n'est plus un
+    // lien depuis REQ-WEB-013 AC-8 — la barre porte déjà `/login`, et le contrat
+    // de sélecteurs n'en admet qu'un par page.
+    await waitFor(() =>
+      expect(screen.getByText(/Sign in or sign up to add comments/)).toBeInTheDocument()
+    )
   })
 
   it('AC-1: n’affiche l’écran d’attente sous aucune classe que le contrat compte', () => {
