@@ -252,8 +252,14 @@ describe('REQ-WEB-004 — page de paramètres', () => {
     // Sans cela, `staleTime: 30s` sert la copie précédente : renseigner une bio
     // puis l'effacer ramènerait l'utilisateur sur un profil qui affiche encore
     // l'ancienne valeur — un enregistrement qui se lit comme perdu.
+    //
+    // L'ordre se vérifie par les rangs d'appel des deux espions plutôt que par
+    // une seule assertion d'état : `isInvalidated` resterait `true` même si
+    // l'invalidation survenait *après* `push`, donc lire seulement l'état final
+    // ne prouverait pas la séquence que le titre du test annonce.
     window.localStorage.setItem(TOKEN_STORAGE_KEY, jake.token)
     const { queryClient } = renderPage()
+    const invalidate = vi.spyOn(queryClient, 'invalidateQueries')
     queryClient.setQueryData(profileQueryKey('jake-renomme'), {
       username: 'jake-renomme',
       bio: 'valeur précédente',
@@ -265,8 +271,41 @@ describe('REQ-WEB-004 — page de paramètres', () => {
     await userEvent.type(bio, 'I work at statefarm')
     await userEvent.click(screen.getByRole('button', { name: 'Update Settings' }))
 
-    await waitFor(() =>
-      expect(queryClient.getQueryState(profileQueryKey('jake-renomme'))?.isInvalidated).toBe(true)
-    )
+    await waitFor(() => expect(push).toHaveBeenCalledWith('/profile/jake-renomme'))
+    expect(invalidate).toHaveBeenCalled()
+    const lastInvalidateRank = Math.max(...invalidate.mock.invocationCallOrder)
+    // `waitFor` ci-dessus garantit au moins un appel : indexer `[0]` est donc sûr,
+    // mais son type reste `number | undefined` (index signature) — la garde
+    // explicite évite le `!` que la rule 17 interdit.
+    const pushCallRank = push.mock.invocationCallOrder[0]
+    if (pushCallRank === undefined) {
+      throw new Error('push aurait dû être appelé : le waitFor ci-dessus vient de le vérifier')
+    }
+    expect(lastInvalidateRank).toBeLessThan(pushCallRank)
+  })
+
+  it('AC-10: invalide aussi l’ancienne clé de profil quand l’enregistrement renomme le compte', async () => {
+    // Un renommage laisse deux entrées en jeu. La nouvelle (`jake-renomme`) n'a
+    // le plus souvent rien à invalider — sa page n'a jamais été visitée. C'est
+    // l'**ancienne** (`jake`) qui présente le vrai risque : l'utilisateur
+    // venait par exemple de son propre profil, elle est donc déjà en cache et
+    // encore fraîche. Ne cibler que la nouvelle laisserait cette entrée servir
+    // la bio d'avant l'enregistrement à quiconque y reviendrait pendant les 30
+    // secondes de `staleTime`.
+    window.localStorage.setItem(TOKEN_STORAGE_KEY, jake.token)
+    const { queryClient } = renderPage()
+    queryClient.setQueryData(profileQueryKey('jake'), {
+      username: 'jake',
+      bio: 'valeur précédente',
+      image: null,
+      following: false,
+    })
+    const bio = await screen.findByPlaceholderText('Short bio about you')
+
+    await userEvent.type(bio, 'I work at statefarm')
+    await userEvent.click(screen.getByRole('button', { name: 'Update Settings' }))
+
+    await waitFor(() => expect(push).toHaveBeenCalledWith('/profile/jake-renomme'))
+    expect(queryClient.getQueryState(profileQueryKey('jake'))?.isInvalidated).toBe(true)
   })
 })

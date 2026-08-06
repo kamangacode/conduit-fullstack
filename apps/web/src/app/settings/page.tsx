@@ -65,7 +65,7 @@ export default function SettingsPage() {
   }
 
   const save = (changes: UpdateUserDto) =>
-    applyChanges(changes, { api, signIn, queryClient, router })
+    applyChanges(changes, { api, signIn, queryClient, router, previousUsername: account.username })
 
   function logout() {
     signOut()
@@ -81,6 +81,12 @@ interface SaveDeps {
   signIn(user: User): void
   readonly queryClient: QueryClient
   readonly router: { push(href: string): void }
+  /**
+   * Username **avant** l'enregistrement — capturé par la page, qui seule le
+   * connaît. Sans lui, `applyChanges` ne peut invalider que la clé du nouveau
+   * username (AC-10 côté "bio changée sans renommage"), pas celle de l'ancien.
+   */
+  readonly previousUsername: string
 }
 
 /**
@@ -109,7 +115,18 @@ async function applyChanges(changes: UpdateUserDto, deps: SaveDeps): Promise<voi
   // renseigner une bio, puis l'effacer — arriverait sur son profil et y lirait
   // la valeur précédente : une entrée encore fraîche est servie sans requête.
   // Le symptôme se lit comme un enregistrement perdu.
-  await deps.queryClient.invalidateQueries({ queryKey: profileQueryKey(updated.username) })
+  //
+  // Un renommage invalide **deux** clés, pas une seule. La nouvelle
+  // (`updated.username`) n'a le plus souvent aucune entrée à invalider — sa
+  // page n'a jamais été visitée — donc ce n'est pas elle qui présente le
+  // risque. C'est l'**ancienne** (`deps.previousUsername`) qui peut porter une
+  // entrée encore fraîche (l'utilisateur venait par exemple de son propre
+  // profil) : la laisser en cache y afficherait la bio d'avant l'enregistrement
+  // tant que `staleTime` court, sur une URL que le compte renommé a quittée.
+  await Promise.all([
+    deps.queryClient.invalidateQueries({ queryKey: profileQueryKey(deps.previousUsername) }),
+    deps.queryClient.invalidateQueries({ queryKey: profileQueryKey(updated.username) }),
+  ])
 
   // Le username **de la réponse**, jamais celui de l'état initial : celui qui
   // vient de se renommer serait envoyé vers une page qui n'existe plus.

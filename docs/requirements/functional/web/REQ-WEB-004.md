@@ -44,9 +44,9 @@ acceptance_criteria:
     when: "la réponse arrive"
     then: "aucune navigation n'a lieu : le formulaire reste affiché avec sa saisie et son message"
   - id: AC-10
-    given: "un profil déjà présent dans le cache de requêtes"
+    given: "le profil visé (ancien ou nouveau username selon qu'il y a renommage) déjà consulté juste avant l'enregistrement"
     when: "l'enregistrement réussit"
-    then: "l'entrée de cache de ce profil est invalidée, de sorte que la page de profil affiche les valeurs enregistrées et non la copie précédente"
+    then: "la page de profil affichée ensuite montre les valeurs tout juste enregistrées, jamais la copie lue avant l'enregistrement"
 implementation:
   files:
     - apps/web/src/components/SettingsForm.tsx
@@ -109,7 +109,11 @@ TanStack Query avec un `staleTime` de trente secondes
 sans invalidation, l'utilisateur qui enregistre deux fois de suite — renseigner
 une bio, puis l'effacer — arrive sur son profil et y lit encore la valeur
 précédente. Le symptôme se lit comme un enregistrement perdu, alors que l'API a
-bien reçu la mise à jour.
+bien reçu la mise à jour. Un renommage double le risque plutôt que de le
+déplacer : l'entrée à invalider n'est pas seulement celle du nouveau username
+(souvent absente du cache, une page jamais visitée), mais aussi celle de
+l'ancien — la plus susceptible d'être encore fraîche, l'utilisateur venant
+justement de son propre profil.
 
 ## Règles
 
