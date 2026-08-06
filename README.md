@@ -29,6 +29,11 @@ lance et on tient un projet full-stack de A à Z*.
     - [Requirements as code](#requirements-as-code)
     - [Sécurité by design](#sécurité-by-design)
     - [Documentation as code](#documentation-as-code)
+- [Livraison et collaboration](#livraison-et-collaboration)
+    - [Conventions de commit](#conventions-de-commit)
+    - [Versioning et release](#versioning-et-release)
+    - [Décisions d'architecture (ADR)](#décisions-darchitecture-adr)
+    - [Processus de review](#processus-de-review)
 - [La boîte à outils](#la-boîte-à-outils)
 - [Démarrage rapide](#démarrage-rapide)
 - [Commandes](#commandes)
@@ -309,6 +314,68 @@ Dans ce repo :
 - Règle simple : toute PR se pose la question « la documentation est-elle à jour ? », et un changement d'architecture crée son ADR avant la PR.
 
 À lire : [L'Architecture Decision Record](https://www.kamanga.fr/fr/architecture-craft/adr-architecture-decision-record).
+
+## Livraison et collaboration
+
+Un projet se juge aussi à la façon dont le travail entre dans la base : comment on commite,
+comment on versionne, comment on tranche une décision, comment on relit. Voici les
+conventions posées ici, et leur état d'automatisation (✅ en place, 🚧 à venir).
+
+### Conventions de commit
+
+Le principe : un historique lisible et exploitable par une machine. Chaque commit suit
+**[Conventional Commits](https://www.conventionalcommits.org/)** (`feat`, `fix`, `docs`,
+`refactor`, `test`, `chore`, `ci`), scope encouragé (`feat(api): …`), message à
+l'impératif qui explique le **pourquoi** quand il n'est pas évident.
+
+Dans ce repo :
+
+- La convention est documentée et attendue de toute contribution ([`CONTRIBUTING.md`](CONTRIBUTING.md), section « Commits & pull requests »). ✅
+- Une branche par sujet, toujours depuis `staging`, jamais depuis `main`. ✅
+- L'automatisation du format (commitlint en `commit-msg`, validation du titre de PR) est prévue dans une phase ultérieure. 🚧
+
+À lire : [Le Référentiel Craft](https://www.kamanga.fr/referentiel-craft).
+
+### Versioning et release
+
+Le principe : ne pas tagguer les versions à la main. Le **SemVer** se dérive des commits
+conventionnels, et la production n'est jamais poussée en direct.
+
+Dans ce repo :
+
+- Le flux de livraison est `branche de feature → staging → main`, `main` n'étant alimenté que par une **promotion** explicite depuis `staging`. ✅
+- La promotion se merge en **merge commit, jamais en squash** : un squash aplatirait les commits conventionnels et ferait sauter le calcul de version. ✅ (règle de discipline)
+- La dérivation automatique du numéro de version et du changelog (type release-please) est prévue mais pas encore branchée : le repo est en `0.0.0`. 🚧
+
+À lire : [Le Référentiel Craft](https://www.kamanga.fr/referentiel-craft).
+
+### Décisions d'architecture (ADR)
+
+Le principe : toute décision technique significative (choix de lib, pattern, modèle de
+données, stratégie de déploiement) est tracée dans un **ADR** versionné. Un ADR est
+immuable : on ne l'efface pas, on le supersède.
+
+Dans ce repo :
+
+- Format et cycle imposés : un numéro séquentiel, un slug, et les sections `Status` / `Context` / `Options Considered` / `Decision` / `Consequences`, depuis [`docs/adr/000-template.md`](docs/adr/000-template.md). ✅
+- Gate automatique : [`scripts/check-adr-index.sh`](scripts/check-adr-index.sh) (via `pnpm adr:check`, en pre-commit et dans le job CI `Convention ADR`) refuse une collision de numéro, une section manquante, un statut invalide ou un index désynchronisé. ✅
+- L'[index des ADR](docs/adr/README.md) porte la liste fermée des statuts. Les décisions existantes sont listées plus bas dans [Décisions d'architecture](#décisions-darchitecture).
+
+À lire : [L'Architecture Decision Record](https://www.kamanga.fr/fr/architecture-craft/adr-architecture-decision-record).
+
+### Processus de review
+
+Le principe : une review sert à trouver les bugs, gagner en lisibilité et partager la
+connaissance, pas à chasser le style (le linter s'en charge). Le vocabulaire est explicite
+pour distinguer ce qui bloque de ce qui suggère.
+
+Dans ce repo :
+
+- Les commentaires suivent les **[Conventional Comments](https://conventionalcomments.org/)** : `issue:` (bloquant), `suggestion:`, `question:`, `nit:`, `praise:`. ✅
+- Une PR = un sujet cohérent, ciblant `staging`, avec le [gabarit de PR](.github/PULL_REQUEST_TEMPLATE.md) rempli (contexte, changements, comment tester). ✅
+- La propriété du code est déclarée dans [`.github/CODEOWNERS`](.github/CODEOWNERS), et les portes locales (`pnpm lint`, `typecheck`, `test`) rejouent celles de la CI avant même la review. ✅
+
+À lire : [La revue de code, guide et exemples](https://www.kamanga.fr/fr/dette-technique/revue-de-code-java-guide-exemples).
 
 ## La boîte à outils
 
