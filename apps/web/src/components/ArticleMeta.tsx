@@ -1,14 +1,17 @@
 'use client'
 
 import type { Article } from '@repo/shared'
+import { useQueryClient } from '@tanstack/react-query'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useState } from 'react'
 import { useApi } from '../lib/api-provider'
 import { avatarUrl } from '../lib/avatar'
+import { articleQueryKey } from '../lib/content-query'
 import { formatDate } from '../lib/format-date'
 import { useSession } from '../lib/session'
 import { ErrorMessages } from './ErrorMessages'
+import { FavoriteButton } from './FavoriteButton'
 import { FollowButton } from './FollowButton'
 
 /**
@@ -34,6 +37,7 @@ export interface ArticleMetaProps {
 
 export function ArticleMeta({ article }: ArticleMetaProps) {
   const { user } = useSession()
+  const queryClient = useQueryClient()
   const isAuthor = user?.username === article.author.username
 
   return (
@@ -53,8 +57,29 @@ export function ArticleMeta({ article }: ArticleMetaProps) {
         <AuthorActions slug={article.slug} />
       ) : (
         // Suivre l'auteur et favoriser l'article : deux gestes relatifs au
-        // lecteur, sans objet sur son propre article.
-        <FollowButton profile={article.author} />
+        // lecteur, sans objet sur son propre article. Le second manquait — le
+        // gabarit RealWorld et le contrat de sélecteurs l'attendent tous deux
+        // sur cette page, et aucun de nos tests ne le réclamait.
+        <>
+          <FollowButton profile={article.author} />{' '}
+          <FavoriteButton
+            slug={article.slug}
+            favorited={article.favorited}
+            favoritesCount={article.favoritesCount}
+            variant="labelled"
+            onToggled={(next) => {
+              // La réponse de l'API est écrite dans le **cache partagé**, pas
+              // dans un état local : la méta est rendue deux fois sur la page
+              // (bandeau et bas d'article), et un état local ne mettrait à jour
+              // que celle sur laquelle on a cliqué — l'autre afficherait un
+              // compteur périmé jusqu'au rechargement.
+              queryClient.setQueryData(articleQueryKey(article.slug), {
+                ...article,
+                ...next,
+              })
+            }}
+          />
+        </>
       )}
     </div>
   )

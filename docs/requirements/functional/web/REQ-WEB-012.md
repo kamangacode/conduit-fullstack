@@ -39,6 +39,10 @@ acceptance_criteria:
     given: "une panne de l'API autre qu'un article absent"
     when: "la page est demandée"
     then: "elle est annoncée comme une indisponibilité, jamais déguisée en article introuvable"
+  - id: AC-9
+    given: "un lecteur qui n'est pas l'auteur"
+    when: "la page article s'affiche"
+    then: "le bouton `Favorite Article` du contrat de sélecteurs lui est proposé avec le compteur, et l'actionner appelle l'API pour cet article"
 implementation:
   files:
     - apps/web/src/components/ArticleBody.tsx
