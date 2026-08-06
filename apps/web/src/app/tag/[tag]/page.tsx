@@ -7,12 +7,15 @@ import { HomePage } from '../../home-page'
  * change. Deux implémentations du même écran auraient deux markups à garder
  * cohérents, ce que l'ADR 015 a explicitement écarté pour les listes.
  *
- * Le tag arrive **encodé** dans le chemin : `Next.js` ne le décode pas, et le
- * passer tel quel filtrerait sur `c%2B%2B` au lieu de `c++`.
+ * `tag` n'est pas redécodé : voir le commentaire de `/profile/:username`, même
+ * défaut, même raison. Il y est ici **atteignable** et non latent : `tagSchema`
+ * ne nettoie rien (`z.string().trim().min(1)`), donc un tag `100%` existe,
+ * `PopularTags` le lie en `/tag/100%25`, Next le redonne `100%` — et un second
+ * décodage y lèverait `URIError: URI malformed`, qui emporte le rendu serveur.
  */
 export async function generateMetadata({ params }: { params: Promise<{ tag: string }> }) {
   const { tag } = await params
-  return { title: `#${decodeURIComponent(tag)} — Conduit` }
+  return { title: `#${tag} — Conduit` }
 }
 
 export default async function Page({
@@ -24,5 +27,5 @@ export default async function Page({
 }) {
   const { tag } = await params
 
-  return <HomePage tag={decodeURIComponent(tag)} searchParams={await searchParams} />
+  return <HomePage tag={tag} searchParams={await searchParams} />
 }
