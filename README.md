@@ -16,11 +16,14 @@ lance et on tient un projet full-stack de A à Z*.
 - [Le projet Conduit (RealWorld)](#le-projet-conduit-realworld)
 - [Le parti pris](#le-parti-pris)
 - [Architecture](#architecture)
+- [Le modèle partagé](#le-modèle-partagé)
 - [Le backend en profondeur](#le-backend-en-profondeur)
     - [Architecture hexagonale (ports et adapters)](#architecture-hexagonale-ports-et-adapters)
     - [Domain-Driven Design (DDD)](#domain-driven-design-ddd)
     - [Clean Architecture](#clean-architecture)
     - [Principes SOLID](#principes-solid)
+    - [Base de données et migrations](#base-de-données-et-migrations)
+- [Le frontend (Next.js, App Router)](#le-frontend-nextjs-app-router)
 - [Stratégie de tests et discipline de code](#stratégie-de-tests-et-discipline-de-code)
     - [Tests end-to-end](#tests-end-to-end)
     - [Couverture de tests](#couverture-de-tests)
@@ -29,6 +32,7 @@ lance et on tient un projet full-stack de A à Z*.
     - [Requirements as code](#requirements-as-code)
     - [Sécurité by design](#sécurité-by-design)
     - [Documentation as code](#documentation-as-code)
+- [Le cycle de développement](#le-cycle-de-développement)
 - [Livraison et collaboration](#livraison-et-collaboration)
     - [Conventions de commit](#conventions-de-commit)
     - [Versioning et release](#versioning-et-release)
@@ -145,6 +149,25 @@ graph LR
 Le `domain` de l'API reste **pur** : aucun import de NestJS ni de Prisma. La discipline
 hexagonale n'est pas troquée contre la facilité du full-stack.
 
+## Le modèle partagé
+
+La section [Le parti pris](#le-parti-pris) l'annonce, [`packages/shared`](packages/shared/src/index.ts)
+le rend concret. Ce package ne dépend d'aucun framework (ni NestJS, ni React) : c'est du
+TypeScript pur, importé par l'API comme par le front.
+
+Ce qu'il porte :
+
+- Le **modèle Conduit** dans [`packages/shared/src/model/`](packages/shared/src/model) : [`article`](packages/shared/src/model/article.ts), [`comment`](packages/shared/src/model/comment.ts), [`profile`](packages/shared/src/model/profile.ts), [`user`](packages/shared/src/model/user.ts), [`tag`](packages/shared/src/model/tag.ts), [`pagination`](packages/shared/src/model/pagination.ts).
+- Le **contrat d'erreurs** partagé dans [`packages/shared/src/errors/`](packages/shared/src/errors) : codes, messages et erreurs de validation, pour que l'API et le front nomment les mêmes échecs de la même façon ([ADR 017](docs/adr/017-messages-du-contrat-dans-shared.md)).
+
+Le parti pris d'écriture : le **schéma Zod est l'unique définition**, le type TypeScript en
+est inféré (`z.infer`). Une règle de validation n'existe qu'à un seul endroit, et un type
+ne peut pas diverger de la validation censée le garantir. Conséquence directe : si le modèle
+change ici, ce qui ne suit pas ne compile plus, côté front comme côté back.
+
+L'approche opposée, à comparer : exposer un contrat externe que le front consomme, comme
+avec [une API-first en OpenAPI](https://www.kamanga.fr/fr/architecture-craft/api-first-openapi-spring-boot).
+
 ## Le backend en profondeur
 
 Le cœur de `apps/api` n'est pas un empilement de bonnes intentions. Trois cadres qui se
@@ -212,6 +235,36 @@ l'hexagonal et la règle de dépendance. Où les voir concrètement :
 | **D**IP, inversion des dépendances | Le domaine définit l'abstraction (le port), l'infrastructure en dépend. Use case de haut niveau et adapter Prisma de bas niveau dépendent tous deux du même port. | [DIP](https://www.kamanga.fr/fr/architecture-craft/principe-inversion-dependances-dip-java-guide-complet) |
 
 Vue d'ensemble : [Les principes SOLID expliqués](https://www.kamanga.fr/fr/architecture-craft/principes-solid-java-exemples).
+
+### Base de données et migrations
+
+Le principe : le schéma Prisma est la **source de vérité** de la persistance, et toute
+modification produit une migration versionnée, committée avec le schéma. La persistance
+décrit l'infrastructure, jamais le domaine.
+
+Dans ce repo :
+
+- [`apps/api/prisma/schema.prisma`](apps/api/prisma/schema.prisma) : identifiants UUID, tables en snake_case pluriel, un modèle aligné sur le contrat ([ADR 002](docs/adr/002-modele-donnees-prisma.md)).
+- Les entités du domaine restent pures : les adapters Prisma les reconstituent depuis les tables, la persistance ne fuit pas dans le domaine ([ADR 004](docs/adr/004-persistance-alignee-sur-le-contrat.md)).
+- Discipline de migration : `prisma migrate dev --name <slug>` crée le SQL, committé avec le schéma dans la même PR ; en CI et avant le boot, `db:migrate:deploy` applique l'existant sans recréer la base. `generate` (client TS) n'est pas `migrate` (SQL).
+
+À lire : [Le Référentiel Craft](https://www.kamanga.fr/referentiel-craft).
+
+## Le frontend (Next.js, App Router)
+
+Le front traduit la même rigueur côté UI : le domaine ne fuit pas, et la spec RealWorld est
+le contrat qui fait autorité.
+
+Dans ce repo :
+
+- **App Router** : les pages vivent sous [`apps/web/src/app/`](apps/web/src/app) ([`layout.tsx`](apps/web/src/app/layout.tsx), [`page.tsx`](apps/web/src/app/page.tsx), plus les routes `article`, `editor`, `profile`, `settings`, `login`, `register`, `tag`).
+- **Client REST typé** : [`api-client.ts`](apps/web/src/lib/api-client.ts) et [`server-api-client.ts`](apps/web/src/lib/server-api-client.ts) consomment `@repo/shared`, jamais un type redéfini côté web.
+- **Rendu hybride et session client** : le serveur prefetch, le client hydrate, la session vit côté client ([`session.tsx`](apps/web/src/lib/session.tsx), [ADR 012](docs/adr/012-rendu-hybride-et-session-client.md) et [ADR 015](docs/adr/015-prefetch-serveur-et-hydratation-des-listes.md)).
+- **Cache serveur** : TanStack Query via [`api-provider.tsx`](apps/web/src/lib/api-provider.tsx) et [`feed-query.ts`](apps/web/src/lib/feed-query.ts), en stale-while-revalidate.
+- **Markdown sûr par construction** : le rendu du contenu utilisateur est neutralisé contre le XSS ([ADR 013](docs/adr/013-rendu-markdown-sur-par-construction.md)).
+- **Contrat de sélecteurs** : les composants ([`ArticlePreview.tsx`](apps/web/src/components/ArticlePreview.tsx), [`ArticleEditor.tsx`](apps/web/src/components/ArticleEditor.tsx)) respectent les classes et les `name` que la suite de conformité exige (voir [Tests end-to-end](#tests-end-to-end)).
+
+À lire : [Le Référentiel Craft](https://www.kamanga.fr/referentiel-craft).
 
 ## Stratégie de tests et discipline de code
 
@@ -315,6 +368,24 @@ Dans ce repo :
 - Règle simple : toute PR se pose la question « la documentation est-elle à jour ? », et un changement d'architecture crée son ADR avant la PR.
 
 À lire : [L'Architecture Decision Record](https://www.kamanga.fr/fr/architecture-craft/adr-architecture-decision-record).
+
+## Le cycle de développement
+
+Ce repo n'est pas seulement un produit : c'est aussi la démonstration d'un **cycle de
+développement discipliné et reprisable**. Chaque incrément suit le même trajet, du cadrage
+à la mise en production, et laisse une trace à chaque étape.
+
+1. **Cadrer** : le besoin est décrit dans le [PRD](docs/prd/PRD-conduit.md), et ce qui est explicitement [hors périmètre](docs/scope/hors-perimetre.md) compte autant que le reste.
+2. **Spécifier** : une exigence devient un REQ versionné avec ses critères `AC-n` (voir [Requirements as code](#requirements-as-code)), cadré par une [Definition of Ready et Done](docs/process/definition-of-ready-done.md).
+3. **Décider** : toute décision non triviale laisse un ADR (voir [Décisions d'architecture](#décisions-darchitecture-adr)).
+4. **Implémenter** : le code et ses tests dans la même unité, sur une branche depuis `staging`, avec les portes locales qui rejouent celles de la CI.
+5. **Relire et livrer** : review en Conventional Comments, puis promotion `staging` vers `main` (voir [Livraison et collaboration](#livraison-et-collaboration)).
+
+Le fil rouge : chaque étape produit une **trace exploitable** (PRD, REQ, ADR, tests nommés
+par critère), pour qu'un travail interrompu se reprenne sans avoir à reconstituer le
+contexte de tête.
+
+À lire : [L'ingénierie logicielle comme avantage](https://www.kamanga.fr/fr/dette-technique/ingenierie-logicielle-avantage-concurrentiel).
 
 ## Livraison et collaboration
 
