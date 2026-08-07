@@ -14,11 +14,11 @@ acceptance_criteria:
   - id: AC-2
     given: "un utilisateur connecté sur la page d'accueil"
     when: "la page s'affiche"
-    then: "l'onglet « Your Feed » apparaît en plus, et devient l'onglet actif par défaut"
+    then: "l'onglet « Your Feed » apparaît en plus de « Global Feed », et c'est « Global Feed » qui porte la classe `active` — l'onglet actif est désigné par l'URL, jamais par la session"
   - id: AC-3
-    given: "un visiteur anonyme qui atteindrait le flux personnel par l'URL"
-    when: "la page résout le flux demandé"
-    then: "elle retombe sur le flux global plutôt que d'émettre un appel qui reviendrait en 401"
+    given: "un visiteur anonyme qui atteint le flux personnel par l'URL `/?feed=following`"
+    when: "la page se rend"
+    then: "le navigateur se retrouve sur `/login`, et aucune requête `GET /articles/feed` n'a été émise"
   - id: AC-4
     given: "la liste des tags populaires"
     when: "un tag est choisi"
@@ -31,11 +31,36 @@ acceptance_criteria:
     given: "la barre latérale des tags"
     when: "l'API des tags échoue ou n'en renvoie aucun"
     then: "la page reste utilisable et le flux s'affiche — la barre latérale ne fait pas échouer la page"
+  - id: AC-7
+    given: "un lecteur connecté qui ouvre `/?feed=following` directement"
+    when: "la session est résolue"
+    then: "l'onglet « Your Feed » porte la classe `active` et la liste provient de `GET /articles/feed`, jamais d'un filtre de `GET /articles`"
+  - id: AC-8
+    given: "un lecteur connecté dont le flux personnel ne renvoie aucun article"
+    when: "la liste est chargée"
+    then: "`.empty-feed-message` contient « Your feed is empty » et un lien `a[href=\"/\"]`"
+  - id: AC-9
+    given: "un flux public (global ou tag) sans article"
+    when: "la liste est chargée"
+    then: "`.empty-feed-message` rend le message d'absence générique et ne mentionne pas de flux personnel"
+  - id: AC-10
+    given: "une session dans l'état `pending` sur `/?feed=following`"
+    when: "le premier rendu a lieu"
+    then: "aucune redirection n'est déclenchée et aucune requête authentifiée n'est émise"
+  - id: AC-11
+    given: "une session dans l'état `unavailable` sur `/?feed=following`"
+    when: "la page se rend"
+    then: "le lecteur n'est pas redirigé vers `/login` et aucun appel authentifié n'est émis"
+  - id: AC-12
+    given: "un lecteur connecté sur `/`"
+    when: "il active l'onglet « Your Feed », puis « Global Feed » depuis `/?feed=following`"
+    then: "l'URL devient exactement `/?feed=following`, puis exactement `/`"
 implementation:
   files:
     - apps/web/src/lib/feed-query.ts
     - apps/web/src/components/FeedToggle.tsx
     - apps/web/src/components/FeedList.tsx
+    - apps/web/src/components/HomeFeed.tsx
     - apps/web/src/components/PopularTags.tsx
     - apps/web/src/app/home-page.tsx
     - apps/web/src/app/page.tsx
@@ -44,17 +69,20 @@ implementation:
     - apps/web/src/lib/feed-query.spec.ts
     - apps/web/src/components/FeedToggle.spec.tsx
     - apps/web/src/components/FeedList.spec.tsx
+    - apps/web/src/components/HomeFeed.spec.tsx
     - apps/web/src/components/PopularTags.spec.tsx
 related:
-  issues: [8]
+  issues: [8, 13]
   requirements:
     - REQ-WEB-008
     - REQ-WEB-010
     - REQ-WEB-011
+    - REQ-WEB-016
     - REQ-TAG-001
   adrs:
     - "012"
     - "015"
+    - "022"
 ---
 
 # REQ-WEB-009 — Présenter la page d'accueil avec ses onglets de flux et ses tags populaires
@@ -70,9 +98,24 @@ AC-3 est le critère qu'une implémentation plausible oublie. Les onglets sont
 conditionnés à la session, donc « Your Feed » n'est pas affiché à un anonyme — et
 on en conclut trop vite que le flux personnel est inatteignable. Il l'est par
 l'URL, que le contrat de sélecteurs E2E rend explicite (`/?feed=following`). Sans
-repli, un visiteur anonyme qui la suit déclenche un appel authentifié sans jeton,
-reçoit un 401, et voit une page en erreur là où le comportement attendu est
-banal : lui montrer le flux global.
+garde, un visiteur anonyme qui la suit déclenche un appel authentifié sans jeton,
+reçoit un 401, et voit une page en erreur.
+
+**AC-2 et AC-3 sont amendés** ([ADR 022](../../../adr/022-flux-demande-et-flux-resolu.md)).
+Leur première rédaction prescrivait « Your Feed » actif par défaut et un repli
+silencieux vers le flux global ; la suite de conformité vendorée exige
+« Global Feed » actif sur `/` et une redirection vers `/login`
+(`url-navigation.spec.ts:13,33`). Quand une exigence de ce dépôt et la suite
+vendorée divergent, **c'est la suite qui fait foi** — règle générale posée par
+l'ADR 022, dans le prolongement de l'ADR 018 qui avait fait de la suite le
+contrat. Le repli était d'ailleurs le plus trompeur des deux comportements : un
+anonyme croyait voir son flux là où on lui montrait celui de tout le monde.
+
+AC-10 et AC-11 tiennent à un piège de la session (ADR 012, ADR 014) : trois de
+ses quatre états portent `user === null` (`pending`, `anonymous`, `unavailable`).
+Une garde écrite sur cette condition éjecte les lecteurs connectés pendant la
+réhydratation — le défaut déjà payé une fois sur `/settings`. Elle s'écrit sur
+`status === 'anonymous'`, et seulement sur lui.
 
 AC-6 tient à la nature de la barre latérale : elle est **décorative pour le
 parcours**. Un échec de `GET /tags` ne doit pas empêcher de lire les articles,
@@ -83,6 +126,15 @@ remarque pas tant que l'API répond.
 
 - Le flux personnel passe par l'endpoint dédié, jamais par un filtre de la liste
   globale ([REQ-WEB-008](REQ-WEB-008.md) AC-4).
+- Le flux **demandé** (lu dans l'URL, connu du serveur) et le flux **résolu**
+  (qui dépend de la session, connu après montage) sont deux valeurs distinctes.
+  Le serveur ne précharge qu'un flux public ; la garde du flux personnel est
+  cliente, faute de quoi que ce soit à lire côté serveur (ADR 012, ADR 022).
+- La liste du flux personnel n'est montée qu'une fois la session
+  `authenticated` : la monter plus tôt émettrait un `GET /articles/feed` sans
+  jeton.
+- Un écran d'attente ne porte ni `.article-preview` ni `.empty-feed-message` —
+  le contrat compte la première et attend la seconde comme une liste vide.
 - L'onglet actif porte la classe `active` du template — le CSS de référence s'en
   sert pour marquer la position, et son absence rend la navigation illisible sans
   rien casser d'autre.

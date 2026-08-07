@@ -31,20 +31,50 @@ acceptance_criteria:
     given: "une page demandée dans l'URL"
     when: "la liste est chargée"
     then: "le décalage envoyé à l'API est déduit de ce numéro et de la taille de page, la première page valant un décalage nul"
+  - id: AC-7
+    given: "une liste dont le total dépasse une page"
+    when: "la pagination est rendue"
+    then: "chaque `.page-item` contient un élément `button` portant le numéro de page, et aucun lien interactif de pagination n'est rendu"
+  - id: AC-8
+    given: "la page 1 d'une liste paginée sous `/tag/:tag`"
+    when: "le lecteur active le bouton « 2 »"
+    then: "la cible soumise est `/tag/:tag?page=2` et le `.page-item` du 2 porte la classe `active`"
+  - id: AC-9
+    given: "l'URL `/tag/:tag?page=2` ouverte directement"
+    when: "la liste est chargée"
+    then: "les articles de la deuxième page s'affichent et le `.page-item` du 2 porte la classe `active`"
+  - id: AC-10
+    given: "une taille de page front de 10 et un total de 15 articles"
+    when: "les deux pages sont rendues"
+    then: "la première contient 10 `.article-preview` et la seconde 5, et la requête envoyée à l'API porte `limit=10`"
+  - id: AC-11
+    given: "un lecteur sur `/?feed=following&page=2`"
+    when: "il active « Global Feed »"
+    then: "la cible est `/` exactement — la page repart à 1 plutôt que d'être reportée"
+  - id: AC-12
+    given: "une liste paginée sur `/?feed=following`"
+    when: "le lecteur change de page"
+    then: "la cible soumise est `/?feed=following&page=2` — le filtre de flux précède le paramètre de page et n'est pas perdu"
 implementation:
   files:
     - apps/web/src/lib/pagination.ts
+    - apps/web/src/lib/feed-query.ts
     - apps/web/src/components/Pagination.tsx
+    - apps/web/src/components/FeedToggle.tsx
   tests:
     - apps/web/src/lib/pagination.spec.ts
+    - apps/web/src/lib/feed-query.spec.ts
     - apps/web/src/components/Pagination.spec.tsx
+    - apps/web/src/components/FeedToggle.spec.tsx
+    - apps/web/src/components/FeedList.spec.tsx
 related:
-  issues: [8]
+  issues: [8, 13]
   requirements:
     - REQ-WEB-008
     - REQ-WEB-009
     - REQ-ARTICLE-002
-  adrs: []
+  adrs:
+    - "023"
 ---
 
 # REQ-WEB-010 — Paginer une liste d'articles à partir du total renvoyé par l'API
@@ -70,15 +100,33 @@ son lien à partir du seul numéro de page, perdant le tag ou le flux en cours. 
 symptôme — « je clique sur la page 2 d'un tag et j'atterris sur le flux global » —
 se lit comme un bug de filtre alors qu'il vient du lien.
 
+AC-10 est la correction d'un défaut qui masquait tous les autres. Le front
+n'envoyait pas `limit`, donc l'API appliquait son défaut (20) et le front
+comptait ses pages sur la même valeur : avec 15 articles, il n'existait jamais de
+seconde page, et **toutes** les assertions de pagination tombaient — y compris
+celles qui portent en apparence sur l'URL.
+
 ## Règles
 
-- La taille de page vient de `@repo/shared` (`DEFAULT_PAGE_LIMIT`), pas d'une
-  constante locale : l'API applique la même, et deux valeurs qui divergent
-  produisent des pages qui se chevauchent ou qui sautent des articles.
+- La taille de page du front est `WEB_PAGE_LIMIT` (10), déclarée dans
+  `apps/web/src/lib/pagination.ts`, et **envoyée** en `limit` à chaque requête de
+  liste ([ADR 023](../../../adr/023-pagination-formulaire-get-et-taille-de-page.md)).
+  C'est l'envoi, et non le partage d'une constante, qui garantit que le front et
+  l'API découpent les mêmes articles de la même façon. `DEFAULT_PAGE_LIMIT` de
+  `@repo/shared` reste ce que l'API applique quand personne ne demande rien.
 - Le contrat expose une **page** dans l'URL (`?page=N`) et un **décalage** à
   l'API (`offset`). La conversion se fait à un seul endroit.
-- Le markup suit `templates.md` : `ul.pagination`, `li.page-item`, `a.page-link`
-  (rule 11), classes que le contrat de sélecteurs E2E vise.
+- Le markup suit `templates.md` (`ul.pagination`, `li.page-item`) à un écart
+  près, documenté en commentaire du composant (rule 11) et dans l'ADR 023 : le
+  contrôle est un `form[method=get] > button.page-link` et non un `a.page-link`,
+  parce que le contrat de sélecteurs vise `.pagination button` et
+  `.page-item:has(button…)`, et qu'un `<button>` imbriqué dans un `<a>` serait du
+  HTML invalide.
+- Les filtres courants sont reportés en champs cachés **avant** le bouton :
+  l'ordre du DOM est l'ordre de soumission, et c'est lui qui produit
+  `/?feed=following&page=2`.
+- Le contrôle de la première page ne porte pas de `name` : il n'est donc pas
+  soumis, et `/` ne se dédouble pas en `/?page=1`.
 
 ## Hors périmètre
 

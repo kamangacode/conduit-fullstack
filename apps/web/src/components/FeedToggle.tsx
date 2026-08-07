@@ -28,11 +28,18 @@ interface Tab {
 }
 
 export function FeedToggle({ feed }: FeedToggleProps) {
-  const { user } = useSession()
+  // `status`, pas `user` : REQ-WEB-009 documente le piège de `user === null`,
+  // qui recouvre trois des quatre états de session (`pending`, `anonymous`,
+  // `unavailable`). Les deux prédicats coïncident aujourd'hui — `user` n'est
+  // posé que sur `authenticated` — mais l'un des deux est l'invariant que le
+  // reste de la page (`HomeFeed`) vérifie explicitement, l'autre le suppose.
+  // N'en garder qu'un supprime la divergence silencieuse que ferait naître un
+  // futur état de session où les deux ne coïncideraient plus.
+  const { status } = useSession()
 
   const tabs: Tab[] = []
 
-  if (user) {
+  if (status === 'authenticated') {
     tabs.push({
       href: '/?feed=following',
       label: 'Your Feed',

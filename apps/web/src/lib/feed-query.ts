@@ -1,7 +1,7 @@
 import type { ArticlesResponse } from '@repo/shared'
 import type { QueryClient } from '@tanstack/react-query'
 import type { ApiClient } from './api-client'
-import { offsetForPage } from './pagination'
+import { offsetForPage, WEB_PAGE_LIMIT } from './pagination'
 
 /**
  * Flux d'articles : quoi charger, et sous quelle clé de cache ([ADR 015]).
@@ -35,32 +35,46 @@ export interface FeedRequest {
 }
 
 /**
- * Détermine le flux réellement affiché.
+ * Flux **demandé par l'URL** — pas le flux finalement affiché ([ADR 022]).
  *
- * Le point qui compte est le repli d'AC-3 : les onglets ne proposent « Your
- * Feed » qu'à un utilisateur connecté, d'où l'on conclut trop vite que le flux
- * personnel est inatteignable autrement. Il l'est par l'URL — le contrat de
- * sélecteurs E2E décrit `/?feed=following` — et un anonyme qui la suit
- * déclencherait un appel authentifié sans jeton, verrait un 401, et une page en
- * erreur là où le comportement attendu est banal : lui montrer le flux global.
+ * La distinction est le cœur de l'ADR 022. Cette fonction ne connaît que
+ * l'adresse : elle est donc calculable par le serveur, qui ne sait rien de la
+ * session (ADR 012). Elle ne prend volontairement **pas** de `isAuthenticated` —
+ * c'est ce paramètre, dans la version précédente, qui faisait passer un flux
+ * demandé pour un flux résolu : le serveur passait `false`, obtenait « global »,
+ * et le préchargeait comme s'il s'agissait du dernier mot.
+ *
+ * Qui a le droit de voir le flux personnel se décide plus tard, côté client, sur
+ * `status` (`components/HomeFeed.tsx`).
  *
  * Le tag l'emporte sur tout : il vient du chemin (`/tag/:tag`), pas d'un
  * paramètre optionnel, donc il n'est jamais ambigu.
  */
-export function resolveFeed(input: {
+export function requestedFeed(input: {
   tag?: string | undefined
   feedParam?: string | undefined
-  isAuthenticated: boolean
 }): FeedKind {
   if (input.tag) {
     return { kind: 'tag', tag: input.tag }
   }
 
-  if (input.feedParam === 'following' && input.isAuthenticated) {
+  if (input.feedParam === 'following') {
     return { kind: 'following' }
   }
 
   return { kind: 'global' }
+}
+
+/**
+ * Ce flux peut-il être chargé par un appelant anonyme ?
+ *
+ * C'est la condition du préchargement serveur, et elle est écrite comme une
+ * fonction plutôt que laissée à la vigilance de chaque page : l'[ADR 015] §4
+ * interdit déjà de précharger le flux personnel — le serveur est anonyme, donc
+ * un préchargement ne pourrait rendre qu'un 401 ou, pire, le flux d'un autre.
+ */
+export function isPublicFeed(feed: FeedKind): boolean {
+  return feed.kind !== 'following'
 }
 
 /**
@@ -91,18 +105,24 @@ export function feedQueryKey({ feed, page }: FeedRequest): readonly unknown[] {
  * Le flux personnel passe par son **endpoint dédié** et jamais par un filtre de
  * la liste globale : router l'un vers l'autre renverrait tout le site, dans une
  * réponse parfaitement bien formée (REQ-WEB-008 AC-4).
+ *
+ * `limit` est envoyé **explicitement** ([ADR 023]). Ne pas l'envoyer laissait
+ * l'API appliquer son propre défaut (20) pendant que le front comptait ses pages
+ * sur la sienne : deux découpes différentes des mêmes articles, sans la moindre
+ * erreur pour le signaler. C'est cet envoi, et non le partage d'une constante,
+ * qui garantit que les deux côtés découpent pareil.
  */
 export function fetchFeed(
   client: ApiClient,
   { feed, page }: FeedRequest
 ): Promise<ArticlesResponse> {
-  const offset = offsetForPage(page)
+  const window = { limit: WEB_PAGE_LIMIT, offset: offsetForPage(page) }
 
   if (feed.kind === 'following') {
-    return client.getFeed({ offset })
+    return client.getFeed(window)
   }
 
-  return client.listArticles({ offset, ...filterFor(feed) })
+  return client.listArticles({ ...window, ...filterFor(feed) })
 }
 
 /**
@@ -148,6 +168,15 @@ export async function prefetchFeed(
   client: ApiClient,
   request: FeedRequest
 ): Promise<void> {
+  if (!isPublicFeed(request.feed)) {
+    // Défense en profondeur : `home-page.tsx` ne devrait déjà appeler cette
+    // fonction que sous `isPublicFeed(feed)`, mais la garder ici aussi évite
+    // qu'un futur appelant qui oublierait cette condition n'émette une
+    // requête authentifiée depuis le client serveur anonyme — elle ne
+    // pourrait recevoir qu'un 401 pour rien.
+    return
+  }
+
   try {
     await queryClient.prefetchQuery({
       queryKey: feedQueryKey(request),
