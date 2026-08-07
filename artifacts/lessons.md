@@ -8,6 +8,44 @@
 
 ---
 
+## 2026-08-06 — L'inventaire d'une issue périme plus vite que l'issue
+
+**Symptôme.** L'issue #12 annonçait 24 tests rouges sur `error-handling.spec.ts`
+et `user-fetch-errors.spec.ts`, et son cadrage était dimensionné là-dessus :
+« le plus gros lot des cinq de l'épique ». À la prise en main, quatre commits
+postérieurs à sa rédaction avaient déjà traité l'essentiel de son contenu —
+`adca6b9` (mode indisponible, message de transport, coquilles de page),
+`f51037c` (chargement client), `fed7f3a` (bouton de favori) et `2310ce8` (page
+de paramètres qui survit à la purge). Le reliquat réel tenait à **trois
+coutures**, dont une qui ne se corrige pas dans `apps/web/src`.
+
+**Ce qui a failli se passer.** Travailler d'après le chiffre de l'issue, c'est
+partir chercher 24 défauts dont 18 n'existent plus. Le coût n'est pas seulement
+du temps perdu : c'est surtout la tentation de « corriger » du code déjà correct
+pour faire baisser un compteur, et de conclure à la fin que le lot a bien traité
+ses 24 tests.
+
+**Cause racine.** Une issue est un **instantané daté**. Sur une épique où
+plusieurs lots partagent la même surface (`apps/web`) et où les correctifs
+tombent dans l'ordre où les causes sont comprises, son inventaire se périme au
+premier commit voisin. Ici, la seule mesure disponible dans le dépôt
+(`apps/web/test-results/.last-run.json`) précédait elle-même deux des quatre
+commits correctifs — donc même la mesure était en retard sur le code.
+
+**Règle à appliquer.** Sur un lot dont l'énoncé est un **compte d'échecs**, la
+première slice ne produit pas de code : elle **re-mesure**. Et le cadrage écrit
+d'où vient le chiffre qu'il cite, avec sa date, pour qu'un lecteur sache
+immédiatement s'il est encore vrai. Corollaire : ce que le lot doit prouver n'est
+jamais « N tests sont passés au vert », mais « aucun test vert ne l'est devenu
+rouge, et le reliquat a diminué » — la seule formulation qui reste juste quand un
+autre lot corrige la même surface en parallèle.
+
+**Ce que ça ne dit pas.** Que l'issue était mal écrite. Elle était juste le jour
+où elle a été écrite. C'est le fait qu'elle **ait l'air** d'être encore vraie qui
+est le piège : rien dans son texte ne signale sa date de péremption.
+
+---
+
 ## 2026-08-06 — `$!` rend le sous-shell, pas le serveur : un run e2e a éprouvé le front du run précédent
 
 **Symptôme.** Après avoir aligné l'URL d'API du navigateur sur l'hôte que la

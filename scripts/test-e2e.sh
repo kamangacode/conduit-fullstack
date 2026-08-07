@@ -266,6 +266,30 @@ wait_for() {
 
 wait_for "l'API" "${API_BASE_URL}/tags" "$api_pid"
 
+# describe REQ-CONF-003
+# it AC-1: au moins un article publié existe avant le lancement de la suite
+# it AC-2: le jeu de données est créé par l'API, jamais par un accès direct à la base
+#
+# ── Jeu de données minimal supposé par la suite (REQ-CONF-003) ───────────────
+#
+# Le `TRUNCATE` ci-dessus est nécessaire, et il a un effet de bord que la suite
+# amont ne déclare nulle part : un de ses tests lit le flux global **sans le
+# mocker** (`user-fetch-errors.spec.ts`, 401 sur `/api/user`) et attend d'y
+# trouver un `.article-preview`. En amont, la démo publique en contient depuis
+# toujours ; ici la page affiche très correctement « No articles are here... yet.»
+# et le test rougit sur un défaut qui n'en est pas un.
+#
+# **Cette étape ne peut pas se placer juste après la purge** : le jeu de données
+# est créé par l'API — jamais par un `INSERT` direct, qui fabriquerait un état
+# que l'API n'aurait jamais accepté — et l'API doit donc être debout. D'où sa
+# place ici, immédiatement après `wait_for`.
+#
+# `set -e` fait le reste : le script sort en code non nul si la création échoue,
+# plutôt que de lancer la suite sur une base vide et de laisser l'absence de
+# données passer pour un défaut du front (AC-3).
+echo "→ jeu de données minimal de la suite (via l'API)..."
+node scripts/e2e-seed.mjs --api-base "$API_BASE_URL"
+
 # ── Terminateur TLS de l'hôte figé par la suite (ADR 019) ────────────────────
 #
 # Certificat auto-signé, régénéré à chaque run dans un répertoire temporaire, et

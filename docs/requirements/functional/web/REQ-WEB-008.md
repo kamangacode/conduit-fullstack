@@ -43,18 +43,22 @@ acceptance_criteria:
     given: "la création puis la modification d'un article"
     when: "le client les envoie"
     then: "la création poste sur la collection et la modification vise le slug, toutes deux dans l'enveloppe `{ article: … }` du contrat"
+  - id: AC-10
+    given: "une création d'article"
+    when: "le client construit la requête"
+    then: "le chemin émis est celui que le contrat externe intercepte, écrit une seule fois dans `api-client.ts`, et le chemin de modification d'article reste inchangé"
 implementation:
   files:
     - apps/web/src/lib/api-client.ts
   tests:
     - apps/web/src/lib/api-client.spec.ts
 related:
-  issues: [8]
+  issues: [8, 12]
   requirements:
     - REQ-WEB-001
     - REQ-ARTICLE-002
     - REQ-ARTICLE-004
-  adrs: []
+  adrs: ["021"]
 ---
 
 # REQ-WEB-008 — Étendre le client API aux articles, commentaires et tags
@@ -82,6 +86,16 @@ taille d'une page — puis une seule page affichée pour un site qui en a douze.
 AC-4 ferme une confusion de lecture du contrat : le flux personnel **est un
 endpoint**, pas un filtre de la liste globale. Un routage vers `/articles`
 répondrait tout le site, bien formé et entièrement faux.
+
+AC-10 (amendement, issue #12) traite un point qu'AC-9 laissait implicite : la
+**forme exacte** du chemin de création. La suite e2e officielle intercepte
+`…/api/articles/`, barre finale comprise, et un motif Playwright est compilé en
+expression ancrée : la barre est donc significative. Le chemin cesse ainsi
+d'être un détail d'implémentation pour devenir une donnée de contrat, au même
+titre qu'un sélecteur ([REQ-WEB-007](REQ-WEB-007.md)) ou que le message d'échec
+de transport ([REQ-WEB-017](REQ-WEB-017.md)). La décision et son coût — une
+asymétrie création/modification qu'un lecteur pressé « corrigerait » par
+propreté — sont dans l'[ADR 021](../../../adr/021-chemin-de-creation-d-article-aligne-sur-le-contrat-e2e.md).
 
 ## Règles
 

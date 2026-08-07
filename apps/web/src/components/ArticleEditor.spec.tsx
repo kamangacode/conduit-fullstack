@@ -4,7 +4,7 @@ import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { ApiError } from '../lib/api-client'
 import { CONNECTION_FAILURE_MESSAGE } from '../lib/errors'
-import { SessionProvider, TOKEN_STORAGE_KEY } from '../lib/session'
+import { SessionProvider, TOKEN_STORAGE_KEY, useSession } from '../lib/session'
 import { ArticleEditor } from './ArticleEditor'
 
 /** Tests écrits depuis les critères de REQ-WEB-014, avant l'implémentation. */
@@ -37,14 +37,58 @@ const existing: Article = {
   author: { username: 'jake', bio: null, image: null, following: false },
 }
 
+/**
+ * Expose la session du rendu courant aux tests : son statut, et le moyen de la
+ * fermer **depuis l'extérieur de l'éditeur**.
+ *
+ * Ce second rôle est indispensable ici. En production, c'est `api-client` qui
+ * appelle `onUnauthorized()` — donc `signOut` — quand une requête authentifiée
+ * revient en 401, avant de lever l'`ApiError` (REQ-WEB-002 AC-4). Le client
+ * étant doublé dans cette spec, aucun geste de l'éditeur ne produit cette
+ * purge : le doublé la rejoue lui-même via cette référence, dans le bon ordre.
+ */
+let closeSession: (() => void) | null = null
+
+function SessionEcho() {
+  const { status, signOut } = useSession()
+  closeSession = signOut
+  return <span data-testid="session-status">{status}</span>
+}
+
 const renderEditor = (article?: Article) =>
   render(
     <SessionProvider fetchCurrentUser={async () => jake}>
       {article ? <ArticleEditor article={article} /> : <ArticleEditor />}
+      <SessionEcho />
     </SessionProvider>
   )
 
+/**
+ * Réponse d'un enregistrement dont le jeton est refusé, **purge comprise**.
+ *
+ * L'ordre reproduit celui du client réel : la session est fermée d'abord, puis
+ * l'erreur remonte à l'appelant. C'est précisément cet ordre qui fabriquait le
+ * défaut — la page passait en « anonyme » avant même de voir l'erreur.
+ */
+const rejectWithExpiredSession = async () => {
+  closeSession?.()
+  throw new ApiError(401, {})
+}
+
 const signedIn = () => window.localStorage.setItem(TOKEN_STORAGE_KEY, jake.token)
+
+/**
+ * Remplit les trois champs que la validation partagée exige, **au minimum**.
+ *
+ * Un caractère par champ : ces tests-là portent sur ce qui arrive *après* la
+ * soumission, et chaque frappe simulée coûte un cycle de rendu complet. Les
+ * tests qui vérifient la valeur envoyée à l'API, eux, saisissent du texte réel.
+ */
+const fillRequiredFields = async () => {
+  await userEvent.type(screen.getByPlaceholderText('Article Title'), 'T')
+  await userEvent.type(screen.getByPlaceholderText("What's this article about?"), 'D')
+  await userEvent.type(screen.getByPlaceholderText('Write your article (in markdown)'), 'B')
+}
 
 /** Attend la résolution de session : le bouton est désactivé avant. */
 const publishButton = async () => {
@@ -56,8 +100,70 @@ const publishButton = async () => {
 beforeEach(() => {
   window.localStorage.clear()
   push.mockClear()
+  closeSession = null
   createArticle.mockReset().mockResolvedValue({ ...existing, slug: 'nouveau-slug' })
   updateArticle.mockReset().mockResolvedValue({ ...existing, slug: 'titre-renomme' })
+})
+
+describe('REQ-WEB-019 — l’éditeur survit à une purge de session', () => {
+  it('AC-1: garde le formulaire monté et affiche le message quand la publication répond 401', async () => {
+    // Le défaut que ce critère ferme : le 401 purge la session, l'éditeur
+    // passait en « anonyme » et redirigeait vers la connexion. `setErrors` avait
+    // bien eu lieu — mais la page n'était plus là pour le rendre. L'auteur
+    // voyait son texte disparaître sans jamais lire pourquoi.
+    createArticle.mockImplementation(rejectWithExpiredSession)
+    signedIn()
+    renderEditor()
+    const publish = await publishButton()
+
+    await fillRequiredFields()
+    await userEvent.click(publish)
+
+    await waitFor(() => expect(screen.getByText(/session has expired/)).toBeInTheDocument())
+    expect(push).not.toHaveBeenCalledWith('/login')
+    expect(screen.getByPlaceholderText('Article Title')).toHaveValue('T')
+  })
+
+  it('AC-2: redirige quand même celui qui arrive sur l’éditeur sans session', async () => {
+    // La garde d'AC-1 ne doit pas désarmer la redirection : personne ne reste
+    // devant un éditeur sans compte résolu (REQ-WEB-014 AC-6).
+    renderEditor()
+
+    await waitFor(() => expect(push).toHaveBeenCalledWith('/login'))
+  })
+
+  it('AC-3: conserve les valeurs saisies, et non celles de l’article d’origine', async () => {
+    // Le piège de la modification : un remontage renverrait les champs à
+    // `article.title`, et l'auteur croirait sa réécriture perdue alors que seul
+    // l'enregistrement a échoué.
+    updateArticle.mockImplementation(rejectWithExpiredSession)
+    signedIn()
+    renderEditor(existing)
+    const publish = await publishButton()
+
+    await userEvent.type(screen.getByPlaceholderText('Article Title'), '-bis')
+    await userEvent.click(publish)
+
+    await waitFor(() => expect(screen.getByText(/session has expired/)).toBeInTheDocument())
+    expect(screen.getByPlaceholderText('Article Title')).toHaveValue(`${existing.title}-bis`)
+    expect(screen.getByPlaceholderText('Article Title')).not.toHaveValue(existing.title)
+  })
+
+  it('AC-5: la session publiée redevient anonyme — la page ne prétend pas le contraire', async () => {
+    // La contrepartie du reste : garder le formulaire ne doit pas laisser
+    // croire que la session est encore ouverte. Le jeton est bien purgé.
+    createArticle.mockImplementation(rejectWithExpiredSession)
+    signedIn()
+    renderEditor()
+    const publish = await publishButton()
+
+    await fillRequiredFields()
+    await userEvent.click(publish)
+
+    await waitFor(() => expect(screen.getByText(/session has expired/)).toBeInTheDocument())
+    expect(screen.getByTestId('session-status')).toHaveTextContent('anonymous')
+    expect(window.localStorage.getItem(TOKEN_STORAGE_KEY)).toBeNull()
+  })
 })
 
 describe('REQ-WEB-017 — traduction partagée des échecs', () => {
