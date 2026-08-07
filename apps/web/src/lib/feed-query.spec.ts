@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { ApiClient } from './api-client'
-import { feedQueryKey, fetchFeed, resolveFeed } from './feed-query'
+import { feedQueryKey, fetchFeed, isPublicFeed, requestedFeed } from './feed-query'
+import { WEB_PAGE_LIMIT } from './pagination'
 
 /** Tests écrits depuis les critères de REQ-WEB-009, avant l'implémentation. */
 
@@ -16,34 +17,45 @@ const clientDouble = () => {
   }
 }
 
-describe('REQ-WEB-009 — résolution du flux affiché', () => {
+describe('REQ-WEB-009 — flux demandé par l’URL', () => {
   it('AC-1: sert le flux global par défaut', () => {
-    expect(resolveFeed({ isAuthenticated: false })).toEqual({ kind: 'global' })
+    expect(requestedFeed({})).toEqual({ kind: 'global' })
   })
 
-  it('AC-2: sert le flux personnel à un utilisateur connecté qui le demande', () => {
-    expect(resolveFeed({ feedParam: 'following', isAuthenticated: true })).toEqual({
-      kind: 'following',
-    })
+  it('AC-7: rend le flux personnel dès que l’URL le demande, sans consulter la session', () => {
+    // La fonction ne prend **pas** `isAuthenticated`, et c'est le point de
+    // l'[ADR 022] : le serveur ne sait pas qui lit (ADR 012), donc lui faire
+    // rendre un verdict d'accès revenait à faire passer le flux demandé pour le
+    // flux résolu. La décision d'accès appartient à `HomeFeed`.
+    expect(requestedFeed({ feedParam: 'following' })).toEqual({ kind: 'following' })
   })
 
-  it('AC-3: retombe sur le flux global pour un anonyme qui demande le flux personnel', () => {
-    // Le cas se produit par l'URL, que le contrat de sélecteurs décrit
-    // (`/?feed=following`) : les onglets ne l'offrent pas à un anonyme, mais un
-    // lien partagé ou un signet y mènent. Sans repli, l'appel authentifié part
-    // sans jeton et le lecteur voit une erreur là où il attend une liste.
-    expect(resolveFeed({ feedParam: 'following', isAuthenticated: false })).toEqual({
-      kind: 'global',
-    })
+  it('AC-3: ne retombe plus silencieusement sur le flux global', () => {
+    // Critère amendé ([ADR 022]) : le repli vers le flux global montrait à un
+    // anonyme les articles de tout le monde en lui laissant croire qu'il voyait
+    // les siens. La redirection vers `/login` est prononcée par la garde
+    // cliente, sur la foi de ce flux demandé.
+    expect(requestedFeed({ feedParam: 'following' })).not.toEqual({ kind: 'global' })
   })
 
   it('AC-4: le tag l’emporte, y compris sur une demande de flux personnel', () => {
     // Le tag vient du chemin (`/tag/:tag`), pas d'un paramètre optionnel : il
     // n'est jamais ambigu.
-    expect(resolveFeed({ tag: 'dragons', feedParam: 'following', isAuthenticated: true })).toEqual({
+    expect(requestedFeed({ tag: 'dragons', feedParam: 'following' })).toEqual({
       kind: 'tag',
       tag: 'dragons',
     })
+  })
+
+  it('AC-3: ne déclare public que ce qu’un appelant anonyme peut charger', () => {
+    // C'est la condition du préchargement serveur (ADR 015 §4). L'écrire comme
+    // une fonction plutôt que comme une vigilance est ce qui empêche une future
+    // page de précharger un flux personnel sans jeton.
+    expect(isPublicFeed({ kind: 'global' })).toBe(true)
+    expect(isPublicFeed({ kind: 'tag', tag: 'dragons' })).toBe(true)
+    expect(isPublicFeed({ kind: 'author', username: 'jake' })).toBe(true)
+    expect(isPublicFeed({ kind: 'favorited', username: 'jake' })).toBe(true)
+    expect(isPublicFeed({ kind: 'following' })).toBe(false)
   })
 
   it('AC-2: distingue les flux et les pages dans la clé de cache', () => {
@@ -76,7 +88,11 @@ describe('REQ-WEB-009 — résolution du flux affiché', () => {
 
     await fetchFeed(client, { feed: { kind: 'tag', tag: 'dragons' }, page: 1 })
 
-    expect(client.listArticles).toHaveBeenCalledWith({ offset: 0, tag: 'dragons' })
+    expect(client.listArticles).toHaveBeenCalledWith({
+      limit: WEB_PAGE_LIMIT,
+      offset: 0,
+      tag: 'dragons',
+    })
   })
 
   it('AC-1: n’envoie aucun filtre de tag sur le flux global', async () => {
@@ -84,9 +100,32 @@ describe('REQ-WEB-009 — résolution du flux affiché', () => {
 
     await fetchFeed(client, { feed: { kind: 'global' }, page: 3 })
 
-    // La page 3 vaut un décalage de 40 : le convertir ici plutôt que dans
-    // chaque appelant évite qu'un seul oublie la conversion.
-    expect(client.listArticles).toHaveBeenCalledWith({ offset: 40 })
+    // La page 3 vaut un décalage de deux pages : le convertir ici plutôt que
+    // dans chaque appelant évite qu'un seul oublie la conversion.
+    expect(client.listArticles).toHaveBeenCalledWith({
+      limit: WEB_PAGE_LIMIT,
+      offset: 2 * WEB_PAGE_LIMIT,
+    })
+  })
+})
+
+describe('REQ-WEB-010 — taille de page demandée à l’API', () => {
+  it('AC-10: envoie explicitement la taille de page du front sur chaque flux', async () => {
+    // Ne pas l'envoyer laissait l'API appliquer son propre défaut (20) pendant
+    // que le front comptait ses pages sur la sienne (10) : deux découpes des
+    // mêmes articles, sans la moindre erreur pour le signaler ([ADR 023]).
+    const client = clientDouble()
+
+    await fetchFeed(client, { feed: { kind: 'global' }, page: 1 })
+    expect(client.listArticles).toHaveBeenLastCalledWith(
+      expect.objectContaining({ limit: WEB_PAGE_LIMIT })
+    )
+
+    await fetchFeed(client, { feed: { kind: 'following' }, page: 2 })
+    expect(client.getFeed).toHaveBeenLastCalledWith({
+      limit: WEB_PAGE_LIMIT,
+      offset: WEB_PAGE_LIMIT,
+    })
   })
 })
 
@@ -106,10 +145,18 @@ describe('REQ-WEB-015 — filtres des onglets du profil', () => {
     const client = clientDouble()
 
     await fetchFeed(client, { feed: { kind: 'author', username: 'jake' }, page: 1 })
-    expect(client.listArticles).toHaveBeenLastCalledWith({ offset: 0, author: 'jake' })
+    expect(client.listArticles).toHaveBeenLastCalledWith({
+      limit: WEB_PAGE_LIMIT,
+      offset: 0,
+      author: 'jake',
+    })
 
     await fetchFeed(client, { feed: { kind: 'favorited', username: 'jake' }, page: 1 })
-    expect(client.listArticles).toHaveBeenLastCalledWith({ offset: 0, favorited: 'jake' })
+    expect(client.listArticles).toHaveBeenLastCalledWith({
+      limit: WEB_PAGE_LIMIT,
+      offset: 0,
+      favorited: 'jake',
+    })
   })
 
   it('AC-4: sépare les deux onglets d’un même profil dans le cache', async () => {

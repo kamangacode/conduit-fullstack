@@ -66,7 +66,7 @@ export const TOKEN_STORAGE_KEY = 'jwtToken'
  * état, une API en rade se lit à l'écran comme une déconnexion, et l'utilisateur
  * se reconnecte pour rien — le formulaire échouera aussi.
  */
-type SessionStatus = 'pending' | 'anonymous' | 'authenticated' | 'unavailable'
+export type SessionStatus = 'pending' | 'anonymous' | 'authenticated' | 'unavailable'
 
 /** Noms d'états du contrat de débogage E2E (REQ-WEB-007 AC-7). */
 type DebugAuthState = 'authenticated' | 'unauthenticated' | 'unavailable' | 'loading'
