@@ -1,6 +1,7 @@
 {
   "$schema": "https://biomejs.dev/schemas/2.5.7/schema.json",
   "assist": { "enabled": true },
+  "plugins": ["./biome-plugins/no-prisma-raw-unsafe.grit"],
   "linter": {
     "enabled": true,
     "rules": {

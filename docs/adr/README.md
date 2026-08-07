@@ -36,6 +36,7 @@ elle porte la mécanique : gabarit, numérotation, statuts, vérification.
 | [021](021-chemin-de-creation-d-article-aligne-sur-le-contrat-e2e.md) | Aligner le chemin de création d'article sur la forme que la suite e2e intercepte | Accepted (précise 018, prolonge 019) | 2026-08-06 |
 | [022](022-flux-demande-et-flux-resolu.md) | Distinguer le flux demandé du flux résolu, et faire primer la suite vendorée sur les exigences | Accepted (amende 012, précise 018) | 2026-08-07 |
 | [023](023-pagination-formulaire-get-et-taille-de-page.md) | Pagination : contrôles en formulaire GET, et taille de page choisie par le front | Accepted (précise 014) | 2026-08-07 |
+| [024](024-verrou-sql-brut-plugin-biome.md) | Verrou SQL brut : plugin GritQL Biome, plutôt qu'un second linter | Accepted | 2026-08-07 |
 
 ## Écrire un ADR
 

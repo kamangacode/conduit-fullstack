@@ -109,6 +109,12 @@ jobs:
         # canary ici prouve que le garde-fou mord aussi sur un runner frais,
         # et attrape le cas où quelqu'un aurait dégradé ses motifs (REQ-SEC-001).
         run: bash scripts/verify-secret-guard.sh
+      - name: Verrou SQL brut (vérification active)
+        # Le plugin GritQL qui interdit `$queryRawUnsafe` se dégrade en silence :
+        # s'il ne compile pas, Biome le rapporte en `info` et sort en 0. Rejouer
+        # ici ses refus prouve qu'il mord encore sur un runner frais, plutôt que
+        # de constater qu'il est déclaré (REQ-SEC-002, ADR 024).
+        run: bash scripts/verify-sql-raw-guard.sh
       - name: Raisons des biome-ignore (PR uniquement)
         if: github.event_name == 'pull_request'
         # Garantit que la ref de base est résolvable côté runner : le script

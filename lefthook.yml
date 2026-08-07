@@ -113,6 +113,17 @@ pre-push:
       # tout se fait contourner par `--no-verify` avant la fin de la semaine.
       run: bash scripts/verify-secret-guard.sh
 
+    verify-sql-raw-guard:
+      # Soumet au verrou SQL les trois formes d'appel qu'il prétend refuser, et
+      # les formes paramétrées qu'il doit laisser passer (REQ-SEC-002, ADR 024).
+      #
+      # Même raison qu'au-dessus, aggravée d'un cran : le verrou est un plugin
+      # GritQL, et un plugin qui ne compile pas est rapporté par Biome en `info`
+      # avec un code de sortie **0**. `pnpm lint` reste donc vert pendant que le
+      # motif ne matche plus rien — vérifié en sabotant la regex. La présence du
+      # fichier ne prouve rien ; seul un refus effectif le fait.
+      run: bash scripts/verify-sql-raw-guard.sh
+
     verify-type-boundary:
       # Casse volontairement le modèle partagé et vérifie que les DEUX
       # applications refusent de compiler (REQ-ARCH-001). C'est la thèse du
