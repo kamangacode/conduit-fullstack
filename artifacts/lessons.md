@@ -8,6 +8,44 @@
 
 ---
 
+## 2026-08-07 — Une garde de session qui déborde sur le contenu public
+
+**Symptôme.** Sur la branche du lot #15, le commit `a4efb02` — 677 insertions
+sur 12 fichiers, sous un message `fix: address review findings` — a fait tomber
+la suite e2e de **138/139 à 104/139** : 34 échecs et un test instable, répartis
+sur sept fichiers dont `xss-security`, `null-fields` et `error-handling`, que le
+lot ne touchait pas. Les 35 échecs partageaient une seule signature : le contenu
+ne s'affichait jamais (`input[name="title"]` introuvable, `.article-preview`
+résolu à 0 élément, `button:has-text("Follow")` jamais visible). Les pages
+restaient sur l'écran d'attente.
+
+**Ce qui a failli se passer.** Le run de CI a conclu **vert**. Le job `E2E` est
+en `continue-on-error` (ADR 018) : sa conclusion ne dit rien du verdict de la
+suite, qui ne se lit que dans son log (`N passed`, `N failed`). Un seul signal
+distinguait ce run des précédents sans ouvrir le log — sa durée, 18 min 48 s
+contre 3 min. Sans la lecture du verdict, une régression de 35 tests partait au
+merge sous un run vert.
+
+**Cause racine.** Le correctif élargissait la garde `enabled: status !== 'pending'`
+pour fermer un trou d'identité de cache, sans traiter deux constats que la revue
+avait pourtant **écrits à l'avance** dans le même lot : « `GET /user` qui pend
+(et non qui échoue) fige désormais un contenu public sur l'écran d'attente, sans
+issue » et « la branche `isPending` retient la liste préchargée : le gate de
+session annule l'ADR 015 sur la page de profil ». Une garde posée pour une
+ressource relative au lecteur retenait du contenu qui ne l'est pas.
+
+Deux enseignements distincts. D'abord, un constat de revue qui **décrit un mode
+de panne** vaut plus qu'un constat qui décrit un défaut : il prédit ce que le
+correctif va casser, et l'ignorer revient à se faire prévenir pour rien. Ensuite,
+un travail d'architecture — ici indexer ou purger le cache par identité de
+lecteur — ne se traite pas dans une ronde de correcteur sous un commit `fix:` :
+il lui faut son propre cadrage et sa porte de conception. C'est le sens du lot
+dédié ouvert à la place. Commit révoqué par `reset --hard` puis
+`push --force-with-lease` ; le SHA `a4efb02` reste consultable au reflog si son
+contenu doit être repris.
+
+---
+
 ## 2026-08-06 — L'inventaire d'une issue périme plus vite que l'issue
 
 **Symptôme.** L'issue #12 annonçait 24 tests rouges sur `error-handling.spec.ts`
