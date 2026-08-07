@@ -3,6 +3,7 @@ import { QueryClient } from '@tanstack/react-query'
 import { describe, expect, it } from 'vitest'
 import {
   articleQueryKey,
+  cacheSavedArticle,
   commentsQueryKey,
   invalidateAuthorCaches,
   profileQueryKey,
@@ -154,5 +155,82 @@ describe('REQ-WEB-004 AC-10 — invalidateAuthorCaches', () => {
     })
 
     expect(() => invalidateAuthorCaches(queryClient, ['jacob'])).not.toThrow()
+  })
+})
+
+/**
+ * Tests de REQ-WEB-014 AC-8 et AC-10, côté cache.
+ *
+ * Ce que le helper doit rendre vrai est une propriété du modèle de cache — quelle
+ * entrée un enregistrement rend fausse — et non un comportement de l'éditeur.
+ * `ArticleEditor.spec.tsx` n'en éprouve que le câblage : que l'éditeur l'appelle,
+ * avec le bon slug d'origine, et avant la redirection.
+ */
+describe('REQ-WEB-014 AC-8/AC-10 — cacheSavedArticle', () => {
+  /** Un article étiqueté, tel que le chargeur de l'éditeur l'écrit à l'ouverture. */
+  const tagged = (slug: string): Article => ({
+    ...articleBy('jacob', slug),
+    tagList: ['test', 'playwright'],
+  })
+
+  it('AC-8: écrit l’article renvoyé sous la clé de son propre slug', () => {
+    const queryClient = newClient()
+
+    cacheSavedArticle(queryClient, articleBy('jacob', 'un-article'))
+
+    expect(queryClient.getQueryData(articleQueryKey('un-article'))).toEqual(
+      articleBy('jacob', 'un-article')
+    )
+  })
+
+  it('AC-9: remplace l’entrée d’avant l’enregistrement, à slug inchangé', () => {
+    // Le cœur du défaut mesuré (`articles.spec.ts:229`). L'entrée pré-remplie
+    // reproduit exactement ce que `ArticleEditorLoader` écrit à l'ouverture de
+    // l'éditeur : sans elle, le test passerait contre le code d'avant, une
+    // clé absente étant de toute façon chargée depuis l'API.
+    const queryClient = newClient()
+    queryClient.setQueryData(articleQueryKey('un-article'), tagged('un-article'))
+    const saved: Article = { ...tagged('un-article'), tagList: [] }
+
+    cacheSavedArticle(queryClient, saved, 'un-article')
+
+    expect(queryClient.getQueryData<Article>(articleQueryKey('un-article'))?.tagList).toEqual([])
+  })
+
+  it('AC-10: retire l’entrée du slug d’origine quand l’enregistrement l’a changé', () => {
+    // La ressource n'existe plus sous l'ancien slug — l'API y répond 404. Une
+    // entrée fraîche qui la décrirait encore servirait un article fantôme à qui
+    // reviendrait en arrière.
+    const queryClient = newClient()
+    queryClient.setQueryData(articleQueryKey('ancien-slug'), tagged('ancien-slug'))
+
+    cacheSavedArticle(queryClient, articleBy('jacob', 'nouveau-slug'), 'ancien-slug')
+
+    expect(queryClient.getQueryData(articleQueryKey('ancien-slug'))).toBeUndefined()
+    expect(queryClient.getQueryData(articleQueryKey('nouveau-slug'))).toBeDefined()
+  })
+
+  it('AC-10: ne retire rien quand le slug n’a pas changé', () => {
+    // Le pendant indispensable du test précédent : un retrait inconditionnel
+    // effacerait l'entrée que la ligne d'avant vient d'écrire, et la page
+    // atteinte repartirait en chargement — l'inverse de ce que AC-8 demande.
+    const queryClient = newClient()
+    const saved: Article = { ...tagged('un-article'), tagList: [] }
+
+    cacheSavedArticle(queryClient, saved, 'un-article')
+
+    expect(queryClient.getQueryData(articleQueryKey('un-article'))).toEqual(saved)
+  })
+
+  it('AC-8: en création, n’efface aucune entrée faute de slug d’origine', () => {
+    // Une création n'a pas d'article de départ : l'appel se fait sans troisième
+    // argument, et `undefined` ne doit pas être pris pour un slug à retirer.
+    const queryClient = newClient()
+    queryClient.setQueryData(articleQueryKey('un-autre-article'), tagged('un-autre-article'))
+
+    cacheSavedArticle(queryClient, articleBy('jacob', 'nouvel-article'))
+
+    expect(queryClient.getQueryData(articleQueryKey('un-autre-article'))).toBeDefined()
+    expect(queryClient.getQueryData(articleQueryKey('nouvel-article'))).toBeDefined()
   })
 })
