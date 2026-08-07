@@ -1,10 +1,12 @@
 'use client'
 
 import { type Article, createArticleDtoSchema, updateArticleDtoSchema } from '@repo/shared'
+import { useQueryClient } from '@tanstack/react-query'
 import { useRouter } from 'next/navigation'
 import { type FormEvent, type KeyboardEvent, useState } from 'react'
 import { useApi } from '../lib/api-provider'
 import { useAuthenticatedAccount } from '../lib/authenticated-page'
+import { cacheSavedArticle } from '../lib/content-query'
 import { toMessages } from '../lib/errors'
 import { ErrorMessages } from './ErrorMessages'
 
@@ -51,6 +53,7 @@ const EDITOR_MESSAGES: Readonly<Record<number, string>> = {
 export function ArticleEditor({ article }: ArticleEditorProps) {
   const api = useApi()
   const router = useRouter()
+  const queryClient = useQueryClient()
   /**
    * Le compte **retenu** par la page, et non `user` de la session.
    *
@@ -90,6 +93,14 @@ export function ArticleEditor({ article }: ArticleEditorProps) {
       const saved = article
         ? await api.updateArticle(article.slug, parsed.data)
         : await api.createArticle(parsed.data as Parameters<typeof api.createArticle>[0])
+      // **Avant** la redirection, jamais après : la page cible lit son entrée
+      // de cache dès qu'elle monte. Depuis l'ADR 020, `/article/:slug` charge
+      // depuis le navigateur et plus rien n'écrase le cache client à la
+      // navigation — une entrée écrite par le chargeur de l'éditeur quelques
+      // secondes plus tôt est encore fraîche (`staleTime: 30_000`), donc servie
+      // telle quelle. Sans cette ligne, publier sans toucher au titre conduit
+      // sur une page qui affiche l'article d'avant l'enregistrement.
+      cacheSavedArticle(queryClient, saved, article?.slug)
       // Le slug **de la réponse** : sous un titre modifié, il diffère de celui
       // qu'on avait, et suivre l'ancien mènerait à une page introuvable.
       router.push(`/article/${saved.slug}`)

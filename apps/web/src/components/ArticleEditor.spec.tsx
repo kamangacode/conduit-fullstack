@@ -1,8 +1,10 @@
 import type { Article, User } from '@repo/shared'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { ApiError } from '../lib/api-client'
+import { articleQueryKey } from '../lib/content-query'
 import { CONNECTION_FAILURE_MESSAGE } from '../lib/errors'
 import { SessionProvider, TOKEN_STORAGE_KEY, useSession } from '../lib/session'
 import { ArticleEditor } from './ArticleEditor'
@@ -55,13 +57,33 @@ function SessionEcho() {
   return <span data-testid="session-status">{status}</span>
 }
 
-const renderEditor = (article?: Article) =>
-  render(
-    <SessionProvider fetchCurrentUser={async () => jake}>
-      {article ? <ArticleEditor article={article} /> : <ArticleEditor />}
-      <SessionEcho />
-    </SessionProvider>
-  )
+/**
+ * Le cache de requêtes est monté comme il l'est par le layout racine.
+ *
+ * L'éditeur écrit l'article enregistré dans le cache partagé avant de rediriger
+ * (REQ-WEB-014 AC-8) : sans fournisseur, `useQueryClient` lèverait, et c'est le
+ * symptôme attendu de l'ajout — pas une régression. Le client est **rendu** à
+ * l'appelant pour que les tests puissent l'amorcer comme le fait
+ * `ArticleEditorLoader`, puis lire l'entrée après publication.
+ */
+const renderEditor = (article?: Article) => {
+  // Pas de `gcTime: 0` : une entrée sans observateur serait ramassée aussitôt et
+  // les assertions liraient `undefined` — un vert qui ne prouve rien. Chaque
+  // rendu a son client, donc rien ne fuit d'un test à l'autre.
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+
+  return {
+    queryClient,
+    ...render(
+      <QueryClientProvider client={queryClient}>
+        <SessionProvider fetchCurrentUser={async () => jake}>
+          {article ? <ArticleEditor article={article} /> : <ArticleEditor />}
+          <SessionEcho />
+        </SessionProvider>
+      </QueryClientProvider>
+    ),
+  }
+}
 
 /**
  * Réponse d'un enregistrement dont le jeton est refusé, **purge comprise**.
@@ -320,6 +342,97 @@ describe('REQ-WEB-014 — éditeur d’article', () => {
       expect(screen.getByPlaceholderText('Article Title')).toHaveValue('How to train your dragon')
     )
     expect(push).not.toHaveBeenCalled()
+  })
+
+  it('AC-8: écrit l’article renvoyé dans le cache **avant** de rediriger', async () => {
+    // L'ordre est tout le critère : après `push`, la page cible a déjà lu son
+    // entrée. Il se vérifie par les rangs d'appel plutôt que par l'état final,
+    // qui resterait juste même si l'écriture arrivait trop tard.
+    signedIn()
+    const { queryClient } = renderEditor()
+    const setQueryData = vi.spyOn(queryClient, 'setQueryData')
+    const publish = await publishButton()
+
+    await fillRequiredFields()
+    await userEvent.click(publish)
+
+    await waitFor(() => expect(push).toHaveBeenCalledWith('/article/nouveau-slug'))
+    expect(queryClient.getQueryData(articleQueryKey('nouveau-slug'))).toEqual({
+      ...existing,
+      slug: 'nouveau-slug',
+    })
+    const writeRank = Math.min(...setQueryData.mock.invocationCallOrder)
+    const pushRank = push.mock.invocationCallOrder[0]
+    if (pushRank === undefined) {
+      throw new Error('push aurait dû être appelé : le waitFor ci-dessus vient de le vérifier')
+    }
+    expect(writeRank).toBeLessThan(pushRank)
+  })
+
+  it('AC-9: remplace l’entrée étiquetée quand la modification retire tous les tags', async () => {
+    // Le défaut mesuré par `articles.spec.ts:229`. Le cache est amorcé comme
+    // `ArticleEditorLoader` l'amorce à l'ouverture de l'éditeur — c'est cette
+    // entrée-là, fraîche pendant trente secondes, que la page article servait.
+    // Le titre ne bouge pas, donc le slug non plus : même clé, aucun refetch à
+    // attendre, et l'échec est déterministe.
+    updateArticle.mockResolvedValue({ ...existing, tagList: [] })
+    signedIn()
+    const { queryClient } = renderEditor(existing)
+    queryClient.setQueryData(articleQueryKey(existing.slug), existing)
+    const publish = await publishButton()
+
+    await userEvent.click(screen.getByRole('button', { name: 'Remove tag dragons' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Remove tag training' }))
+    await userEvent.click(publish)
+
+    await waitFor(() => expect(push).toHaveBeenCalledWith(`/article/${existing.slug}`))
+    expect(updateArticle).toHaveBeenCalledWith(
+      existing.slug,
+      expect.objectContaining({ tagList: [] })
+    )
+    expect(queryClient.getQueryData<Article>(articleQueryKey(existing.slug))?.tagList).toEqual([])
+  })
+
+  it('AC-10: retire l’entrée du slug d’origine quand le titre a changé', async () => {
+    // Le doublé renvoie `titre-renomme` : l'ancienne clé décrit une ressource
+    // qui n'existe plus, et l'API y répond 404. La laisser fraîche servirait un
+    // article fantôme à qui revient sur l'ancienne URL.
+    signedIn()
+    const { queryClient } = renderEditor(existing)
+    queryClient.setQueryData(articleQueryKey(existing.slug), existing)
+    const publish = await publishButton()
+
+    await userEvent.type(screen.getByPlaceholderText('Article Title'), '-bis')
+    await userEvent.click(publish)
+
+    await waitFor(() => expect(push).toHaveBeenCalledWith('/article/titre-renomme'))
+    expect(queryClient.getQueryData(articleQueryKey(existing.slug))).toBeUndefined()
+    expect(queryClient.getQueryData(articleQueryKey('titre-renomme'))).toBeDefined()
+  })
+
+  it('AC-11: ne touche à aucune entrée quand l’API refuse la publication', async () => {
+    // Rien n'a été enregistré : écrire quoi que ce soit ferait décrire par le
+    // cache un état que l'API n'a jamais confirmé — et la saisie refusée
+    // s'afficherait comme si elle avait été acceptée.
+    //
+    // Seul test du lot qui passe **aussi** contre le code d'avant, et c'est
+    // dans sa nature : il énonce une non-écriture, que du code n'écrivant nulle
+    // part satisfait trivialement. Sa valeur est en garde de la ligne ajoutée —
+    // la déplacer dans un `finally`, ou hors du `try`, le fait rougir.
+    updateArticle.mockRejectedValue(new ApiError(422, { title: ["can't be blank"] }))
+    signedIn()
+    const { queryClient } = renderEditor(existing)
+    queryClient.setQueryData(articleQueryKey(existing.slug), existing)
+    const publish = await publishButton()
+
+    await userEvent.click(screen.getByRole('button', { name: 'Remove tag dragons' }))
+    await userEvent.click(publish)
+
+    await waitFor(() => expect(screen.getByText(/can't be blank/)).toBeInTheDocument())
+    expect(queryClient.getQueryData(articleQueryKey(existing.slug))).toEqual(existing)
+    expect(push).not.toHaveBeenCalled()
+    // La saisie reste à l'écran : l'étiquette retirée ne revient pas.
+    expect(screen.queryByText('dragons')).not.toBeInTheDocument()
   })
 
   it('AC-7: affiche les erreurs par champ et préserve la saisie', async () => {

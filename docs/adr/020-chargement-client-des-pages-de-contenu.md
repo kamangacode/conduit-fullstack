@@ -105,6 +105,23 @@ lisible :
   contournées.
 - Premier affichage plus tardif sur ces routes : un aller-retour supplémentaire
   avant que le contenu n'apparaisse.
+- **Ces trois routes perdent la réparation implicite du cache par hydratation.**
+  Conséquence non listée à la décision, découverte en mesurant
+  ([#29](https://github.com/kamangacode/conduit-fullstack/issues/29)) et ajoutée
+  ici par amendement. `hydrate` remplace une entrée dès que la donnée
+  déshydratée est plus récente : tant que ces pages chargeaient au rendu
+  serveur, chaque navigation vers elles écrasait le cache client avec ce que le
+  serveur venait de lire, et une entrée périmée ne survivait pas à une
+  navigation. L'accueil et les listes gardent cette réparation
+  ([ADR 015](015-prechargement-serveur-et-hydratation-du-cache.md)) ; ces trois
+  routes ne l'ont plus, et **le cache client y fait désormais autorité**. La
+  règle qui en découle : **toute mutation qui touche une ressource affichée par
+  ces routes doit écrire sa réponse dans le cache** — sans quoi
+  `staleTime: 30_000` sert l'état d'avant et plus rien ne le corrige. Le premier
+  symptôme constaté a été un article enregistré à titre inchangé, donc à slug
+  inchangé, dont la page suivante affichait les étiquettes qu'on venait de
+  retirer (REQ-WEB-014 AC-8 à AC-11). Un renommage y échappait par accident : le
+  slug régénéré mène à une clé de cache vide, donc chargée depuis l'API.
 
 ### Neutral
 

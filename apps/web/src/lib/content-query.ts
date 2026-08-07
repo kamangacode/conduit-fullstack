@@ -38,6 +38,57 @@ export function profileQueryKey(username: string): readonly unknown[] {
 }
 
 /**
+ * Écrit dans le cache l'article que l'API vient de confirmer, et retire l'entrée
+ * du slug qu'il portait avant lorsque l'enregistrement l'a changé.
+ *
+ * **Le trou que ce helper ferme.** Depuis l'[ADR 020], `/article/:slug` et
+ * `/editor/:slug` chargent depuis le navigateur : elles ont donc perdu la
+ * réparation implicite qu'apportait l'hydratation. `hydrate` remplace une entrée
+ * dès que la donnée déshydratée est plus récente, si bien qu'une navigation vers
+ * une page préchargée écrasait le cache client avec ce que le serveur venait de
+ * lire. Sur ces routes-là, **le cache client fait désormais autorité** : une
+ * mutation qui n'y écrit rien laisse `staleTime: 30_000` servir l'état d'avant,
+ * et plus rien ne vient le corriger.
+ *
+ * Le symptôme mesuré : enregistrer un article **sans toucher au titre** — donc à
+ * slug inchangé, donc sur la même clé — puis suivre la redirection affiche
+ * l'article d'avant l'enregistrement pendant trente secondes, étiquettes retirées
+ * comprises. Le parcours frère qui renomme l'article était vert par accident : le
+ * slug régénéré menait à une clé vide, donc chargée depuis l'API.
+ *
+ * On **écrit** la réponse plutôt que d'invalider l'entrée : c'est le geste que
+ * `ArticleMeta` pose déjà pour le favori, et celui que le docblock de `staleTime`
+ * (`api-provider.tsx`) affirme — « les mutations mettent l'affichage à jour
+ * depuis la réponse de l'API, sans attendre un refetch ». Invalider coûterait un
+ * aller-retour et, pendant sa durée, continuerait d'afficher l'ancien contenu :
+ * l'auteur verrait ses étiquettes revenir une fraction de seconde.
+ *
+ * L'entrée de l'ancien slug est **retirée**, pas écrasée : la ressource n'existe
+ * plus sous ce slug (l'API y répond 404), et une entrée fraîche qui la décrirait
+ * encore servirait un article fantôme à qui reviendrait en arrière.
+ *
+ * Vit ici, à côté des clés qu'il écrit, pour la même raison
+ * qu'`invalidateAuthorCaches` : quelles entrées un enregistrement rend fausses
+ * est une propriété du **modèle de cache**, pas de l'écran qui enregistre.
+ *
+ * [ADR 020]: ../../../../docs/adr/020-chargement-client-des-pages-de-contenu.md
+ */
+export function cacheSavedArticle(
+  queryClient: QueryClient,
+  saved: Article,
+  previousSlug?: string
+): void {
+  queryClient.setQueryData(articleQueryKey(saved.slug), saved)
+
+  if (previousSlug !== undefined && previousSlug !== saved.slug) {
+    // `exact` : sans lui, la clé serait traitée comme un préfixe. Elle n'a
+    // aujourd'hui aucun descendant, mais une clé plus fine posée demain
+    // (`['article', slug, …]`) disparaîtrait sans que rien ne le signale.
+    queryClient.removeQueries({ queryKey: articleQueryKey(previousSlug), exact: true })
+  }
+}
+
+/**
  * Invalide, pour un ou plusieurs usernames, **toutes** les entrées de cache qui
  * portent une copie de leur compte — pas seulement `profileQueryKey`.
  *
