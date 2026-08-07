@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs'
+import { readdirSync, readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import type { User } from '@repo/shared'
 import { render, screen, waitFor } from '@testing-library/react'
@@ -54,6 +54,25 @@ const renderProbe = () =>
     </SessionProvider>
   )
 
+/**
+ * Toutes les routes App Router de `src/app`, **découvertes** plutôt que
+ * recopiées : une liste figée est exactement le défaut qu'AC-4 dénonce
+ * ailleurs — une troisième page authentifiée qui naîtrait demain n'aurait
+ * qu'à ne pas être ajoutée à un tableau pour échapper au test.
+ *
+ * `dir` reste un paramètre (et non une constante interne) pour que le test
+ * qui l'appelle documente, à l'endroit de l'appel, la racine qu'il balaie.
+ */
+function findPageFiles(dir: string): string[] {
+  return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
+    const full = resolve(dir, entry.name)
+    if (entry.isDirectory()) {
+      return findPageFiles(full)
+    }
+    return entry.name === 'page.tsx' ? [full] : []
+  })
+}
+
 beforeEach(() => {
   window.localStorage.clear()
   push.mockClear()
@@ -108,16 +127,37 @@ describe('REQ-WEB-019 — règle des pages authentifiées', () => {
     expect(window.localStorage.getItem(TOKEN_STORAGE_KEY)).toBeNull()
   })
 
-  it('AC-4: aucune page authentifiée ne porte sa propre copie de la règle', async () => {
-    // Un critère **structurel**, donc un test structurel : ce qu'AC-4 promet
-    // n'est pas un comportement de plus (les autres tests le couvrent déjà des
-    // deux côtés), c'est l'absence d'une seconde écriture. La seule façon de le
-    // vérifier est de regarder les fichiers.
+  it('AC-4a: les pages authentifiées connues consomment la règle partagée', () => {
+    // La moitié « positive » d'AC-4 reste une liste : elle affirme que des
+    // fichiers précis appellent bien le hook, ce qu'une découverte
+    // automatique ne peut pas remplacer (une page publique ne doit *pas*
+    // l'appeler, donc balayer `src/app` en entier donnerait des faux
+    // positifs ici). C'est la moitié « négative », ci-dessous, qui ferme le
+    // trou qu'une liste laisse ouvert.
     //
-    // Ce n'est pas de la cosmétique : le défaut d'origine venait précisément
-    // d'une règle écrite dans une page et pas dans l'autre. Un test qui échoue
-    // le jour où quelqu'un recopie `push('/login')` dans une troisième page
-    // authentifiée vaut mieux qu'une convention que personne ne relit.
+    // Chemins depuis la racine du workspace `apps/web`, où Vitest s'exécute.
+    // `import.meta.url` ne serait pas un `file:` sous l'environnement jsdom.
+    const knownConsumers = ['src/app/settings/page.tsx', 'src/components/ArticleEditor.tsx']
+
+    for (const name of knownConsumers) {
+      const source = readFileSync(resolve(process.cwd(), name), 'utf8')
+      expect(source, `${name} doit consommer la règle partagée`).toContain(
+        'useAuthenticatedAccount'
+      )
+    }
+  })
+
+  it('AC-4b: aucune route ni l’éditeur ne recopie la redirection localement', () => {
+    // Le défaut d'origine venait d'une règle écrite dans une page et pas dans
+    // l'autre — une **troisième** page authentifiée, ajoutée plus tard, n'a
+    // aucune raison de figurer dans un tableau maintenu à la main. Ce test
+    // balaie donc **toutes** les routes de `src/app` (découvertes, pas
+    // recopiées) plutôt qu'une liste connue : une page qui échapperait à un
+    // tableau n'échappe pas à un `readdirSync`.
+    //
+    // `ArticleEditor.tsx` est ajouté à part : ce n'est pas une route App
+    // Router, mais c'est lui qui porte le formulaire de `/editor` et
+    // `/editor/:slug`.
     //
     // Les motifs tolèrent les deux styles de guillemets (`'` et `"`) que
     // Biome laisse cohabiter dans ce dépôt selon le contexte (apostrophe
@@ -126,20 +166,16 @@ describe('REQ-WEB-019 — règle des pages authentifiées', () => {
     // écrite avec l'autre, sans qu'aucune règle de lint ne le signale — Biome
     // ne vérifie pas la présence d'un mot-clé, seulement la cohérence des
     // guillemets une fois le style choisi.
-    //
-    // Chemins depuis la racine du workspace `apps/web`, où Vitest s'exécute.
-    // `import.meta.url` ne serait pas un `file:` sous l'environnement jsdom.
-    const paths = ['src/app/settings/page.tsx', 'src/components/ArticleEditor.tsx']
+    const appDir = resolve(process.cwd(), 'src/app')
+    const editorComponent = resolve(process.cwd(), 'src/components/ArticleEditor.tsx')
+    const candidates = [...findPageFiles(appDir), editorComponent]
 
-    for (const name of paths) {
-      const source = readFileSync(resolve(process.cwd(), name), 'utf8')
-      expect(source, `${name} doit consommer la règle partagée`).toContain(
-        'useAuthenticatedAccount'
-      )
+    for (const file of candidates) {
+      const source = readFileSync(file, 'utf8')
       // La destination de la redirection n'apparaît plus que dans le hook : sa
       // présence ici signalerait une copie locale de la décision.
-      expect(source, `${name} ne doit pas rediriger lui-même`).not.toMatch(/['"]\/login['"]/)
-      expect(source, `${name} ne doit pas relire le statut de session`).not.toMatch(
+      expect(source, `${file} ne doit pas rediriger lui-même`).not.toMatch(/['"]\/login['"]/)
+      expect(source, `${file} ne doit pas relire le statut de session`).not.toMatch(
         /status\s*===\s*['"]anonymous['"]/
       )
     }
