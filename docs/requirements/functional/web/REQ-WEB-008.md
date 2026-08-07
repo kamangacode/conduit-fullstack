@@ -52,6 +52,7 @@ implementation:
     - apps/web/src/lib/api-client.ts
   tests:
     - apps/web/src/lib/api-client.spec.ts
+    - apps/api/test/integration/article-http.integration.spec.ts
 related:
   issues: [8, 12]
   requirements:

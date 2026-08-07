@@ -53,4 +53,37 @@ describe('REQ-WEB-017 — traduction des échecs de soumission', () => {
     expect(messages).not.toEqual([CONNECTION_FAILURE_MESSAGE])
     expect(messages).toEqual(['request failed'])
   })
+
+  it('REQ-WEB-019 AC-1 : préfère le message de la page au détail du champ `token`', () => {
+    // La forme que le guard d'authentification renvoie réellement
+    // (REQ-ERROR-002 AC-4) — jamais un objet vide. Une régression qui referait
+    // primer `error.messages` afficherait « token is invalid », un message que
+    // rien sur la page ne permet de corriger, à la place de celui qui dit quoi
+    // faire.
+    const error = new ApiError(401, { token: ['is invalid'] })
+
+    expect(toMessages(error, { 401: 'your session has expired, please sign in again' })).toEqual([
+      'your session has expired, please sign in again',
+    ])
+  })
+
+  it('REQ-WEB-019 AC-1 : rend quand même le détail si la page ne fournit aucun message pour 401', () => {
+    // L'exception ne doit pas faire disparaître un message exploitable pour un
+    // appelant qui n'a rien prévu pour ce statut — elle ne fait que lui donner
+    // la priorité quand la page en a un.
+    const error = new ApiError(401, { token: ['is invalid'] })
+
+    expect(toMessages(error)).toEqual(['token is invalid'])
+  })
+
+  it('ne détourne pas le 401 de connexion, qui porte `credentials` et non `token`', () => {
+    // REQ-ERROR-002 AC-5 : `/users/login` refuse sous une clé différente.
+    // `AuthForm` doit continuer de recevoir le détail de l'API, pas le message
+    // générique d'une autre page.
+    const error = new ApiError(401, { credentials: ['invalid'] })
+
+    expect(toMessages(error, { 401: 'your session has expired, please sign in again' })).toEqual([
+      'credentials invalid',
+    ])
+  })
 })

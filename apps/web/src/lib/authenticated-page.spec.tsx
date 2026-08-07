@@ -118,6 +118,15 @@ describe('REQ-WEB-019 — règle des pages authentifiées', () => {
     // d'une règle écrite dans une page et pas dans l'autre. Un test qui échoue
     // le jour où quelqu'un recopie `push('/login')` dans une troisième page
     // authentifiée vaut mieux qu'une convention que personne ne relit.
+    //
+    // Les motifs tolèrent les deux styles de guillemets (`'` et `"`) que
+    // Biome laisse cohabiter dans ce dépôt selon le contexte (apostrophe
+    // française dans une chaîne à interpoler, par exemple) : un grep qui ne
+    // reconnaîtrait qu'un seul style laisserait passer une copie locale
+    // écrite avec l'autre, sans qu'aucune règle de lint ne le signale — Biome
+    // ne vérifie pas la présence d'un mot-clé, seulement la cohérence des
+    // guillemets une fois le style choisi.
+    //
     // Chemins depuis la racine du workspace `apps/web`, où Vitest s'exécute.
     // `import.meta.url` ne serait pas un `file:` sous l'environnement jsdom.
     const paths = ['src/app/settings/page.tsx', 'src/components/ArticleEditor.tsx']
@@ -129,9 +138,9 @@ describe('REQ-WEB-019 — règle des pages authentifiées', () => {
       )
       // La destination de la redirection n'apparaît plus que dans le hook : sa
       // présence ici signalerait une copie locale de la décision.
-      expect(source, `${name} ne doit pas rediriger lui-même`).not.toContain("'/login'")
+      expect(source, `${name} ne doit pas rediriger lui-même`).not.toMatch(/['"]\/login['"]/)
       expect(source, `${name} ne doit pas relire le statut de session`).not.toMatch(
-        /status === 'anonymous'/
+        /status\s*===\s*['"]anonymous['"]/
       )
     }
   })

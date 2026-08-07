@@ -117,6 +117,27 @@ describe('REQ-ARTICLE-003 — POST /articles', () => {
     expect(response.body.article.author.username).toBe('jake')
     expect(response.body.article.slug).toBe('how-to-train-your-dragon')
   })
+
+  it('accepte la barre finale que `apps/web` émet en création (ADR 021)', async () => {
+    // `CREATE_ARTICLE_PATH` (`apps/web/src/lib/api-client.ts`) émet
+    // `POST /articles/`, et non `/articles`, pour que la suite e2e officielle
+    // puisse intercepter la requête. L'ADR 021 affirme que le routeur d'Express
+    // répond identiquement aux deux formes hors *strict routing* — une
+    // affirmation sur **notre** câblage NestJS, pas sur Express en général, que
+    // rien ne vérifiait ici. Sans ce test, un jour où `strict routing` serait
+    // activé (ou un intercepteur de préfixe ajouté) casserait silencieusement
+    // la création d'article depuis le front, découvert uniquement en e2e.
+    const token = await register('jake')
+
+    const response = await http()
+      .post('/api/articles/')
+      .set('Authorization', `Token ${token}`)
+      .send({ article: anArticle() })
+      .expect(201)
+
+    expect(articleResponseSchema.safeParse(response.body).success).toBe(true)
+    expect(response.body.article.slug).toBe('how-to-train-your-dragon')
+  })
 })
 
 describe('REQ-ARTICLE-004 — GET /articles/:slug', () => {

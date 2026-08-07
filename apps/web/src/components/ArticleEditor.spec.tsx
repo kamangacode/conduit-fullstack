@@ -69,10 +69,16 @@ const renderEditor = (article?: Article) =>
  * L'ordre reproduit celui du client réel : la session est fermée d'abord, puis
  * l'erreur remonte à l'appelant. C'est précisément cet ordre qui fabriquait le
  * défaut — la page passait en « anonyme » avant même de voir l'erreur.
+ *
+ * Le corps porte `{ token: […] }`, la forme que le guard d'authentification
+ * renvoie réellement (REQ-ERROR-002 AC-3/AC-4) — jamais un objet vide. Un
+ * double qui construirait `ApiError(401, {})` prouverait un comportement que la
+ * vraie API ne déclenche jamais : `toMessages` (`lib/errors.ts`) traite les
+ * deux formes différemment, et seule celle-ci éprouve le chemin réel.
  */
 const rejectWithExpiredSession = async () => {
   closeSession?.()
-  throw new ApiError(401, {})
+  throw new ApiError(401, { token: ['is invalid'] })
 }
 
 const signedIn = () => window.localStorage.setItem(TOKEN_STORAGE_KEY, jake.token)
