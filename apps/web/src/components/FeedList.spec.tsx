@@ -96,7 +96,35 @@ describe('REQ-WEB-009 — liste du flux', () => {
     const { container } = renderList()
 
     await waitFor(() => expect(container.querySelector('.pagination')).not.toBeNull())
-    expect(container.querySelectorAll('li.page-item')).toHaveLength(3)
+    expect(container.querySelectorAll('li.page-item')).toHaveLength(5)
+  })
+
+  it('AC-8: dit au lecteur quoi faire d’un flux personnel vide', async () => {
+    // « Aucun article » ne veut pas dire la même chose des deux côtés : sur le
+    // flux personnel, c'est la conséquence de ne suivre personne, et le geste
+    // qui en sort est d'aller voir le flux global. Le message referme donc
+    // lui-même l'impasse qu'il annonce.
+    getFeed.mockResolvedValue({ articles: [], articlesCount: 0 })
+
+    const { container } = renderList({ kind: 'following' })
+
+    await waitFor(() => expect(container.querySelector('.empty-feed-message')).toBeInTheDocument())
+    const message = container.querySelector('.empty-feed-message')
+    expect(message).toHaveTextContent('Your feed is empty')
+    expect(message?.querySelector('a[href="/"]')).not.toBeNull()
+  })
+
+  it('AC-9: garde le message générique sur un flux public vide', async () => {
+    // Un flux global vide ne parle pas au lecteur de son propre flux : il n'a
+    // rien à y faire, et l'y renvoyer serait une invitation sans objet.
+    listArticles.mockResolvedValue({ articles: [], articlesCount: 0 })
+
+    const { container } = renderList({ kind: 'tag', tag: 'dragons' })
+
+    await waitFor(() => expect(container.querySelector('.empty-feed-message')).toBeInTheDocument())
+    const message = container.querySelector('.empty-feed-message')
+    expect(message).not.toHaveTextContent('Your feed')
+    expect(message?.querySelector('a')).toBeNull()
   })
 })
 
@@ -118,6 +146,19 @@ describe('REQ-WEB-015 — listes du profil', () => {
 
     const { container } = renderList({ kind: 'favorited', username: 'jacob' })
 
-    await waitFor(() => expect(container.querySelectorAll('li.page-item')).toHaveLength(3))
+    await waitFor(() => expect(container.querySelectorAll('li.page-item')).toHaveLength(5))
+  })
+
+  it('AC-6: pagine un onglet de profil avec le nouveau contrôle', async () => {
+    // Non-régression du passage au formulaire GET ([ADR 023]) : le profil hérite
+    // de `Pagination` par son unique chemin (`FeedList`), il n'a pas de seconde
+    // implémentation — et c'est ce test qui le prouve plutôt que de le supposer.
+    listArticles.mockResolvedValue({ articles: [article], articlesCount: 47 })
+
+    const { container } = renderList({ kind: 'author', username: 'jacob' })
+
+    await waitFor(() =>
+      expect(container.querySelector('li.page-item form button.page-link')).not.toBeNull()
+    )
   })
 })

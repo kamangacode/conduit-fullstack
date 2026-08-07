@@ -1,8 +1,7 @@
 import { dehydrate, HydrationBoundary, QueryClient } from '@tanstack/react-query'
-import { FeedList } from '../components/FeedList'
-import { FeedToggle } from '../components/FeedToggle'
+import { HomeFeed } from '../components/HomeFeed'
 import { PopularTags } from '../components/PopularTags'
-import { prefetchFeed, resolveFeed } from '../lib/feed-query'
+import { type FeedKind, isPublicFeed, prefetchFeed, requestedFeed } from '../lib/feed-query'
 import { pageFromParam } from '../lib/pagination'
 import { createServerApiClient } from '../lib/server-api-client'
 
@@ -17,6 +16,10 @@ import { createServerApiClient } from '../lib/server-api-client'
  * **Server Component** qui précharge le flux et transmet le cache déshydraté
  * ([ADR 015]) : le HTML initial contient déjà les articles, et `FeedList` monte
  * côté client sans émettre de requête.
+ *
+ * Il ne transmet que le flux **demandé** par l'URL ([ADR 022]) : qui a le droit
+ * de voir le flux personnel se décide dans `HomeFeed`, côté client, une fois la
+ * session résolue.
  */
 
 export interface HomePageProps {
@@ -28,14 +31,17 @@ export async function HomePage({ tag, searchParams }: HomePageProps) {
   const feedParam = firstValue(searchParams.feed)
   const page = pageFromParam(firstValue(searchParams.page))
 
-  // Le serveur est anonyme (ADR 012) : il ne peut pas résoudre un flux
-  // personnel, et ne doit surtout pas essayer — l'appel partirait sans jeton.
-  // C'est `FeedToggle`, côté client, qui proposera l'onglet, et le client qui
-  // chargera ce flux-là.
-  const feed = resolveFeed({ tag, feedParam, isAuthenticated: false })
+  const feed = requestedFeed({ tag, feedParam })
 
   const queryClient = new QueryClient()
-  await prefetchFeed(queryClient, createServerApiClient(), { feed, page })
+
+  // Le serveur est anonyme (ADR 012) : il ne peut précharger qu'un flux public,
+  // et ne doit surtout pas essayer sur `following` — l'appel partirait sans
+  // jeton et reviendrait en 401 (ADR 015 §4). La condition est portée par
+  // `isPublicFeed` plutôt que par une vigilance de relecture.
+  if (isPublicFeed(feed)) {
+    await prefetchFeed(queryClient, createServerApiClient(), { feed, page })
+  }
 
   return (
     <div className="home-page">
@@ -49,9 +55,8 @@ export async function HomePage({ tag, searchParams }: HomePageProps) {
       <div className="container page">
         <div className="row">
           <div className="col-md-9">
-            <FeedToggle feed={feed} />
             <HydrationBoundary state={dehydrate(queryClient)}>
-              <FeedList
+              <HomeFeed
                 feed={feed}
                 page={page}
                 pathname={pathnameFor(feed, tag)}
@@ -82,11 +87,11 @@ function firstValue(raw: string | string[] | undefined): string | undefined {
 }
 
 /** Chemin courant, que la pagination doit conserver. */
-function pathnameFor(feed: ReturnType<typeof resolveFeed>, tag: string | undefined): string {
+function pathnameFor(feed: FeedKind, tag: string | undefined): string {
   return feed.kind === 'tag' && tag ? `/tag/${encodeURIComponent(tag)}` : '/'
 }
 
-/** Filtres à reporter sur les liens de pagination — le tag vit dans le chemin. */
+/** Filtres à reporter sur les contrôles de pagination — le tag vit dans le chemin. */
 function toSearchParams(feedParam: string | undefined): URLSearchParams {
   return new URLSearchParams(feedParam ? { feed: feedParam } : {})
 }
