@@ -510,3 +510,114 @@ ne disent pas la même chose.
 **symptôme**, pas une cause. Le lire comme un diagnostic aurait envoyé chercher
 une interpolation fautive qui n'existait pas. C'est l'assertion qui fait foi,
 jamais l'intitulé.
+
+---
+
+## 2026-08-07 — Une requête relative au lecteur montée avant la résolution de la session part anonyme, et ne se reprend jamais
+
+**Symptôme.** `social.spec.ts` échouait sur « suivre puis cesser de suivre » :
+`unfollowUser()` recharge `/profile/{cible}` par un `page.goto` complet, la page
+réaffiche « Follow », et l'attente de « Unfollow » expire. Le premier clic, lui,
+fonctionnait — ce qui rendait le défaut difficile à voir.
+
+**La cause.** `ProfileView` demande le profil au montage. Le client API lit le
+jeton **à l'instant de la requête**, dans la session, et ce jeton vaut `null` au
+montage : `SessionProvider` part délibérément de `status: 'pending'` pour que le
+premier rendu client soit identique au rendu serveur (ADR 012), et ne lit le
+stockage que dans un effet, suivi d'un `GET /user` (ADR 014). Or React exécute
+les effets **des enfants vers le parent** : le montage de la page précède
+toujours la lecture du stockage. Ce n'est donc pas une course dont l'issue
+varie, c'est un ordre garanti.
+
+La requête part anonyme, l'API répond `following: false` — ce qui est **juste**
+pour l'appelant qu'elle a vu (règle R-5) — et rien ne reprend cette réponse : la
+clé de cache ne porte pas l'identité du lecteur, `staleTime` vaut trente
+secondes, `refetchOnWindowFocus` est désactivé, et l'invalidation des caches
+d'auteur n'est déclenchée que par la page de paramètres.
+
+**Pourquoi le premier clic marchait.** Au premier passage, le lecteur ne suit
+effectivement personne : la réponse anonyme **coïncide avec la vérité**. Le clic,
+lui, part bien authentifié — le jeton est à jour à cet instant. Le défaut n'est
+visible qu'au second chargement, celui où réponse anonyme et vérité divergent.
+Une coïncidence qui masque un défaut est pire qu'un défaut franc : elle produit
+un chemin heureux qui rassure.
+
+**Trois occurrences, une seule cause.** C'est la troisième fois que la même
+confusion se paie dans ce dépôt, et elle a coûté un défaut à chaque fois :
+
+| Surface | Ce qui a été confondu | Symptôme |
+|---|---|---|
+| `/settings` | `user === null` lu comme « anonyme » | le lecteur connecté était redirigé vers `/login` pendant la réhydratation |
+| `/?feed=following` | idem, plus une liste montée trop tôt | `GET /articles/feed` émis sans jeton, 401 à l'écran |
+| `/profile/:username` | requête émise sous `pending` | `following: false` affiché à un lecteur qui suit |
+
+**Le prédicat qui les distingue.** Trois des quatre états de session portent
+`user === null` (`pending`, `anonymous`, `unavailable`) ; ils ne veulent pas dire
+la même chose. La règle tient en deux lignes :
+
+- une **redirection** s'écrit sur `status === 'anonymous'`, jamais sur
+  `user === null` ;
+- une **requête dont un champ dépend du lecteur** s'écrit sur
+  `status !== 'pending'` — les trois autres états sont des réponses, y compris
+  `unavailable`, où un jeton conservé reste un jeton à envoyer.
+
+**Règle à appliquer.** Avant d'écrire un `useQuery` dans un composant client, se
+demander : *un champ de cette réponse change-t-il selon qui la demande ?* Si oui,
+la requête attend la résolution de la session. `isPending` restant vrai tant
+qu'une requête est désactivée, l'écran d'attente déjà écrit couvre le nouvel état
+sans une ligne de plus — le coût réel de la garde est **un rendu** pour un
+anonyme, et zéro requête supplémentaire pour personne.
+
+**Le corollaire côté état local.** Le second verrou était dans `FollowButton` :
+il **copiait** `profile.following` dans un `useState` et ne se resynchronisait
+qu'au changement de username. Une réponse fraîche pour le même profil était donc
+ignorée. Un état dérivé d'une prop ne se copie pas ; on ne garde en local que
+l'écart que le serveur ne connaît pas encore, et cet écart s'efface dès que la
+prop bouge. Le commentaire d'`ArticlePreview` affirmait déjà que ce bouton
+procédait ainsi : une affirmation sur un fichier voisin ne vaut rien tant que
+rien ne l'observe — même leçon que le 2026-08-06.
+
+**Ce qu'un test de composant ne pouvait pas voir.** `FollowButton.spec.tsx`
+montait le bouton sous une session **déjà résolue**. Aucune assertion n'était
+fausse ; l'état éprouvé n'était simplement pas celui dans lequel l'application se
+trouve à chaque chargement de page. Un test qui pose son décor après la fenêtre
+où le défaut vit ne le verra jamais, et sa couverture se lira comme acquise.
+
+---
+
+## 2026-08-07 — Le mode par défaut d'une suite vendorée est une supposition d'environnement, et elle ne se déclare nulle part
+
+**Symptôme.** Après correction du défaut ci-dessus, les trois mêmes tests de
+`social.spec.ts` restaient rouges — et pas là où on les attendait : le profil
+visé rendait « Profile not found ». Le front était devenu correct, la donnée
+manquait.
+
+**La cause.** `helpers/config.ts` de la suite tient en une ligne :
+`API_MODE = process.env.API_MODE?.toLowerCase() !== 'false'`. Le défaut est donc
+**vrai**, et notre harnais n'a jamais posé cette variable. La suite se croyait
+opposée à la démo publique, où le compte `johndoe` existe depuis toujours ;
+`social.spec.ts` le cible en dur plutôt que d'inscrire un second compte, et le
+commentaire le dit en clair — « API mode: johndoe exists with articles on the
+demo backend ». Sur notre base vidée à chaque run, ce compte n'existait pas.
+
+**Le mauvais remède, et pourquoi.** Poser `API_MODE=false` aurait fait basculer
+la suite dans sa branche « fullstack », qui inscrit son second compte elle-même.
+Trois tests seraient passés au vert — et **quatre fichiers entiers** se seraient
+éteints, `test.skip(!API_MODE, …)` en tête de fichier : `error-handling`,
+`user-fetch-errors`, `xss-security`, `health`, soit une quarantaine de tests que
+les lots précédents avaient payés. Le compteur de rouges serait tombé, la
+couverture aussi. C'est le mode de tricherie le plus tentant parce qu'il ne
+touche ni une assertion ni un sélecteur : il change **quels tests existent**.
+
+**Le bon remède.** Rendre vrai ce que la suite suppose, jamais changer ce
+qu'elle vérifie : le compte manquant est semé par le harnais, comme l'était déjà
+l'article du flux global (REQ-CONF-003) et comme l'hôte d'API est déjà résolu
+vers l'API du run (ADR 019). Zéro test désactivé, zéro fichier vendoré touché.
+
+**Règle à appliquer.** Avant d'imputer un échec de suite vendorée au code,
+**lire ses helpers de configuration** et énumérer ses variables d'environnement
+avec leur valeur par défaut. Un défaut non posé est un choix implicite qu'on n'a
+pas fait, et il vient avec une supposition d'environnement que rien ne déclare.
+Corollaire : quand un drapeau ferait passer des tests au vert, vérifier d'abord
+combien il en **retire** — un drapeau qui réduit l'ensemble exécuté n'est pas un
+correctif, c'est un filtre.

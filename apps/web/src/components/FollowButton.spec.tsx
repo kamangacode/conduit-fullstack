@@ -137,4 +137,61 @@ describe('REQ-WEB-005 — bouton de suivi', () => {
 
     expect(container.querySelector('button.btn.btn-sm.action-btn')).not.toBeNull()
   })
+
+  it('AC-8: affiche « Unfollow » avant tout clic quand le lecteur suit déjà', async () => {
+    // L'état affiché au **chargement** est celui de la prop, sans geste de
+    // l'utilisateur. C'est l'assertion que `social.spec.ts` fait juste après un
+    // `page.goto` complet : le helper `unfollowUser()` recharge la page et
+    // attend `button:has-text("Unfollow")` sans rien cliquer.
+    signedIn()
+    const { container } = renderButton({ ...jacobProfile, following: true })
+
+    expect(await screen.findByRole('button', { name: /Unfollow jacob/ })).toBeInTheDocument()
+    // La classe distingue les deux états dans le CSS de référence (rule 11) :
+    // un libellé juste sur un bouton resté `btn-outline-secondary` se lit encore
+    // comme « non suivi ».
+    expect(container.querySelector('button.btn-secondary')).not.toBeNull()
+    expect(follow).not.toHaveBeenCalled()
+    expect(unfollow).not.toHaveBeenCalled()
+  })
+
+  it('AC-9: suit une réponse fraîche portant un `following` différent, à username inchangé', async () => {
+    // La resynchronisation était conditionnée au changement de **username** :
+    // une réponse fraîche pour le *même* profil était donc silencieusement
+    // ignorée. Le `key` de la liste protège du changement de profil, pas du
+    // rafraîchissement du même.
+    signedIn()
+    const { rerender } = renderButton({ ...jacobProfile, following: false })
+    expect(await screen.findByRole('button', { name: /Follow jacob/ })).toBeInTheDocument()
+
+    rerender(
+      <SessionProvider fetchCurrentUser={async () => jake}>
+        <FollowButton profile={{ ...jacobProfile, following: true }} />
+      </SessionProvider>
+    )
+
+    expect(await screen.findByRole('button', { name: /Unfollow jacob/ })).toBeInTheDocument()
+  })
+
+  it('AC-9: conserve l’écart d’une bascule tant que la réponse fraîche ne l’a pas rattrapé', async () => {
+    // La contrepartie du critère précédent : dériver des props ne doit pas
+    // effacer ce que l'API vient de confirmer. Tant que la prop porte encore la
+    // valeur d'avant le clic, c'est l'écart local qui gouverne — c'est
+    // exactement ce que « l'état local ne conserve que l'écart produit par une
+    // bascule en cours » veut dire.
+    signedIn()
+    const { rerender } = renderButton({ ...jacobProfile, following: false })
+    await waitFor(() => expect(screen.getByRole('button')).toBeEnabled())
+
+    await userEvent.click(screen.getByRole('button', { name: /Follow jacob/ }))
+    expect(await screen.findByRole('button', { name: /Unfollow jacob/ })).toBeInTheDocument()
+
+    rerender(
+      <SessionProvider fetchCurrentUser={async () => jake}>
+        <FollowButton profile={{ ...jacobProfile, following: false }} />
+      </SessionProvider>
+    )
+
+    expect(await screen.findByRole('button', { name: /Unfollow jacob/ })).toBeInTheDocument()
+  })
 })

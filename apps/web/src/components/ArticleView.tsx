@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query'
 import { ApiError } from '../lib/api-client'
 import { useApi } from '../lib/api-provider'
 import { articleQueryKey, commentsQueryKey } from '../lib/content-query'
+import { useSession } from '../lib/session'
 import { ArticleBody } from './ArticleBody'
 import { ArticleMeta } from './ArticleMeta'
 import { ArticlePageNotice } from './ArticlePageNotice'
@@ -20,14 +21,24 @@ import { CommentSection } from './CommentSection'
  * L'appel part avec le jeton du lecteur quand il en a un : `favorited` et
  * `following` sont relatifs à lui (règle R-5), et c'est précisément ce que le
  * rendu serveur anonyme ne pouvait pas produire.
+ *
+ * Encore faut-il qu'il y ait un jeton à envoyer **au moment où l'appel part**.
+ * C'est la même garde que sur la page de profil (REQ-WEB-005 AC-7) : montée
+ * pendant `pending`, la requête part anonyme et l'entrée de cache qu'elle
+ * remplit n'est jamais reprise — la clé ne porte pas l'identité du lecteur,
+ * `staleTime` vaut trente secondes et le refetch au focus est désactivé.
  */
 
 export function ArticleView({ slug }: { readonly slug: string }) {
   const api = useApi()
+  const { status } = useSession()
 
   const article = useQuery({
     queryKey: articleQueryKey(slug),
     queryFn: () => api.getArticle(slug),
+    // Voir `ProfileView` : `pending` est le seul état où l'on ne sait pas encore
+    // quel jeton envoyer, donc le seul où attendre a un sens.
+    enabled: status !== 'pending',
     // Un article inexistant est une **réponse**, pas une panne : réessayer trois
     // fois un 404 retarde l'affichage du message d'absence sans rien changer à
     // son contenu.
@@ -38,6 +49,11 @@ export function ArticleView({ slug }: { readonly slug: string }) {
   // Chargés en parallèle de l'article, et non à sa suite : les commentaires sont
   // publics et leur requête ne dépend que du slug de l'URL. Les enchaîner
   // ajouterait un aller-retour pour rien.
+  //
+  // Et **sans** la garde de session ci-dessus, pour la même raison : rien dans
+  // la réponse ne dépend du lecteur, donc la retarder ne corrigerait aucun
+  // champ — elle ne ferait qu'ajouter l'aller-retour `GET /user` au chemin
+  // critique d'un contenu public.
   const comments = useQuery({
     queryKey: commentsQueryKey(slug),
     queryFn: () => api.getComments(slug),

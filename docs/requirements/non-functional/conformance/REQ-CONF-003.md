@@ -23,6 +23,10 @@ acceptance_criteria:
     given: "la suite exécutée deux fois d'affilée sur la même base"
     when: "on compare les deux verdicts"
     then: "le test qui lit le flux global sans mock rend le même résultat — il ne dépend d'aucun article créé par un autre fichier de specs"
+  - id: AC-5
+    given: "`social.spec.ts`, qui vise en dur le compte `johndoe` que la suite dit présent sur la démo publique"
+    when: "le harnais démarre"
+    then: "ce compte existe et a publié au moins un article, de sorte que `/profile/johndoe` rende un profil et non la coquille « profil introuvable »"
 implementation:
   files:
     - scripts/e2e-seed.mjs
@@ -31,7 +35,7 @@ implementation:
   tests:
     - scripts/verify-e2e-seed.sh
 related:
-  issues: [12]
+  issues: [12, 15]
   requirements:
     - REQ-CONF-002
     - REQ-WEB-002
@@ -61,6 +65,26 @@ pas un comportement, c'est une donnée. En amont, la suite vise une démo publiq
 qui contient des articles depuis toujours ; notre harnais défait volontairement
 cette propriété et ne la restitue pas.
 
+**AC-5 est la seconde occurrence, découverte un lot plus tard.** La suite lit
+`API_MODE`, dont le défaut est **vrai** : elle se croit donc opposée à la démo
+publique, et trois tests de `social.spec.ts` ciblent `johndoe` en dur plutôt que
+d'inscrire un second compte — « API mode: johndoe exists with articles on the
+demo backend », écrit dans le fichier lui-même. Forcer `API_MODE=false` serait le
+mauvais remède : ce drapeau **saute** quatre fichiers entiers
+(`error-handling`, `user-fetch-errors`, `xss-security`, `health`) et une poignée
+de tests ailleurs, soit une désactivation de notre fait que
+[REQ-CONF-002](REQ-CONF-002.md) AC-1 interdit. Le bon remède est le même que
+pour AC-1 : rendre l'environnement conforme à ce que les assertions supposent.
+Notre harnais tient déjà lieu de démo publique pour l'hôte d'API (ADR 019) ; il
+lui manquait seulement le compte que cette démo a toujours eu.
+
+**Ce que la première rédaction avait manqué.** AC-1 était née d'**un** test qui
+supposait une API peuplée, et la règle « un seul auteur » en avait fait une
+propriété du jeu de données plutôt qu'une réponse à ce test-là. Une supposition
+d'environnement non déclarée par la suite ne se découvre qu'en l'exécutant : la
+seconde s'est révélée en rejouant `social.spec.ts`, où le symptôme —
+« Profile not found » — désignait le front alors que la donnée manquait.
+
 **Fournir cette donnée n'est pas assouplir la suite.** Aucune assertion ne
 bouge, aucun timeout ne change, aucun fichier vendoré n'est retouché
 ([ADR 018](../../../adr/018-conformite-e2e-suite-officielle-vendoree.md)) : seul
@@ -85,9 +109,14 @@ le test.
   e2e parfaitement crédible — « le front n'affiche pas les articles » — qui coûte
   une demi-heure de diagnostic sur le mauvais fichier. Le harnais s'arrête donc
   avant la suite, avec le vrai motif.
-- **Minimal.** Un seul auteur, un seul article. Le jeu de données n'est pas une
-  fixture applicative : plus il grossit, plus il devient une dépendance cachée
-  des autres fichiers de specs, et plus l'ordre d'exécution finit par compter.
+- **Minimal, et minimal veut dire « ce que la suite nomme ».** Un article par
+  compte, et aucun compte qui ne soit exigé par une assertion : `e2e-seed-author`
+  pour AC-1, `johndoe` pour AC-5. Le jeu de données n'est pas une fixture
+  applicative — plus il grossit, plus il devient une dépendance cachée des autres
+  fichiers de specs, et plus l'ordre d'exécution finit par compter. La règle
+  d'origine disait « un seul auteur » ; c'était la bonne intention exprimée par
+  un chiffre, et le chiffre a été amendé quand un second compte s'est avéré
+  **nommé en clair** par la suite (voir Contexte).
 
 ## Hors périmètre
 
@@ -102,10 +131,12 @@ le test.
 
 ## Couverture
 
-AC-1 et AC-4 se lisent dans l'exécution de la suite : le seeding précède le
-lancement, donc le flux global n'est jamais vide au démarrage, et le test ne
+AC-1, AC-4 et AC-5 se lisent dans l'exécution de la suite : le seeding précède le
+lancement, donc le flux global n'est jamais vide au démarrage, le test ne
 dépend d'aucun article produit par un autre fichier — ce qui importe, la suite
-étant parallélisée et son ordre non garanti.
+étant parallélisée et son ordre non garanti — et les six tests de
+`social.spec.ts` passent, ce qu'aucun d'eux ne pouvait faire tant que `johndoe`
+manquait.
 
 AC-2 et AC-3 sont prouvés par `scripts/verify-e2e-seed.sh`, qui oppose
 `scripts/e2e-seed.mjs` à un **stub d'API** plutôt qu'à l'API réelle : le script
