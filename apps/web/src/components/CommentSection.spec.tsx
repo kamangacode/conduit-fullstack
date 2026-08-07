@@ -1,22 +1,31 @@
-import type { Comment, User } from '@repo/shared'
+import type { Article, Comment, User } from '@repo/shared'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { ApiError } from '../lib/api-client'
 import { CONNECTION_FAILURE_MESSAGE } from '../lib/errors'
 import { SessionProvider, TOKEN_STORAGE_KEY } from '../lib/session'
+import { ArticleView } from './ArticleView'
 import { CommentSection } from './CommentSection'
 import { Navbar } from './Navbar'
 
 /** Tests écrits depuis les critères de REQ-WEB-013, avant l'implémentation. */
 
-// La barre de navigation est montée par un seul test — celui qui compte les
-// liens de connexion de la page (AC-8) — et elle lit le chemin courant.
-vi.mock('next/navigation', () => ({ usePathname: () => '/article/how-to-train-your-dragon' }))
+// La dernière suite monte la page article entière (AC-8) : la barre y lit le
+// chemin courant, et la méta d'article y offre des actions qui naviguent.
+vi.mock('next/navigation', () => ({
+  usePathname: () => '/article/how-to-train-your-dragon',
+  useRouter: () => ({ push: vi.fn(), replace: vi.fn() }),
+}))
 
 const addComment = vi.hoisted(() => vi.fn())
 const deleteComment = vi.hoisted(() => vi.fn())
-vi.mock('../lib/api-provider', () => ({ useApi: () => ({ addComment, deleteComment }) }))
+const getArticle = vi.hoisted(() => vi.fn())
+const getComments = vi.hoisted(() => vi.fn())
+vi.mock('../lib/api-provider', () => ({
+  useApi: () => ({ addComment, deleteComment, getArticle, getComments }),
+}))
 
 const jake: User = {
   email: 'jake@jake.jake',
@@ -36,6 +45,20 @@ const commentBy = (id: number, username: string, body: string): Comment => ({
 
 const existing = commentBy(1, 'jacob', 'It takes a Jacobian')
 
+/** Article servi à la page entière — auteur distinct du lecteur, comme AC-8 le suppose. */
+const article: Article = {
+  slug: 'how-to-train-your-dragon',
+  title: 'How to train your dragon',
+  description: 'Ever wonder how?',
+  body: 'It takes a Jacobian',
+  tagList: ['dragons'],
+  createdAt: '2016-02-18T03:22:56.637Z',
+  updatedAt: '2016-02-18T03:22:56.637Z',
+  favorited: false,
+  favoritesCount: 0,
+  author: { username: 'jacob', bio: null, image: null, following: false },
+}
+
 const renderSection = (initialComments: Comment[] = [existing]) =>
   render(
     <SessionProvider fetchCurrentUser={async () => jake}>
@@ -53,6 +76,8 @@ beforeEach(() => {
   window.localStorage.clear()
   addComment.mockReset().mockResolvedValue(commentBy(2, 'jake', 'Merci !'))
   deleteComment.mockReset().mockResolvedValue(undefined)
+  getArticle.mockReset().mockResolvedValue(article)
+  getComments.mockReset().mockResolvedValue([existing])
 })
 
 describe('REQ-WEB-013 — commentaires', () => {
@@ -171,41 +196,75 @@ describe('REQ-WEB-013 — commentaires', () => {
   })
 })
 
-describe('REQ-WEB-013 AC-8 — un seul lien de connexion sur la page d’un anonyme', () => {
+describe('REQ-WEB-013 AC-8 — la page article d’un anonyme, telle que la route la compose', () => {
   /**
-   * La barre **et** la section, comme sur la page réelle.
+   * Ce que la route monte réellement, et non un assemblage propre au test.
    *
-   * Le contrat de sélecteurs traite `a[href="/login"]` comme un singleton de
-   * page : ses assertions de visibilité sont strictes, donc un locator qui
-   * résout deux éléments lève au lieu de réussir sur le premier. L'invariant est
-   * une propriété de la **page**, pas de la section — le prouver en montant la
-   * section seule laisserait rentrer la régression par la barre, et
-   * réciproquement.
+   * L'invariant à prouver est une propriété de la **page** : le contrat de
+   * sélecteurs traite `a[href="/login"]` comme un singleton, donc un locator qui
+   * en résout deux lève au lieu de réussir sur le premier. Le prouver sur la
+   * barre posée à côté de la seule section laissait hors du test tout ce que la
+   * route rend entre les deux — méta d'article, boutons suivre et favori,
+   * écrans d'absence ou d'indisponibilité. Un second `/login` introduit par l'un
+   * d'eux serait passé inaperçu ici et n'aurait cassé que la suite e2e, c'est-à-
+   * dire le plus tard et le plus cher.
+   *
+   * On monte donc les deux composants que la route monte : `Navbar`, posé par le
+   * layout racine, et `ArticleView`, rendu par `app/article/[slug]/page.tsx` —
+   * qui n'est plus qu'un adaptateur de deux lignes depuis l'[ADR 020]. Le layout
+   * lui-même ne peut pas l'être : c'est un Server Component qui rend `<html>`,
+   * et sa coquille ne porte aucun lien de connexion.
+   *
+   * Cette suite porte aussi ce que la suite vendorée ne peut plus prouver.
+   * `comments.spec.ts` (« should require login to post comment ») attend un
+   * `a[href="/login"]` visible sur la page d'un anonyme : depuis AC-8, c'est
+   * celui de la barre qui le satisfait, donc ce test ne dit plus rien de la
+   * section. Il garde sa valeur résiduelle — l'absence de formulaire — et la
+   * preuve que la section **invite** bien à se connecter vit désormais ici.
    */
-  const renderArticlePageChrome = () =>
+  const renderArticleRoute = () =>
     render(
-      <SessionProvider fetchCurrentUser={async () => jake}>
-        <Navbar />
-        <CommentSection slug="how-to-train-your-dragon" initialComments={[existing]} />
-      </SessionProvider>
+      <QueryClientProvider
+        client={new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } })}
+      >
+        {/* Anonyme par le stockage vidé au `beforeEach` : sans jeton, la
+            réhydratation ne demande rien à l'API et la session tombe
+            directement sur « anonymous ». */}
+        <SessionProvider fetchCurrentUser={async () => jake}>
+          <Navbar />
+          <ArticleView slug="how-to-train-your-dragon" />
+        </SessionProvider>
+      </QueryClientProvider>
     )
 
-  it('AC-8: expose exactement un `a[href="/login"]`, celui de la barre', async () => {
-    const { container } = renderArticlePageChrome()
+  /** L'invite marque la fin du chargement : l'article **et** ses commentaires sont rendus. */
+  const anonymousInvite = () => screen.findByText(/Sign in or sign up to add comments/)
 
-    await waitFor(() =>
-      expect(container.querySelector('.navbar a[href="/login"]')).toBeInTheDocument()
-    )
+  it('AC-8: expose exactement un `a[href="/login"]` sur la page, celui de la barre', async () => {
+    const { container } = renderArticleRoute()
+
+    await anonymousInvite()
+    expect(container.querySelector('.navbar a[href="/login"]')).toBeInTheDocument()
     expect(container.querySelectorAll('a[href="/login"]')).toHaveLength(1)
   })
 
   it('AC-8: ne propose aucun champ de commentaire à l’anonyme', async () => {
-    const { container } = renderArticlePageChrome()
+    const { container } = renderArticleRoute()
 
-    await waitFor(() =>
-      expect(container.querySelector('.navbar a[href="/login"]')).toBeInTheDocument()
-    )
+    await anonymousInvite()
     expect(container.querySelector('textarea[placeholder="Write a comment..."]')).toBeNull()
+  })
+
+  it('AC-2: porte l’invite dans la section, et n’en fait pas un second lien', async () => {
+    // Ce que la suite vendorée ne peut plus distinguer : que l'invite vienne de
+    // la page article et non de la barre. Sans cette assertion, retirer
+    // entièrement le message laisserait les deux suites au vert.
+    const { container } = renderArticleRoute()
+
+    const invite = await anonymousInvite()
+
+    expect(container.querySelector('.article-page')).toContainElement(invite)
+    expect(invite.closest('a')).toBeNull()
   })
 })
 

@@ -76,10 +76,28 @@ const tlsSpki = process.env.E2E_TLS_SPKI
  * L'épinglage n'est ajouté que s'il est fourni : lancé hors de `test-e2e.sh`, le
  * navigateur n'a aucun certificat jetable à accepter, et un drapeau portant une
  * empreinte vide n'épinglerait rien tout en ayant l'air de le faire.
+ *
+ * Son absence est en revanche **annoncée**. Le défaut à éviter ici n'est pas la
+ * conditionnalité — hors du script, il n'existe aucune empreinte à épingler —
+ * mais qu'un run dégradé ressemble à un run complet. C'est exactement le mode
+ * d'échec que l'épinglage corrige : une suite verte sur des pages qui n'ont rien
+ * chargé. Un run sans empreinte reste possible (`--list`, `verify-e2e-gate.sh`),
+ * il ne doit simplement pas passer pour l'autre.
  */
 const browserArgs = [`--host-resolver-rules=MAP ${mockedApiHost} 127.0.0.1:${tlsPort}`]
 if (tlsSpki) {
   browserArgs.push(`--ignore-certificate-errors-spki-list=${tlsSpki}`)
+} else {
+  console.warn(
+    [
+      '[e2e] E2E_TLS_SPKI absent : aucun épinglage de certificat pour ce run.',
+      '      Les contextes qu’un test fabrique lui-même (browser.newContext) ne',
+      '      feront confiance à aucun certificat jetable : leurs appels d’API',
+      '      échoueront en erreur TLS, et leurs assertions peuvent passer au vert',
+      '      sur une page qui n’a rien chargé.',
+      '      Pour un run complet : bash scripts/test-e2e.sh',
+    ].join('\n')
+  )
 }
 
 export default defineConfig({
@@ -100,9 +118,14 @@ export default defineConfig({
     // temps du run. Sans elle, chaque appel du front finirait en erreur TLS —
     // un échec qui ne parlerait pas de conformité.
     //
-    // Elle reste, et l'épinglage `launchOptions` ne la remplace pas : elle
-    // couvre le cas où `E2E_TLS_SPKI` n'est pas fourni, et les deux portées sont
-    // distinctes (contextes de la fixture ici, navigateur entier là).
+    // Elle reste, et l'épinglage `launchOptions` ne la remplace pas. Ce ne sont
+    // pas deux politiques concurrentes sur la même surface, mais deux **piles
+    // TLS** : un drapeau de lancement est appliqué par Chromium, alors que la
+    // fixture `request` de Playwright (`APIRequestContext`) négocie le sien dans
+    // Node — hors d'atteinte de tout drapeau du navigateur. `health.spec.ts` s'en
+    // sert pour un appel `https` direct. Retirer cette option laisserait donc
+    // cette pile-là au magasin de certificats du système, où le certificat
+    // jetable n'est justement jamais installé.
     ignoreHTTPSErrors: true,
 
     launchOptions: { args: browserArgs },
