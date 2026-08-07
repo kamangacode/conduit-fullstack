@@ -104,7 +104,11 @@ recommandation.
   `GET /articles` provoquera un « tiens, une coquille » chez le prochain
   lecteur. La seule défense est le commentaire au-dessus de la constante et cet
   ADR : un jour, quelqu'un supprimera la barre en croyant nettoyer, et la seule
-  chose qui le rattrapera est le test e2e — non bloquant à ce jour.
+  chose qui le rattrapera est le test e2e — non bloquant à la date de cet ADR,
+  bloquant depuis le 2026-08-07
+  ([ADR 018](018-conformite-e2e-suite-officielle-vendoree.md), second temps). La
+  défense est donc passée de « quelqu'un lira le journal » à « la CI refuse le
+  commit ».
 - **Le chemin est figé par un tiers.** Une future version de la suite qui
   écrirait `…/articles` remettrait la décision en jeu. C'est le coût général du
   vendoring assumé par l'ADR 016, pas une conséquence propre à celui-ci.

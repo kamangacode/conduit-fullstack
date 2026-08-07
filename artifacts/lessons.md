@@ -44,6 +44,15 @@ dédié ouvert à la place. Commit révoqué par `reset --hard` puis
 `push --force-with-lease` ; le SHA `a4efb02` reste consultable au reflog si son
 contenu doit être repris.
 
+**Suite donnée, le même jour.** Le signal qui a sauvé ce run — sa durée, 18 min 48 s
+contre 3 min — était un hasard heureux : rien ne garantissait qu'une régression
+suivante coûterait du temps. Le job `E2E` est **bloquant** depuis le 2026-08-07
+(issue #17, second temps de l'[ADR 018](../docs/adr/018-conformite-e2e-suite-officielle-vendoree.md)),
+et la condition qui manquait pour le basculer est précisément celle que ce lot a
+fini par produire : une suite verte. La leçon reste vraie pour tout job en
+`continue-on-error` — sa conclusion ne dit rien de son verdict — mais elle ne
+s'applique plus à celui-ci.
+
 ---
 
 ## 2026-08-06 — L'inventaire d'une issue périme plus vite que l'issue

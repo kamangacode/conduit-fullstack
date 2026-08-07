@@ -24,9 +24,9 @@ acceptance_criteria:
     when: "le front est construit pour l'exécution e2e"
     then: "le bundle servi porte l'URL de l'API de test, et non celle par défaut — un artefact de cache construit avec une autre URL ferait interroger à la suite une API qui n'existe pas"
   - id: AC-5
-    given: "le job de CI qui exécute la suite e2e"
-    when: "la suite échoue"
-    then: "le job remonte le signal sans faire échouer la CI et n'entre pas dans l'agrégat `ci-success` — la bascule en gate est un geste ultérieur et délibéré, pas un oubli"
+    given: "le job de CI qui exécute la suite e2e, bloquant depuis le 2026-08-07"
+    when: "la suite échoue, ou que le câblage qui la rend bloquante est défait"
+    then: "la CI échoue — aucune étape du job n'est en `continue-on-error`, `e2e` est dans le `needs` de `ci-success` et dans la liste blanche de sa garde, et ces trois maillons sont vérifiés à chaque changement de `ci.yml`"
   - id: AC-6
     given: "deux fichiers de la suite qui figent l'hôte d'API dans leurs interceptions"
     when: "le front est construit pour l'exécution e2e"
@@ -55,8 +55,9 @@ implementation:
   tests:
     - scripts/verify-e2e-gate.sh
     - scripts/verify-conformance-drift.sh
+    - scripts/check-e2e-gate-wiring.mjs
 related:
-  issues: [10, 11, 15, 16]
+  issues: [10, 11, 15, 16, 17]
   requirements:
     - REQ-CONF-001
     - REQ-WEB-007
@@ -133,11 +134,21 @@ l'empreinte SPKI du certificat de ce run plutôt que d'accepter n'importe quel
 certificat : le run reste hors ligne par la règle de résolution dans les deux
 cas, mais dire *ce* certificat coûte une commande `openssl` et une variable.
 
-AC-5 enfin acte que ce contrôle démarre en **rapport** et non en gate
+AC-5 enfin porte l'**autorité** du contrôle, et il a changé une fois — c'est le
+seul critère de ce REQ dans ce cas, et son historique fait partie de ce qu'il
+énonce. Il a d'abord acté que le contrôle démarrait en **rapport** et non en gate
 ([ADR 018](../../../adr/018-conformite-e2e-suite-officielle-vendoree.md)) : la
 suite pilote un navigateur réel, ses modes d'échec incluent des situations qui ne
 disent rien de la conformité, et poser le seuil avant d'avoir mesuré le bruit
 produit le gate qu'on désactive six mois plus tard (rule 21, étape 3).
+
+Le bruit a été mesuré — 1 à 2 instables sur 139, absorbés par les `retries: 2`
+amont — puis la suite est devenue verte avec l'epic #11, et trois runs verts
+consécutifs sur `staging` ont confirmé le taux sur une suite qui *passe*. Le
+critère est donc passé en **gate** le 2026-08-07 (issue #17, second temps de
+l'ADR 018), et sa formulation a suivi : elle porte désormais sur les trois
+maillons qui font qu'un job bloque, parce qu'aucun ne suffit seul et qu'ils se
+défont indépendamment.
 
 ## Règles
 
@@ -155,8 +166,11 @@ produit le gate qu'on désactive six mois plus tard (rule 21, étape 3).
 ## Hors périmètre
 
 - La conformité de l'API, couverte par [REQ-CONF-001](REQ-CONF-001.md).
-- La bascule du job de rapport en gate : elle demande quelques runs réels pour
-  calibrer, et reste inscrite au plan d'outillage comme item distinct.
+- ~~La bascule du job de rapport en gate~~ — **faite le 2026-08-07** (issue #17).
+  Elle était hors périmètre tant qu'elle demandait des runs réels pour calibrer ;
+  ces runs ont eu lieu, et la propriété est passée dans AC-5 plutôt que de rester
+  dans cette liste. La ligne est barrée et non supprimée : ce qu'un REQ a un jour
+  écarté explicitement se lit mieux que ce qu'il n'a jamais mentionné.
 - Une suite e2e **maison** en Page Object Model : écartée par
   l'[ADR 018](../../../adr/018-conformite-e2e-suite-officielle-vendoree.md), qui
   distingue conformité (assertions d'un tiers) et régression (assertions de nous).
@@ -187,13 +201,28 @@ vide — un drapeau vide n'épingle rien tout en ayant l'air de le faire — et 
 preuve est l'exécution de `comments.spec.ts`, dont l'assertion anonyme
 n'atteignait jamais une page chargée avant ce correctif.
 
-**AC-5 n'est pas couvert par un test, et c'est délibéré** — comme l'AC-5 de
-[REQ-CONF-001](REQ-CONF-001.md), et pour une raison voisine. Le prouver
-demanderait de faire échouer la suite dans un vrai run de CI et de constater que
-`ci-success` reste vert : un test qui rend la CI rouge pour vérifier qu'elle ne
-l'est pas. La propriété se lit dans `.github/workflows/ci.yml` — le job `E2E` est
-en `continue-on-error` et absent du `needs` de `ci-success` — et c'est cette
-lecture qui fait foi. Critère **sciemment non couvert**, pas oublié.
+**AC-5 était sciemment non couvert ; il ne l'est plus, et ce qui a changé n'est
+pas notre rigueur mais la propriété elle-même.** Tant que le critère disait « la
+CI reste verte quand la suite échoue », le prouver demandait de faire échouer la
+suite dans un vrai run et de constater le vert : un test qui rend la CI rouge
+pour vérifier qu'elle ne l'est pas. Il n'était donc pas testable, comme l'AC-5 de
+[REQ-CONF-001](REQ-CONF-001.md), et pour la même raison.
+
+Depuis la bascule, il dit l'inverse — et l'inverse est une propriété du
+**câblage**, pas du verdict : aucune étape du job en `continue-on-error`, `e2e`
+dans le `needs` de `ci-success` et dans la liste blanche de sa garde.
+[`check-e2e-gate-wiring.mjs`](../../../../scripts/check-e2e-gate-wiring.mjs) la
+constate sur `ci.yml`, et le job `Quality` la rejoue à chaque changement du
+workflow. Le script commence par se soumettre trois copies délibérément abîmées
+du workflow réel — étape redevenue tolérante, job sorti du `needs`, job sorti de
+la garde — et s'arrête s'il en accepte une : un vérificateur de configuration qui
+ne trouve plus rien à examiner affiche « ok » exactement comme un vérificateur
+satisfait.
+
+Ce que ce contrôle ne prouve pas, et qu'il ne faut pas lui prêter : que la CI
+rougit effectivement sur une suite rouge. Ça, seul un run le rend, et le
+2026-08-07 en a rendu un — 35 tests rouges sous un job vert, sous l'ancien
+régime. C'est ce run qui a montré ce que coûtait la propriété inverse.
 
 ## Ce que le premier run a rendu
 

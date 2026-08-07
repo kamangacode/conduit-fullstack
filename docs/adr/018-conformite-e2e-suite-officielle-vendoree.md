@@ -79,6 +79,37 @@ fichier **imbriqué** pour constater que le contrôle le voit.
 `continue-on-error` et n'entre pas dans `ci-success`. Le passage en gate est un
 geste ultérieur et délibéré, tracé comme item restant du plan.
 
+#### Second temps — bascule en gate, 2026-08-07
+
+Le geste annoncé ci-dessus a été fait, et il est daté ici plutôt que porté par un
+nouvel ADR : il n'amende pas la décision, il en exécute la seconde moitié. Ce
+paragraphe ne remplace donc pas le précédent — c'est l'écart entre les deux dates
+qui porte l'information (convention d'amendement : [README.md](README.md)).
+
+Ce qui l'a rendu possible, dans l'ordre : l'epic #11 a rendu la suite verte
+(139/139), puis **trois runs verts consécutifs** sur `staging` ont mesuré le taux
+d'instables sur une suite qui *passe* — le seul régime où ce taux veut dire
+quelque chose. Le troisième a été déclenché à la main sur un arbre inchangé, pour
+ne pas confondre « la suite est stable » et « le dernier commit était inoffensif ».
+Mesure de la phase de rapport : **1 à 2 instables sur 139**, absorbés par les
+`retries: 2` de la configuration amont, et un ensemble d'échecs strictement
+identique d'un run à l'autre.
+
+Concrètement : plus de `continue-on-error` sur les étapes du job, et `e2e` entre
+dans le `needs` **et** dans la liste blanche de `ci-success`. Les trois maillons
+comptent et aucun ne suffit seul — d'où
+[`scripts/check-e2e-gate-wiring.mjs`](../../scripts/check-e2e-gate-wiring.mjs),
+qui les vérifie à chaque changement de `ci.yml`. Le mode de panne qu'il ferme
+n'est pas hypothétique : le 2026-08-07, un run **vert** portait une régression de
+35 tests, invisible parce qu'un job en `continue-on-error` conclut `success` quoi
+qu'il arrive (`artifacts/lessons.md`). C'était le coût assumé du rapport ; il ne
+l'est plus.
+
+Ce que la bascule ne change **pas** : le chiffre `retries: 2` n'est pas relevé
+pour l'occasion. Le remonter ferait passer par la configuration ce qui doit
+passer par le code (rule 13) — un gate vert acheté en silence plutôt qu'en
+conformité.
+
 ### La conséquence sur la rule 13, écrite ici plutôt que découverte plus tard
 
 La rule 13 prescrit le Page Object Model et un `packages/playwright-config`
@@ -116,7 +147,9 @@ La distinction est entre *conformité* (assertions d'un tiers, jamais éditées)
 
 - Un échec réel peut passer inaperçu tant que le job ne bloque pas. C'est le prix
   assumé de la calibration, et il est borné : l'item de bump en gate est inscrit
-  au plan, pas laissé à la mémoire.
+  au plan, pas laissé à la mémoire. **Payé une fois, le 2026-08-07** — un run
+  vert portant 35 tests rouges — puis clos par la bascule décrite ci-dessus. La
+  borne a donc tenu, mais elle a coûté ce qu'elle annonçait.
 - La machinerie d'exécution est plus lourde que celle de Hurl — il faut une base,
   l'API **et** le front, donc trois processus à composer et à arrêter proprement.
 - `NEXT_PUBLIC_API_URL` est figé à la compilation du bundle client. Le front doit
