@@ -140,7 +140,13 @@ manquait.
 
 AC-2 et AC-3 sont prouvés par `scripts/verify-e2e-seed.sh`, qui oppose
 `scripts/e2e-seed.mjs` à un **stub d'API** plutôt qu'à l'API réelle : le script
-y est exécuté deux fois d'affilée (aucun doublon créé au second passage, code de
-sortie nul les deux fois), puis contre un stub qui refuse, où l'on exige un code
-non nul. Un stub rend ces deux propriétés observables en quelques secondes, là
-où la vraie pile demanderait Docker, deux builds et une base.
+y est exécuté deux fois d'affilée contre chacun des deux comptes du jeu de
+données (aucun doublon créé au second passage pour `e2e-seed-author` ni pour
+`johndoe`, code de sortie nul les deux fois), puis contre un stub qui refuse, où
+l'on exige un code non nul. Le stub garde son compteur d'articles créés
+**indexé par auteur** précisément pour cette raison : un compteur global
+confondrait « deux comptes semés une fois » et « un compte semé deux fois »,
+soit exactement la régression qu'AC-2 doit intercepter depuis que le jeu de
+données porte `johndoe` en plus de `e2e-seed-author` (AC-5). Un stub rend ces
+propriétés observables en quelques secondes, là où la vraie pile demanderait
+Docker, deux builds et une base.

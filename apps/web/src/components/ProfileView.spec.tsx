@@ -225,6 +225,22 @@ describe('REQ-WEB-005 — profil public', () => {
     expect(getProfile).toHaveBeenCalledOnce()
   })
 
+  it('AC-7: émet la requête de profil une fois la session « unavailable », pas seulement « authenticated »', async () => {
+    // La garde s'écrit sur `pending` **seul** : `anonymous`, `authenticated` et
+    // `unavailable` sont trois réponses. `unavailable` conserve un jeton qu'on
+    // n'a pas pu vérifier (REQ-WEB-016) — ce n'est pas `pending`, et rien ne
+    // dispense donc la page d'émettre sa requête avec ce jeton, l'API tranchera.
+    // Sans ce test, une régression qui gate la requête sur `authenticated` au
+    // lieu de `!== 'pending'` resterait invisible : les deux prédicats ne
+    // divergent que sur cet état-ci.
+    window.localStorage.setItem(TOKEN_STORAGE_KEY, jake.token)
+    const fetchCurrentUser = vi.fn(() => Promise.reject(new ApiError(500, {})))
+
+    renderView('author', 'jacob', fetchCurrentUser)
+
+    await waitFor(() => expect(getProfile).toHaveBeenCalledWith('jacob', jake.token))
+  })
+
   it('AC-7: n’attend rien d’un visiteur anonyme', async () => {
     // Sans jeton conservé, `useRehydration` pose `anonymous` sans aller-retour :
     // la garde ne coûte donc qu'un rendu de plus, jamais une requête.

@@ -200,6 +200,22 @@ describe('REQ-WEB-005 — requête relative au lecteur, sur la page article', ()
     await waitFor(() => expect(getArticle).toHaveBeenCalledOnce())
   })
 
+  it('AC-7: émet la requête d’article une fois la session « unavailable », pas seulement « authenticated »', async () => {
+    // La garde s'écrit sur `pending` **seul** : `anonymous`, `authenticated` et
+    // `unavailable` sont trois réponses. `unavailable` conserve un jeton qu'on
+    // n'a pas pu vérifier (REQ-WEB-016) — ce n'est pas `pending`, et rien ne
+    // dispense donc la page d'émettre sa requête avec ce jeton, l'API tranchera.
+    // Sans ce test, une régression qui gate la requête sur `authenticated` au
+    // lieu de `!== 'pending'` resterait invisible : les deux prédicats ne
+    // divergent que sur cet état-ci.
+    window.localStorage.setItem(TOKEN_STORAGE_KEY, jake.token)
+    const fetchCurrentUser = vi.fn(() => Promise.reject(new ApiError(500, {})))
+
+    renderView('how-to-train-your-dragon', fetchCurrentUser)
+
+    await waitFor(() => expect(getArticle).toHaveBeenCalledOnce())
+  })
+
   it('AC-7: ne retarde pas les commentaires, qui ne dépendent pas du lecteur', async () => {
     // La garde est **ciblée**. L'étendre à toute la page ajouterait
     // l'aller-retour `GET /user` au chemin critique d'un contenu public, pour

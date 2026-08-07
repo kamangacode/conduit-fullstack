@@ -68,6 +68,21 @@ export const TOKEN_STORAGE_KEY = 'jwtToken'
  */
 export type SessionStatus = 'pending' | 'anonymous' | 'authenticated' | 'unavailable'
 
+/**
+ * Une requête relative au lecteur (`following`, `favorited`…) peut-elle partir
+ * (REQ-WEB-005 AC-7) ?
+ *
+ * `pending` est le seul état où l'on ignore encore quel jeton envoyer :
+ * `anonymous`, `authenticated` et `unavailable` sont trois réponses, chacune
+ * avec un jeton à envoyer ou non déjà tranché. `ArticleView` et `ProfileView`
+ * gardaient chacun sa propre copie de ce prédicat — deux endroits qu'un futur
+ * cinquième statut aurait dû faire évoluer de concert, sans qu'aucun test ne
+ * le rappelle. Exportée pour qu'il n'y en ait plus qu'un.
+ */
+export function isReaderScopedQueryEnabled(status: SessionStatus): boolean {
+  return status !== 'pending'
+}
+
 /** Noms d'états du contrat de débogage E2E (REQ-WEB-007 AC-7). */
 type DebugAuthState = 'authenticated' | 'unauthenticated' | 'unavailable' | 'loading'
 
@@ -112,6 +127,22 @@ const DEBUG_STATES: Record<SessionStatus, DebugAuthState> = {
  * sans penser à recharger.
  */
 export const RECONNECT_DELAY_MS = 5_000
+
+/**
+ * Délai maximal accordé à la réhydratation avant de la traiter comme une panne
+ * (REQ-WEB-016 AC-2, étendu).
+ *
+ * AC-2 couvre déjà « aucune réponse » quand `fetch` **rejette** sans attendre —
+ * panne de transport. Ce qu'il ne couvrait pas est la requête qui ne se termine
+ * **jamais**, ni par un succès ni par un rejet : une connexion ouverte que le
+ * serveur ne referme pas. Tant que `pending` ne gardait que la barre de
+ * navigation (REQ-WEB-016 AC-4), l'écart restait cosmétique. Depuis
+ * REQ-WEB-005 AC-7, `pending` retarde aussi `ArticleView` et `ProfileView` —
+ * du contenu **public**, sans rapport avec le lecteur — et une requête qui pend
+ * l'y bloquerait indéfiniment. La borne referme cet écart en traitant
+ * l'absence de réponse comme l'absence de réponse, quelle qu'en soit la cause.
+ */
+export const REHYDRATION_TIMEOUT_MS = 8_000
 
 interface SessionState {
   /** Compte courant, ou `null` si anonyme **ou** si la session n'est pas encore résolue. */
@@ -318,6 +349,32 @@ function useRehydration(
 }
 
 /**
+ * Borne une promesse dans le temps, sans annuler l'appel sous-jacent.
+ *
+ * `fetch` n'expose pas de délai par défaut, et ce module n'a aucune raison
+ * d'ajouter un `AbortController` au client API partagé pour un seul appelant :
+ * la requête réelle peut continuer en arrière-plan, elle sera ignorée si elle
+ * répond après coup — exactement ce que `isStale()` fait déjà pour une réponse
+ * tardive ordinaire. Rejeter avec une erreur simple (non `ApiError`) suffit :
+ * `isTokenVerdict` la classe alors comme la panne qu'elle est.
+ */
+function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error(`sans réponse après ${ms}ms`)), ms)
+    promise.then(
+      (value) => {
+        clearTimeout(timer)
+        resolve(value)
+      },
+      (error) => {
+        clearTimeout(timer)
+        reject(error)
+      }
+    )
+  })
+}
+
+/**
  * Boucle de réhydratation : une tentative, puis une reprise tant que la session
  * reste indisponible. Rend la fonction d'annulation attendue par `useEffect`.
  *
@@ -379,7 +436,7 @@ function runRehydration({
   }
 
   const attempt = (): void => {
-    fetchCurrentUser(token).then(onResolved, onRejected)
+    withTimeout(fetchCurrentUser(token), REHYDRATION_TIMEOUT_MS).then(onResolved, onRejected)
   }
 
   attempt()

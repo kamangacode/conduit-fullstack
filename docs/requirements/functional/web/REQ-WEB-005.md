@@ -144,6 +144,17 @@ l'action.
 
 ## Hors périmètre
 
+- **AC-7 reste logé ici bien qu'il s'énonce pour deux pages.** Son `given`
+  couvre explicitement « profil, article » : c'est une règle de chargement
+  transverse, pas une règle de profil qui déborderait par accident. Elle
+  n'a pas été extraite dans un REQ dédié pour ce lot — l'extraire aurait
+  supposé retracer chaque référence croisée (ADR 020, REQ-WEB-007,
+  REQ-WEB-012, REQ-WEB-018) sans bénéfice fonctionnel immédiat. Ce qui compte
+  en attendant : `isReaderScopedQueryEnabled` (`apps/web/src/lib/session.tsx`)
+  est le **seul** endroit qui encode le prédicat — `ArticleView` et
+  `ProfileView` l'importent tous les deux plutôt que d'en garder chacun une
+  copie, ce qui ferme le risque de divergence même si le texte du critère,
+  lui, reste à un seul endroit.
 - Les onglets « My Articles » et « Favorited Articles » du profil : ils listent
   des articles et relèvent de la slice F5, avec le reste des listes.
 - L'édition de son propre profil : [REQ-WEB-004](REQ-WEB-004.md).

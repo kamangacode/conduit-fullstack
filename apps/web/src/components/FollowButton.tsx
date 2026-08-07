@@ -55,19 +55,33 @@ interface FollowOverride {
  * que le serveur ne sait pas encore, et laisser les props gouverner le reste.
  * Le commentaire de ce fichier voisin l'affirmait déjà de ce bouton-ci ; il
  * n'était pas vrai, il l'est maintenant.
+ *
+ * **L'invalidation supprime l'écart, elle ne le masque pas.** Une première
+ * version se contentait d'exclure l'écart du calcul par comparaison
+ * (`override.from === profile.following ? override : null`) sans jamais vider
+ * l'état. La comparaison seule ne distingue pas « la prop n'a pas encore
+ * rattrapé le clic » de « la prop a rattrapé, puis une réponse plus tardive l'a
+ * ramenée par coïncidence à sa valeur de départ » — un cas réel dès qu'une
+ * requête en vol répond dans le désordre. Dans le second cas, l'écart
+ * ressuscitait et affichait de nouveau la valeur d'un clic déjà résolu.
+ * `setOverride(null)` pendant le rendu ferme le cas : l'état disparaît la
+ * première fois que la prop diverge et ne peut plus revenir, quelle que soit la
+ * valeur qu'elle prend ensuite. C'est le remède documenté pour « ajuster un
+ * état dérivé d'une prop » — appeler `setState` pendant le rendu est sûr ici
+ * parce que la condition qui déclenche l'appel devient fausse dès qu'il a eu
+ * lieu, ce qui exclut toute boucle.
  */
 function useFollowState(profile: Profile): [boolean, (next: boolean) => void] {
   const [override, setOverride] = useState<FollowOverride | null>(null)
 
-  // `from !== profile.following` signifie que la prop a bougé depuis le clic :
-  // le serveur a donc répondu, et l'écart local n'a plus rien à dire.
-  const applied =
-    override?.username === profile.username && override.from === profile.following ? override : null
+  if (override && (override.username !== profile.username || override.from !== profile.following)) {
+    setOverride(null)
+  }
 
   const setFollowing = (next: boolean) =>
     setOverride({ username: profile.username, from: profile.following, to: next })
 
-  return [applied?.to ?? profile.following, setFollowing]
+  return [override?.to ?? profile.following, setFollowing]
 }
 
 /** Ce que le front de référence affiche à la place du bouton, sur son propre profil. */

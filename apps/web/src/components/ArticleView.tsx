@@ -4,7 +4,7 @@ import { useQuery } from '@tanstack/react-query'
 import { ApiError } from '../lib/api-client'
 import { useApi } from '../lib/api-provider'
 import { articleQueryKey, commentsQueryKey } from '../lib/content-query'
-import { useSession } from '../lib/session'
+import { isReaderScopedQueryEnabled, useSession } from '../lib/session'
 import { ArticleBody } from './ArticleBody'
 import { ArticleMeta } from './ArticleMeta'
 import { ArticlePageNotice } from './ArticlePageNotice'
@@ -36,9 +36,9 @@ export function ArticleView({ slug }: { readonly slug: string }) {
   const article = useQuery({
     queryKey: articleQueryKey(slug),
     queryFn: () => api.getArticle(slug),
-    // Voir `ProfileView` : `pending` est le seul état où l'on ne sait pas encore
-    // quel jeton envoyer, donc le seul où attendre a un sens.
-    enabled: status !== 'pending',
+    // Voir `ProfileView` et `isReaderScopedQueryEnabled` (`lib/session`), qui
+    // porte ce prédicat pour que les deux pages n'en gardent qu'une copie.
+    enabled: isReaderScopedQueryEnabled(status),
     // Un article inexistant est une **réponse**, pas une panne : réessayer trois
     // fois un 404 retarde l'affichage du message d'absence sans rien changer à
     // son contenu.

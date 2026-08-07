@@ -194,4 +194,38 @@ describe('REQ-WEB-005 — bouton de suivi', () => {
 
     expect(await screen.findByRole('button', { name: /Unfollow jacob/ })).toBeInTheDocument()
   })
+
+  it('AC-9: n’exhume pas un écart déjà invalidé quand une réponse tardive revient à sa valeur de départ', async () => {
+    // Le défaut que ce test ferme : l'ancienne invalidation comparait
+    // `override.from` à la prop courante à **chaque rendu**, sans jamais vider
+    // l'état. Une fois la prop passée à `true` (le serveur confirme le clic),
+    // l'écart cessait de s'appliquer — mais restait en mémoire. Qu'une réponse
+    // plus tardive ramène la prop à `false`, sa valeur de départ, et l'écart
+    // réapparaissait, affichant de nouveau « Unfollow » alors que la donnée
+    // fraîche dit le contraire.
+    signedIn()
+    const { rerender } = renderButton({ ...jacobProfile, following: false })
+    await waitFor(() => expect(screen.getByRole('button')).toBeEnabled())
+
+    await userEvent.click(screen.getByRole('button', { name: /Follow jacob/ }))
+    expect(await screen.findByRole('button', { name: /Unfollow jacob/ })).toBeInTheDocument()
+
+    // Le serveur confirme : la prop rattrape l'écart, qui s'efface.
+    rerender(
+      <SessionProvider fetchCurrentUser={async () => jake}>
+        <FollowButton profile={{ ...jacobProfile, following: true }} />
+      </SessionProvider>
+    )
+    expect(await screen.findByRole('button', { name: /Unfollow jacob/ })).toBeInTheDocument()
+
+    // Une réponse plus tardive revient, par coïncidence, à la valeur d'avant le
+    // clic. Sans l'invalidation définitive, l'écart ressuscite ici.
+    rerender(
+      <SessionProvider fetchCurrentUser={async () => jake}>
+        <FollowButton profile={{ ...jacobProfile, following: false }} />
+      </SessionProvider>
+    )
+
+    expect(await screen.findByRole('button', { name: /Follow jacob/ })).toBeInTheDocument()
+  })
 })

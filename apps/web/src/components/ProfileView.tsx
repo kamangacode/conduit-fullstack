@@ -6,7 +6,7 @@ import { useApi } from '../lib/api-provider'
 import { avatarUrl } from '../lib/avatar'
 import { profileQueryKey } from '../lib/content-query'
 import type { FeedKind } from '../lib/feed-query'
-import { useSession } from '../lib/session'
+import { isReaderScopedQueryEnabled, useSession } from '../lib/session'
 import { ArticlesToggle } from './ArticlesToggle'
 import { FeedList } from './FeedList'
 import { FollowButton } from './FollowButton'
@@ -62,7 +62,7 @@ export function ProfileView({ username, tab, page }: ProfileViewProps) {
     // `anonymous` sans aller-retour. Un lecteur connecté paie l'aller-retour
     // `GET /user` qu'il payait déjà — il est simplement devenu bloquant pour
     // cette page-ci, et l'écran d'attente ci-dessous le couvrait déjà.
-    enabled: status !== 'pending',
+    enabled: isReaderScopedQueryEnabled(status),
     // Un compte inexistant est une réponse, pas une panne : la réessayer
     // retarde le message d'absence sans jamais le changer.
     retry: (failureCount, error) =>
