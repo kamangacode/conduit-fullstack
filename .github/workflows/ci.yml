@@ -487,6 +487,82 @@ jobs:
           retention-days: 14
           if-no-files-found: ignore
 
+  secrets:
+    name: Secrets (TruffleHog — rapport)
+    runs-on: ubuntu-latest
+    # **Aucun filtre de chemin, et c'est délibéré.** Les autres jobs se
+    # déclenchent sur `code`, parce qu'un diff de documentation ne casse pas un
+    # test. Un secret, lui, entre par n'importe quel fichier — un README, un
+    # workflow, un fichier de configuration d'éditeur. Filtrer ici reviendrait à
+    # ne pas regarder là où on ne s'attend pas à trouver, c'est-à-dire là où on
+    # trouve.
+    #
+    # Skip sur le cron hebdomadaire : sans événement, la plage serait « toute
+    # l'histoire », donc le même rapport tous les lundis sur des constats déjà
+    # connus. Un rapport qui se répète à l'identique cesse d'être lu, et emporte
+    # avec lui celui qui aurait dit quelque chose.
+    if: github.event_name != 'schedule'
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          # Histoire complète : le scan travaille sur une plage de commits. Avec
+          # la profondeur par défaut (1), `git rev-list base..head` ne résout
+          # rien et le scan n'examinerait qu'un arbre sans passé — vert, et vide.
+          fetch-depth: 0
+      # Le contrôle du contrôle, et il vient **avant** le scan. Un scanner de
+      # secrets affiche « 0 trouvé » quand il marche et « 0 trouvé » quand il ne
+      # regarde rien : sans cette étape, le job ne distinguerait pas les deux.
+      # Bloquante, à la différence du scan lui-même — elle ne dépend d'aucun
+      # tiers, seulement du dépôt.
+      - name: Modes de défaillance du scan de secrets
+        run: bash scripts/verify-secret-scan.sh
+      - name: Scan de secrets sur la plage du push ou de la PR
+        # **Rapport, pas gate** (rule 21, étape 3). La vérification en ligne
+        # appelle l'API du fournisseur : un gate qui rougit parce qu'AWS répond
+        # mal est un gate qu'on désactive, et B2 tient déjà la porte d'entrée en
+        # pre-commit. La bascule éventuelle se décidera sur du bruit mesuré.
+        continue-on-error: true
+        env:
+          EVENT: ${{ github.event_name }}
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
+          PR_HEAD: ${{ github.event.pull_request.head.sha }}
+          PUSH_BEFORE: ${{ github.event.before }}
+          PUSH_AFTER: ${{ github.event.after }}
+        # `pipefail` explicite, pour la même raison que dans le job e2e : sans
+        # lui, le code de sortie observé serait celui de `tee`.
+        run: |
+          set -o pipefail
+          if [ "$EVENT" = "pull_request" ]; then
+            BASE="$PR_BASE"; HEAD="$PR_HEAD"
+          elif [ "$EVENT" = "push" ]; then
+            HEAD="$PUSH_AFTER"
+            # Première poussée d'une branche : `before` vaut quarante zéros et ne
+            # désigne aucun commit. La plage devient toute l'histoire, ce qui est
+            # le bon défaut — mieux vaut scanner deux fois qu'ouvrir une fenêtre.
+            case "$PUSH_BEFORE" in
+              0000000000000000000000000000000000000000) BASE="" ;;
+              *) BASE="$PUSH_BEFORE" ;;
+            esac
+          else
+            BASE=""; HEAD="HEAD"
+          fi
+          bash scripts/secret-scan.sh "$BASE" "$HEAD" 2>&1 | tee /tmp/secret-scan.log
+      # Un rapport que personne ne lit ne rapporte rien — même leçon que pour le
+      # verdict e2e. Le job ne bloquant pas, connaître son résultat imposerait
+      # sinon d'ouvrir le journal d'un job vert, ce que personne ne fait.
+      - name: Verdict du scan (résumé de run)
+        if: always()
+        run: |
+          {
+            echo "## Scan de secrets (rapport, non bloquant)"
+            echo ""
+            if [ -s /tmp/secret-scan.log ]; then
+              sed -n '1,4p' /tmp/secret-scan.log | sed 's/^/- /'
+            else
+              echo "_Le scan n'a pas atteint son terme : voir le journal du job._"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
   build:
     name: Build
     runs-on: ubuntu-latest
