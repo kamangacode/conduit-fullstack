@@ -55,6 +55,10 @@ acceptance_criteria:
     given: "un lecteur connecté sur `/`"
     when: "il active l'onglet « Your Feed », puis « Global Feed » depuis `/?feed=following`"
     then: "l'URL devient exactement `/?feed=following`, puis exactement `/`"
+  - id: AC-13
+    given: "un lecteur connecté qui suit un compte ayant publié un article"
+    when: "il ouvre `/?feed=following`"
+    then: "l'article de ce compte est listé comme `.article-preview`, avec son auteur"
 implementation:
   files:
     - apps/web/src/lib/feed-query.ts
@@ -72,7 +76,7 @@ implementation:
     - apps/web/src/components/HomeFeed.spec.tsx
     - apps/web/src/components/PopularTags.spec.tsx
 related:
-  issues: [8, 13]
+  issues: [8, 13, 15]
   requirements:
     - REQ-WEB-008
     - REQ-WEB-010
@@ -116,6 +120,14 @@ ses quatre états portent `user === null` (`pending`, `anonymous`, `unavailable`
 Une garde écrite sur cette condition éjecte les lecteurs connectés pendant la
 réhydratation — le défaut déjà payé une fois sur `/settings`. Elle s'écrit sur
 `status === 'anonymous'`, et seulement sur lui.
+
+**AC-13 dit ce qu'aucun autre critère n'affirmait.** AC-2 et AC-7 décrivent
+l'onglet et l'endpoint, AC-8 la liste vide, AC-10 et AC-11 ce qui **n'est pas**
+demandé pendant la résolution de la session. Aucun ne dit qu'un article publié
+par un compte suivi ressort effectivement de la liste — la propriété que le
+lecteur vient chercher, et la seule que `social.spec.ts` éprouve. Une garde
+d'authentification correcte et un endpoint correct laissent encore la place à
+une liste rendue vide.
 
 AC-6 tient à la nature de la barre latérale : elle est **décorative pour le
 parcours**. Un échec de `GET /tags` ne doit pas empêcher de lire les articles,

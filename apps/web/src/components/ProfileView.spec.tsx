@@ -1,8 +1,9 @@
-import type { Profile } from '@repo/shared'
+import type { Profile, User } from '@repo/shared'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { ApiError } from '../lib/api-client'
+import { SessionProvider, TOKEN_STORAGE_KEY } from '../lib/session'
 import { ProfileView } from './ProfileView'
 
 /**
@@ -13,10 +14,27 @@ import { ProfileView } from './ProfileView'
  * d'articles et délègue le reste à ce composant, qui est donc l'endroit où ces
  * critères s'éprouvent désormais. AC-6 a changé de sens dans l'opération et est
  * réécrit plutôt que déplacé.
+ *
+ * Le composant est monté sous un **vrai** `SessionProvider` depuis AC-7 : c'est
+ * la résolution de la session qui commande l'émission de la requête, donc la
+ * simuler par une valeur figée retirerait au test la seule chose qu'il éprouve.
  */
 
 const getProfile = vi.hoisted(() => vi.fn())
-vi.mock('../lib/api-provider', () => ({ useApi: () => ({ getProfile }) }))
+
+// Le client API est doublé, mais le **jeton** qu'il lit vient de la vraie
+// session, à l'instant de l'appel — exactement comme `ApiClientProvider` le lit
+// par `tokenRef`. C'est ce qui rend observable ici l'identité que la requête
+// réelle porterait dans son en-tête `Authorization` (AC-7).
+vi.mock('../lib/api-provider', async () => {
+  const { useSession } = await import('../lib/session')
+  return {
+    useApi: () => {
+      const { token } = useSession()
+      return { getProfile: (username: string) => getProfile(username, token) }
+    },
+  }
+})
 
 // `FollowButton` et `FeedList` consomment la session, le client API et le cache
 // de requêtes : ils ont leurs propres specs, et les monter ici ferait échouer
@@ -30,16 +48,36 @@ vi.mock('./FeedList', () => ({
 
 const jacob: Profile = { username: 'jacob', bio: null, image: null, following: false }
 
-const renderView = (tab: 'author' | 'favorited' = 'author', username = 'jacob') =>
+const jake: User = {
+  email: 'jake@jake.jake',
+  token: 'jwt.token.here',
+  username: 'jake',
+  bio: null,
+  image: null,
+}
+
+/**
+ * Rend le composant sous la session par défaut : **aucun jeton conservé**, donc
+ * `useRehydration` pose `anonymous` sans aller-retour et la requête part au
+ * rendu suivant. C'est le cas du visiteur anonyme, et il ne paie rien.
+ */
+const renderView = (
+  tab: 'author' | 'favorited' = 'author',
+  username = 'jacob',
+  fetchCurrentUser: (token: string) => Promise<User> = async () => jake
+) =>
   render(
     <QueryClientProvider
       client={new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } })}
     >
-      <ProfileView username={username} tab={tab} page={1} />
+      <SessionProvider fetchCurrentUser={fetchCurrentUser}>
+        <ProfileView username={username} tab={tab} page={1} />
+      </SessionProvider>
     </QueryClientProvider>
   )
 
 beforeEach(() => {
+  window.localStorage.clear()
   getProfile.mockReset().mockResolvedValue(jacob)
 })
 
@@ -120,15 +158,95 @@ describe('REQ-WEB-007 — contrat de sélecteurs, page de profil', () => {
 })
 
 describe('REQ-WEB-005 — profil public', () => {
-  it('AC-1: rend le username et la bio du compte demandé', async () => {
-    getProfile.mockResolvedValue({ ...jacob, bio: 'I work at statefarm' })
+  it('AC-1: rend l’écran d’attente sans `.user-info`, puis le profil une fois la réponse arrivée', async () => {
+    // Le critère d'origine affirmait que le **serveur** rendait déjà username,
+    // bio et image. C'était vrai avant l'[ADR 020] et ne l'est plus : ce test
+    // éprouve donc la transition réelle, et non le seul fait que React sait
+    // rendre une chaîne — un test qui aurait été vert dans les deux mondes, donc
+    // aveugle au changement (§4.6 du dossier #15).
+    let resolveProfile: (profile: Profile) => void = () => undefined
+    getProfile.mockReturnValue(
+      new Promise<Profile>((resolve) => {
+        resolveProfile = resolve
+      })
+    )
 
     const { container } = renderView()
+
+    expect(container.querySelector('.profile-page')).not.toBeNull()
+    expect(container.querySelector('.user-info')).toBeNull()
+
+    resolveProfile({ ...jacob, bio: 'I work at statefarm' })
 
     await waitFor(() =>
       expect(container.querySelector('.profile-page .user-info h4')).toHaveTextContent('jacob')
     )
     expect(container.querySelector('.user-info p')).toHaveTextContent('I work at statefarm')
+  })
+
+  it('AC-7: n’émet aucune requête tant que la session n’a pas résolu son jeton', async () => {
+    // Le défaut que ce critère ferme, et qui coûtait les trois échecs de
+    // `social.spec.ts` : montée sous `pending`, la requête part **anonyme**,
+    // l'API répond `following: false` — correctement, pour l'appelant qu'elle a
+    // vu — et rien ne la reprend (clé sans identité du lecteur, `staleTime` de
+    // trente secondes, refetch au focus désactivé). Le lecteur qui suit voit
+    // « Follow » à chaque chargement.
+    window.localStorage.setItem(TOKEN_STORAGE_KEY, jake.token)
+    let resolveUser: (user: User) => void = () => undefined
+    const fetchCurrentUser = vi.fn(
+      () =>
+        new Promise<User>((resolve) => {
+          resolveUser = resolve
+        })
+    )
+
+    renderView('author', 'jacob', fetchCurrentUser)
+
+    // La session est bien en train de se résoudre — et le profil n'a pourtant
+    // rien demandé.
+    await waitFor(() => expect(fetchCurrentUser).toHaveBeenCalledWith(jake.token))
+    expect(getProfile).not.toHaveBeenCalled()
+
+    resolveUser(jake)
+
+    await waitFor(() => expect(getProfile).toHaveBeenCalledOnce())
+  })
+
+  it('AC-7: émet la requête avec le jeton du lecteur une fois la session résolue', async () => {
+    window.localStorage.setItem(TOKEN_STORAGE_KEY, jake.token)
+
+    renderView()
+
+    // Une requête, et une seule, portant l'identité du lecteur : c'est ce que
+    // l'en-tête `Authorization` du client réel transporte. Un second appel
+    // signalerait le retour de la double requête que l'option B du cadrage
+    // écartait — celle qui fait clignoter le bouton de « Follow » à « Unfollow ».
+    await waitFor(() => expect(getProfile).toHaveBeenCalledWith('jacob', jake.token))
+    expect(getProfile).toHaveBeenCalledOnce()
+  })
+
+  it('AC-7: émet la requête de profil une fois la session « unavailable », pas seulement « authenticated »', async () => {
+    // La garde s'écrit sur `pending` **seul** : `anonymous`, `authenticated` et
+    // `unavailable` sont trois réponses. `unavailable` conserve un jeton qu'on
+    // n'a pas pu vérifier (REQ-WEB-016) — ce n'est pas `pending`, et rien ne
+    // dispense donc la page d'émettre sa requête avec ce jeton, l'API tranchera.
+    // Sans ce test, une régression qui gate la requête sur `authenticated` au
+    // lieu de `!== 'pending'` resterait invisible : les deux prédicats ne
+    // divergent que sur cet état-ci.
+    window.localStorage.setItem(TOKEN_STORAGE_KEY, jake.token)
+    const fetchCurrentUser = vi.fn(() => Promise.reject(new ApiError(500, {})))
+
+    renderView('author', 'jacob', fetchCurrentUser)
+
+    await waitFor(() => expect(getProfile).toHaveBeenCalledWith('jacob', jake.token))
+  })
+
+  it('AC-7: n’attend rien d’un visiteur anonyme', async () => {
+    // Sans jeton conservé, `useRehydration` pose `anonymous` sans aller-retour :
+    // la garde ne coûte donc qu'un rendu de plus, jamais une requête.
+    renderView()
+
+    await waitFor(() => expect(getProfile).toHaveBeenCalledWith('jacob', null))
   })
 
   it('AC-6: rend la coquille « profil introuvable » sur un username inconnu', async () => {

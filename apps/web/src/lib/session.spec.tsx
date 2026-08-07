@@ -3,7 +3,13 @@ import { act, render, screen, waitFor } from '@testing-library/react'
 import { renderToString } from 'react-dom/server'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ApiError } from './api-client'
-import { RECONNECT_DELAY_MS, SessionProvider, TOKEN_STORAGE_KEY, useSession } from './session'
+import {
+  RECONNECT_DELAY_MS,
+  REHYDRATION_TIMEOUT_MS,
+  SessionProvider,
+  TOKEN_STORAGE_KEY,
+  useSession,
+} from './session'
 
 /** Tests écrits depuis les critères de REQ-WEB-002, REQ-WEB-007 et REQ-WEB-016. */
 
@@ -442,6 +448,29 @@ describe('REQ-WEB-016 — mode indisponible au démarrage', () => {
     renderProbe()
 
     await waitFor(() => expect(screen.getByTestId('status')).toHaveTextContent('unavailable'))
+    expect(window.localStorage.getItem(TOKEN_STORAGE_KEY)).toBe('mon.jeton')
+  })
+
+  it('AC-2 (étendu) : entre en mode indisponible quand la requête ne répond jamais', async () => {
+    // AC-2 couvrait déjà le rejet immédiat (panne de transport). Ce qu'il ne
+    // couvrait pas est la requête qui ne se termine **jamais** — ni succès, ni
+    // rejet, une connexion que le serveur ne referme pas. Depuis REQ-WEB-005
+    // AC-7, `pending` gate aussi `ArticleView` et `ProfileView` : sans borne,
+    // ce contenu public resterait bloqué indéfiniment derrière un `GET /user`
+    // qui pend.
+    vi.useFakeTimers()
+    window.localStorage.setItem(TOKEN_STORAGE_KEY, 'mon.jeton')
+    fetchCurrentUser.mockReturnValue(new Promise<User>(() => undefined))
+
+    renderProbe()
+
+    expect(screen.getByTestId('status')).toHaveTextContent('pending')
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(REHYDRATION_TIMEOUT_MS)
+    })
+
+    expect(screen.getByTestId('status')).toHaveTextContent('unavailable')
     expect(window.localStorage.getItem(TOKEN_STORAGE_KEY)).toBe('mon.jeton')
   })
 

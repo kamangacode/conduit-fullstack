@@ -90,6 +90,20 @@ describe('REQ-WEB-009 — liste du flux', () => {
     expect(listArticles).not.toHaveBeenCalled()
   })
 
+  it('AC-13: liste l’article d’un compte suivi renvoyé par le flux personnel', async () => {
+    // Le critère que ni AC-2 ni AC-8 ne couvraient : l'un dit quel endpoint est
+    // appelé, l'autre ce qu'on affiche quand il ne renvoie rien. Aucun
+    // n'affirmait que ce qu'il renvoie **ressort** — or c'est la seule chose
+    // que le lecteur vient chercher, et la seule que `social.spec.ts` éprouve.
+    getFeed.mockResolvedValue({ articles: [article], articlesCount: 1 })
+
+    const { container } = renderList({ kind: 'following' })
+
+    await waitFor(() => expect(container.querySelectorAll('.article-preview')).toHaveLength(1))
+    expect(screen.getByText('How to train your dragon')).toBeInTheDocument()
+    expect(container.querySelector('.article-meta .author')).toHaveTextContent('jacob')
+  })
+
   it('AC-1: pagine avec le total annoncé, pas le nombre d’articles reçus', async () => {
     listArticles.mockResolvedValue({ articles: [article], articlesCount: 47 })
 

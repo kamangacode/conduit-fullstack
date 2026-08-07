@@ -269,6 +269,7 @@ wait_for "l'API" "${API_BASE_URL}/tags" "$api_pid"
 # describe REQ-CONF-003
 # it AC-1: au moins un article publié existe avant le lancement de la suite
 # it AC-2: le jeu de données est créé par l'API, jamais par un accès direct à la base
+# it AC-5: le compte que `social.spec.ts` cible en dur existe et a publié un article
 #
 # ── Jeu de données minimal supposé par la suite (REQ-CONF-003) ───────────────
 #
@@ -386,7 +387,18 @@ wait_for "le front" "http://localhost:${WEB_PORT}/" "$web_pid"
 
 # describe REQ-CONF-002
 # it AC-1: les 12 fichiers de specs officiels sont exécutés, sans exclusion de notre fait
+# it AC-9: les six tests de `social.spec.ts` passent, sans relèvement d'aucun délai
 echo "→ exécution de la suite e2e officielle..."
+#
+# **`API_MODE` n'est volontairement pas posé, donc il vaut `true`.** Le drapeau
+# (`conformance/e2e/helpers/config.ts`) ne choisit pas un « mode de test » : il
+# choisit **quels tests existent**. À `false`, quatre fichiers entiers
+# s'éteignent en tête de fichier (`error-handling`, `user-fetch-errors`,
+# `xss-security`, `health`) plus une poignée de tests ailleurs — une exclusion
+# de notre fait, que l'AC-1 ci-dessus interdit. Les branches « API mode » que la
+# suite prend alors supposent un environnement peuplé ; c'est le seeding
+# ci-dessus (REQ-CONF-003) qui le rend vrai, jamais ce drapeau qui le contourne.
+#
 # `API_BASE` est lu par `conformance/e2e/helpers/config.ts` : les helpers créent
 # comptes et articles **par l'API**, sans passer par l'interface. Ils tournent
 # dans Node, hors du navigateur, donc hors de portée de la règle de résolution —

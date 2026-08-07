@@ -39,6 +39,10 @@ acceptance_criteria:
     given: "un test de la suite qui crée son propre contexte via `browser.newContext()`"
     when: "la page chargée appelle l'hôte d'API relayé en TLS par le harnais"
     then: "l'appel aboutit et la page rend son contenu — la tolérance au certificat jetable est portée au niveau du navigateur, pas seulement du contexte fabriqué par la config"
+  - id: AC-9
+    given: "`staging` à jour et le harnais e2e"
+    when: "`pnpm conformance:e2e social.spec.ts` est exécuté"
+    then: "les six tests du fichier passent, sans relèvement d'aucun délai de `playwright.config.ts` ni de `playwright.base.ts`"
 implementation:
   files:
     - apps/web/conformance/UPSTREAM.md
@@ -52,7 +56,7 @@ implementation:
     - scripts/verify-e2e-gate.sh
     - scripts/verify-conformance-drift.sh
 related:
-  issues: [10, 11, 16]
+  issues: [10, 11, 15, 16]
   requirements:
     - REQ-CONF-001
     - REQ-WEB-007
@@ -168,6 +172,13 @@ l'autre interroge l'hôte figé — résolu comme le navigateur le résoudra —
 vérifie que c'est bien l'API de ce run qui répond. Les deux **arrêtent le run**
 en cas d'échec, plutôt que de laisser la suite produire un diagnostic qui ne
 parlerait pas de la vraie cause.
+
+AC-9 est prouvé par l'**exécution** de `social.spec.ts`, et par rien d'autre :
+c'est le dernier des cinq manques du tableau ci-dessous à être payé, et le seul
+verdict qui vaille est celui de la suite elle-même. Sa formulation nomme
+explicitement ce qui ne compte pas comme une preuve — relever un délai de la
+configuration Playwright ferait passer les six tests sans que le front ait
+changé, et serait la même triche qu'éditer une assertion, en un chiffre.
 
 AC-8 n'a pas de test unitaire possible : la propriété porte sur ce qu'un
 navigateur réel accorde à un contexte qu'un test fabrique, et rien en dessous du

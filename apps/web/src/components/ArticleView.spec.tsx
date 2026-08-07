@@ -1,9 +1,9 @@
-import type { Article } from '@repo/shared'
+import type { Article, User } from '@repo/shared'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { ApiError } from '../lib/api-client'
-import { SessionProvider } from '../lib/session'
+import { SessionProvider, TOKEN_STORAGE_KEY } from '../lib/session'
 import { ArticleView } from './ArticleView'
 
 /**
@@ -40,12 +40,23 @@ const article: Article = {
   author: { username: 'jacob', bio: null, image: null, following: false },
 }
 
-const renderView = (slug = 'how-to-train-your-dragon') =>
+const jake: User = {
+  email: 'jake@jake.jake',
+  token: 'jwt.token.here',
+  username: 'jake',
+  bio: null,
+  image: null,
+}
+
+const renderView = (
+  slug = 'how-to-train-your-dragon',
+  fetchCurrentUser: (token: string) => Promise<User> = () => Promise.reject(new ApiError(401, {}))
+) =>
   render(
     <QueryClientProvider
       client={new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } })}
     >
-      <SessionProvider fetchCurrentUser={() => Promise.reject(new ApiError(401, {}))}>
+      <SessionProvider fetchCurrentUser={fetchCurrentUser}>
         <ArticleView slug={slug} />
       </SessionProvider>
     </QueryClientProvider>
@@ -158,5 +169,63 @@ describe('REQ-WEB-012 — page article', () => {
     expect(container.querySelector('.article-page .banner h1')).toHaveTextContent(
       'How to train your dragon'
     )
+  })
+})
+
+/**
+ * La page article porte deux champs relatifs au lecteur — `favorited` et
+ * `author.following` (règle R-5) — donc exactement la propriété que
+ * REQ-WEB-005 AC-7 énonce, sur une seconde surface. Le critère est écrit une
+ * fois et éprouvé partout où il s'applique ; le redoubler dans REQ-WEB-012
+ * créerait deux formulations à garder d'accord.
+ */
+describe('REQ-WEB-005 — requête relative au lecteur, sur la page article', () => {
+  it('AC-7: n’émet aucune requête d’article tant que la session n’a pas résolu son jeton', async () => {
+    window.localStorage.setItem(TOKEN_STORAGE_KEY, jake.token)
+    let resolveUser: (user: User) => void = () => undefined
+    const fetchCurrentUser = vi.fn(
+      () =>
+        new Promise<User>((resolve) => {
+          resolveUser = resolve
+        })
+    )
+
+    renderView('how-to-train-your-dragon', fetchCurrentUser)
+
+    await waitFor(() => expect(fetchCurrentUser).toHaveBeenCalledWith(jake.token))
+    expect(getArticle).not.toHaveBeenCalled()
+
+    resolveUser(jake)
+
+    await waitFor(() => expect(getArticle).toHaveBeenCalledOnce())
+  })
+
+  it('AC-7: émet la requête d’article une fois la session « unavailable », pas seulement « authenticated »', async () => {
+    // La garde s'écrit sur `pending` **seul** : `anonymous`, `authenticated` et
+    // `unavailable` sont trois réponses. `unavailable` conserve un jeton qu'on
+    // n'a pas pu vérifier (REQ-WEB-016) — ce n'est pas `pending`, et rien ne
+    // dispense donc la page d'émettre sa requête avec ce jeton, l'API tranchera.
+    // Sans ce test, une régression qui gate la requête sur `authenticated` au
+    // lieu de `!== 'pending'` resterait invisible : les deux prédicats ne
+    // divergent que sur cet état-ci.
+    window.localStorage.setItem(TOKEN_STORAGE_KEY, jake.token)
+    const fetchCurrentUser = vi.fn(() => Promise.reject(new ApiError(500, {})))
+
+    renderView('how-to-train-your-dragon', fetchCurrentUser)
+
+    await waitFor(() => expect(getArticle).toHaveBeenCalledOnce())
+  })
+
+  it('AC-7: ne retarde pas les commentaires, qui ne dépendent pas du lecteur', async () => {
+    // La garde est **ciblée**. L'étendre à toute la page ajouterait
+    // l'aller-retour `GET /user` au chemin critique d'un contenu public, pour
+    // corriger un champ que ce contenu ne porte pas.
+    window.localStorage.setItem(TOKEN_STORAGE_KEY, jake.token)
+    const fetchCurrentUser = vi.fn(() => new Promise<User>(() => undefined))
+
+    renderView('how-to-train-your-dragon', fetchCurrentUser)
+
+    await waitFor(() => expect(getComments).toHaveBeenCalledWith('how-to-train-your-dragon'))
+    expect(getArticle).not.toHaveBeenCalled()
   })
 })
