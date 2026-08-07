@@ -104,6 +104,11 @@ jobs:
         run: pnpm lint
       - name: Verrou hard-fail Biome (vérification active)
         run: bash scripts/verify-biome-hardfail.sh
+      - name: Garde-fou de secrets (vérification active)
+        # Le hook pre-commit ne protège que celui qui l'a installé. Rejouer le
+        # canary ici prouve que le garde-fou mord aussi sur un runner frais,
+        # et attrape le cas où quelqu'un aurait dégradé ses motifs (REQ-SEC-001).
+        run: bash scripts/verify-secret-guard.sh
       - name: Raisons des biome-ignore (PR uniquement)
         if: github.event_name == 'pull_request'
         # Garantit que la ref de base est résolvable côté runner : le script

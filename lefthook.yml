@@ -31,31 +31,12 @@ pre-commit:
     secret-guard:
       # Rejette tout diff ajoutant un secret à haute confiance : clé privée PEM,
       # JWT, clé d'accès AWS (AKIA), PAT GitHub (ghp_), clé secrète Stripe (sk_live).
-      # La version durcie + son test canary (scripts/test-secret-guard.sh) arrivent
-      # en Phase 3 (item B2). Exclut les emplacements où des exemples synthétiques
-      # sont légitimes : tests, docs/, .github/workflows/, lefthook.yml, scripts/.
-      run: |
-        set --
-        while IFS= read -r f; do
-          [ -z "$f" ] && continue
-          set -- "$@" "$f"
-        done <<EOF
-        $(git diff --cached --name-only --diff-filter=AM \
-          | grep -vE '\.(spec|test)\.(ts|tsx|js|jsx)$' \
-          | grep -vE '^docs/' \
-          | grep -vE '^\.github/' \
-          | grep -vE '^lefthook\.yml$' \
-          | grep -vE '^scripts/')
-        EOF
-        if [ "$#" -eq 0 ]; then exit 0; fi
-        if git diff --cached -U0 -- "$@" \
-          | grep -E '^\+' \
-          | grep -Eo '(-----BEGIN [A-Z ]*PRIVATE KEY-----|eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}|AKIA[0-9A-Z]{16}|ghp_[A-Za-z0-9]{36}|sk_live_[A-Za-z0-9]{20,})' \
-          | grep -q .; then
-          echo "ERREUR : secret potentiel détecté dans le diff (clé privée / JWT / AWS / GitHub / Stripe)."
-          echo "        Retirez la valeur et utilisez une variable d'environnement."
-          exit 1
-        fi
+      #
+      # La logique vit dans un script et non ici (item B2) : un garde-fou qu'on ne
+      # peut pas exécuter hors de son hook ne peut pas être mis en échec, donc pas
+      # prouvé. `scripts/verify-secret-guard.sh` appelle ce même script en pre-push
+      # et en CI — jamais une copie de ses motifs, qui ne prouverait que la copie.
+      run: bash scripts/secret-guard.sh
     adr-convention:
       # Dès qu'un ADR bouge : numérotation unique, sections obligatoires, statut
       # valide et index à jour. Le contrôle porte sur tout le dossier (la
@@ -117,6 +98,20 @@ pre-push:
       # Vérifie en local que le verrou hard-fail Biome est toujours actif
       # (~5s). Empêche un push qui aurait silencieusement dégradé biome.json.
       run: bash scripts/verify-biome-hardfail.sh
+
+    verify-secret-guard:
+      # Soumet au garde-fou de secrets un exemplaire de chacune des cinq familles
+      # qu'il prétend refuser, dans un dépôt git jetable (REQ-SEC-001).
+      #
+      # Un garde-fou de secrets est silencieux quand il marche ET quand il est
+      # cassé : un commit qui passe ne dit pas s'il a examiné le diff ou s'il a
+      # sorti 0 sur une liste de fichiers vide. La seule preuve est de lui
+      # soumettre un vrai secret et de constater le refus.
+      #
+      # La vérification porte aussi ses contrôles négatifs — exclusions, code
+      # ordinaire, suppression d'un secret — parce qu'un garde-fou qui refuse
+      # tout se fait contourner par `--no-verify` avant la fin de la semaine.
+      run: bash scripts/verify-secret-guard.sh
 
     verify-type-boundary:
       # Casse volontairement le modèle partagé et vérifie que les DEUX
