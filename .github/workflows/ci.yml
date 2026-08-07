@@ -402,6 +402,14 @@ jobs:
       - name: Modes de défaillance du harnais e2e
         continue-on-error: true
         run: bash scripts/verify-e2e-gate.sh
+      # Le même principe appliqué à l'étape de données : le jeu minimal que la
+      # suite suppose doit être idempotent et savoir rougir (REQ-CONF-003 AC-2,
+      # AC-3). Contre un stub d'API, donc quelques secondes et aucune dépendance
+      # à la base ni au navigateur — les deux propriétés portent sur la séquence
+      # d'appels du script, pas sur le comportement de l'API.
+      - name: Idempotence du jeu de données e2e
+        continue-on-error: true
+        run: bash scripts/verify-e2e-seed.sh
       - name: Suite e2e RealWorld (rapport)
         continue-on-error: true
         env:

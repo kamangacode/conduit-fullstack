@@ -266,6 +266,30 @@ function profileEndpoints(
 const articlePath = (slug: string) => `/articles/${encodeURIComponent(slug)}`
 
 /**
+ * Chemin de **création** d'article — barre finale comprise, et ce n'est pas une
+ * coquille ([ADR 021](../../../../docs/adr/021-chemin-de-creation-d-article-aligne-sur-le-contrat-e2e.md),
+ * REQ-WEB-008 AC-10).
+ *
+ * La suite e2e officielle intercepte `…/api/articles/` pour éprouver la panne de
+ * transport à la publication. Un motif Playwright est compilé en expression
+ * **ancrée** : la barre y est significative, et un `POST …/api/articles` n'est
+ * pas intercepté. La requête partait donc pour de bon, récoltait un 401 sur son
+ * jeton factice, et le test échouait sur une page de connexion — un diagnostic
+ * qui ne parlait ni du message d'erreur ni de la panne réseau.
+ *
+ * Ce chemin est donc une **donnée de contrat**, comme un sélecteur (REQ-WEB-007)
+ * ou le message d'échec de transport (REQ-WEB-017), et non un détail
+ * d'implémentation. Retirer la barre « pour l'aligner sur les autres chemins »
+ * ne casserait rien dans l'application et casserait la suite : c'est exactement
+ * le mode d'échec que l'ADR 014 documente.
+ *
+ * Les autres chemins d'article ne portent pas cette barre — seule la création
+ * est interceptée sous cette forme. Côté API, les deux écritures sont
+ * équivalentes : rien ne change dans `apps/api`.
+ */
+const CREATE_ARTICLE_PATH = '/articles/'
+
+/**
  * Endpoints d'articles et de favoris (PRD §7.3).
  *
  * Le flux personnel a son **propre chemin** et n'est pas un filtre de la liste
@@ -303,7 +327,8 @@ function articleEndpoints(
     listArticles: (query) => unwrapPage({ method: 'GET', path: '/articles', query }),
     getFeed: (query) => unwrapPage({ method: 'GET', path: '/articles/feed', query }),
     getArticle: (slug) => unwrap({ method: 'GET', path: articlePath(slug) }),
-    createArticle: (dto) => unwrap({ method: 'POST', path: '/articles', body: { article: dto } }),
+    createArticle: (dto) =>
+      unwrap({ method: 'POST', path: CREATE_ARTICLE_PATH, body: { article: dto } }),
     updateArticle: (slug, dto) =>
       unwrap({ method: 'PUT', path: articlePath(slug), body: { article: dto } }),
     deleteArticle: async (slug) => {

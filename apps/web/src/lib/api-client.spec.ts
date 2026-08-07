@@ -356,7 +356,7 @@ describe('REQ-WEB-008 — client API des articles, commentaires et tags', () => 
       tagList: ['dragons'],
     })
 
-    expect(urlOf(fetchImpl).pathname).toBe('/api/articles')
+    expect(urlOf(fetchImpl).pathname).toBe('/api/articles/')
     expect(fetchImpl.mock.calls[0]?.[1]?.method).toBe('POST')
     // Le DTO nu serait rejeté par l'API : l'enveloppe fait partie du contrat.
     expect(JSON.parse(String(fetchImpl.mock.calls[0]?.[1]?.body))).toEqual({
@@ -368,6 +368,33 @@ describe('REQ-WEB-008 — client API des articles, commentaires et tags', () => 
       },
     })
     expect(created.slug).toBe('how-to-train-your-dragon')
+  })
+
+  it('AC-10: crée sur le chemin que le contrat externe intercepte, sans toucher la modification', async () => {
+    // La barre finale n'est pas cosmétique : la suite e2e officielle route
+    // `…/api/articles/` pour éprouver la panne de transport à la publication, et
+    // un motif Playwright est compilé en expression **ancrée**. Sans elle,
+    // l'interception ne matche pas, la requête part pour de bon, et le test
+    // échoue sur une page de connexion (ADR 021).
+    //
+    // Le test asserte les **deux** chemins dans le même `it` parce que c'est
+    // leur écart qui porte le sens : le vérifier séparément laisserait passer un
+    // « nettoyage » qui alignerait les deux formes.
+    const create = vi.fn().mockResolvedValue(jsonResponse(201, { article: anArticle }))
+    await buildClient(create, 'jwt.token.here').createArticle({
+      title: 'How to train your dragon',
+      description: 'Ever wonder how?',
+      body: 'It takes a Jacobian',
+      tagList: [],
+    })
+
+    const update = vi.fn().mockResolvedValue(jsonResponse(200, { article: anArticle }))
+    await buildClient(update, 'jwt.token.here').updateArticle('how-to-train-your-dragon', {
+      title: 'Nouveau titre',
+    })
+
+    expect(urlOf(create).pathname).toBe('/api/articles/')
+    expect(urlOf(update).pathname).toBe('/api/articles/how-to-train-your-dragon')
   })
 
   it('AC-9: modifie un article par son slug, en PUT et sous la même enveloppe', async () => {
