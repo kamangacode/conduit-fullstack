@@ -63,6 +63,21 @@ const SHELL_DESCRIBE_REQ = /^\s*#\s*describe\s+(REQ-[A-Z]+-\d{3})/
 const SHELL_IT_AC = /^\s*#\s*it\s+(AC-\d+)\s*:/
 
 /**
+ * Troisième famille : les vérifications écrites en Node, pour la même raison qui
+ * a fait entrer `scripts/` ici — une preuve reste une preuve quel que soit son
+ * langage, et un rapport qui en ignore une famille pousse à écrire de faux tests
+ * pour le satisfaire.
+ *
+ * Le shell ne sait pas lire du YAML sans dépendance, et certaines propriétés
+ * portent précisément sur un fichier YAML : le câblage qui rend le job e2e
+ * bloquant (REQ-CONF-002 AC-5) se constate en parcourant `ci.yml`, pas en le
+ * grepant — un `grep continue-on-error` sur le fichier entier confondrait le job
+ * e2e avec le job conformance, dont deux étapes sont tolérantes à dessein.
+ */
+const JS_DESCRIBE_REQ = /^\s*\/\/\s*describe\s+(REQ-[A-Z]+-\d{3})/
+const JS_IT_AC = /^\s*\/\/\s*it\s+(AC-\d+)\s*:/
+
+/**
  * Chaque forme ne s'applique qu'à son type de fichier, et ce cloisonnement est
  * nécessaire — pas une élégance.
  *
@@ -74,9 +89,9 @@ const SHELL_IT_AC = /^\s*#\s*it\s+(AC-\d+)\s*:/
  * production.
  */
 function patternsFor(file: string): { describe: RegExp; it: RegExp } {
-  return file.endsWith('.sh')
-    ? { describe: SHELL_DESCRIBE_REQ, it: SHELL_IT_AC }
-    : { describe: DESCRIBE_REQ, it: IT_AC }
+  if (file.endsWith('.sh')) return { describe: SHELL_DESCRIBE_REQ, it: SHELL_IT_AC }
+  if (file.endsWith('.mjs')) return { describe: JS_DESCRIBE_REQ, it: JS_IT_AC }
+  return { describe: DESCRIBE_REQ, it: IT_AC }
 }
 
 type Hit = { file: string; line: number }
@@ -99,7 +114,7 @@ function collectTestFiles(roots: string[]): string[] {
       continue
     }
     for (const entry of readdirSync(root, { withFileTypes: true, recursive: true })) {
-      if (!(entry.isFile() && /(\.(spec|test)\.tsx?|\.sh)$/.test(entry.name))) {
+      if (!(entry.isFile() && /(\.(spec|test)\.tsx?|\.sh|\.mjs)$/.test(entry.name))) {
         continue
       }
       const path = join(entry.parentPath, entry.name)
