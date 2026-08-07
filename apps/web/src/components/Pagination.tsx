@@ -94,7 +94,8 @@ function PageControl({
           d'écran.
 
           Pas de `name` sur la première page : un contrôle sans nom n'est pas
-          soumis, donc la cible reste `/` et non `/?page=1`. */}
+          soumis, donc la cible ne porte jamais `page=1` (voir `pagination.ts`
+          pour la nuance sur un formulaire sans aucun autre champ). */}
       {target.page === null ? (
         <button aria-current={active ? 'page' : undefined} className="page-link" type="submit">
           {page}

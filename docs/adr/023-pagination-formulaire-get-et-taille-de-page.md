@@ -107,6 +107,15 @@ front **envoie** la sienne au lieu de laisser l'API choisir.
   assumée ; elle serait réversible en un rendu si le contrat amont changeait.
 - Un `<form>` par cellule alourdit le markup de la pagination par rapport au
   gabarit de référence.
+- Le contrôle de la première page, quand aucun filtre n'est actif, est un
+  formulaire GET sans aucun champ nommé. L'algorithme de soumission de
+  formulaire du standard HTML encode alors un jeu de données vide plutôt que
+  d'omettre la requête, et certains navigateurs produisent donc `/?` plutôt
+  que `/` exactement (l'API `URL.search`, elle, purge le `?` sur une chaîne
+  vide — l'écart vient de l'algorithme de soumission, pas d'une erreur du
+  composant). `/?` et `/` restent la même ressource pour Next.js et pour
+  `searchParams`, donc rien ne se casse ; c'est une variation cosmétique de
+  l'adresse, pas de l'invariant « aucun `page` soumis ».
 
 ### Neutral
 

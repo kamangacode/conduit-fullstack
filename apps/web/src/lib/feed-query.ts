@@ -168,6 +168,15 @@ export async function prefetchFeed(
   client: ApiClient,
   request: FeedRequest
 ): Promise<void> {
+  if (!isPublicFeed(request.feed)) {
+    // Défense en profondeur : `home-page.tsx` ne devrait déjà appeler cette
+    // fonction que sous `isPublicFeed(feed)`, mais la garder ici aussi évite
+    // qu'un futur appelant qui oublierait cette condition n'émette une
+    // requête authentifiée depuis le client serveur anonyme — elle ne
+    // pourrait recevoir qu'un 401 pour rien.
+    return
+  }
+
   try {
     await queryClient.prefetchQuery({
       queryKey: feedQueryKey(request),

@@ -85,9 +85,20 @@ export interface PageFormTarget {
    * Valeur à soumettre pour `page`, ou `null` sur la première.
    *
    * `null` n'est pas « zéro » : c'est l'instruction de ne pas nommer le bouton
-   * du tout. Un contrôle sans `name` n'est pas soumis, donc la première page
-   * mène à `/` et non à `/?page=1` — les deux désignent la même ressource, et en
-   * produire deux ferait deux entrées d'historique et deux URL à indexer.
+   * du tout. Un contrôle sans `name` n'est pas soumis, donc la cible ne porte
+   * jamais `page=1` — les deux désigneraient la même ressource, et en produire
+   * deux ferait deux entrées d'historique et deux URL à indexer.
+   *
+   * Quand ce contrôle est aussi le seul champ du formulaire (aucun filtre
+   * courant), la cible n'est pas garantie identique au caractère près à
+   * `pathname` : un formulaire GET sans aucun champ nommé soumet malgré tout
+   * une requête, et certains navigateurs y ajoutent un `?` vide (le jeu de
+   * données codé étant la chaîne vide, non l'absence de requête — le
+   * comportement suit l'algorithme de soumission de formulaire du standard
+   * HTML, pas l'API `URL.search`, qui elle purge le `?` sur une valeur vide).
+   * `/?` et `/` désignent la même ressource pour tout ce qui lit cette URL
+   * ensuite (Next.js, `searchParams`) ; l'invariant réellement garanti est
+   * « aucun `page` soumis », pas « chaîne d'URL identique ».
    */
   readonly page: string | null
 }

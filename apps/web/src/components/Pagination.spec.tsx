@@ -119,11 +119,17 @@ describe('REQ-WEB-010 — pagination rendue', () => {
       search: 'feed=following',
     })
 
-    const { form } = controlFor(container, '2')
+    const { button, form } = controlFor(container, '2')
     const hidden = form?.querySelector('input[type="hidden"]')
     expect(hidden).toHaveAttribute('name', 'feed')
     expect(hidden).toHaveAttribute('value', 'following')
     expect(form && new FormData(form).get('feed')).toBe('following')
+
+    // L'assertion qui manquait : `hidden` et `button` peuvent tous deux être
+    // présents sans être dans le bon ordre. `compareDocumentPosition` est le
+    // test direct de « avant » que `FormData` (qui suit l'ordre du DOM, donc
+    // masque une inversion) ne peut pas fournir.
+    expect(hidden?.compareDocumentPosition(button as Node)).toBe(Node.DOCUMENT_POSITION_FOLLOWING)
   })
 
   it('AC-6: ne nomme pas le contrôle de la première page, pour une URL canonique', () => {

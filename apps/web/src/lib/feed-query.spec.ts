@@ -1,6 +1,7 @@
+import { QueryClient } from '@tanstack/react-query'
 import { describe, expect, it, vi } from 'vitest'
 import type { ApiClient } from './api-client'
-import { feedQueryKey, fetchFeed, isPublicFeed, requestedFeed } from './feed-query'
+import { feedQueryKey, fetchFeed, isPublicFeed, prefetchFeed, requestedFeed } from './feed-query'
 import { WEB_PAGE_LIMIT } from './pagination'
 
 /** Tests écrits depuis les critères de REQ-WEB-009, avant l'implémentation. */
@@ -70,6 +71,20 @@ describe('REQ-WEB-009 — flux demandé par l’URL', () => {
     expect(feedQueryKey({ feed: { kind: 'tag', tag: 'a' }, page: 1 })).not.toEqual(
       feedQueryKey({ feed: { kind: 'tag', tag: 'b' }, page: 1 })
     )
+  })
+
+  it('AC-3: ne précharge jamais le flux personnel, même appelée directement', async () => {
+    // Défense en profondeur : `home-page.tsx` conditionne déjà son appel à
+    // `isPublicFeed(feed)`, mais cette garde doit survivre à un futur
+    // appelant qui l'oublierait — un préchargement du flux personnel depuis
+    // le client serveur anonyme ne pourrait recevoir qu'un 401 pour rien.
+    const client = clientDouble()
+    const queryClient = new QueryClient()
+
+    await prefetchFeed(queryClient, client, { feed: { kind: 'following' }, page: 1 })
+
+    expect(client.getFeed).not.toHaveBeenCalled()
+    expect(client.listArticles).not.toHaveBeenCalled()
   })
 
   it('AC-2: charge le flux personnel par son endpoint dédié', async () => {
