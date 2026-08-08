@@ -3,7 +3,7 @@ id: REQ-ARCH-002
 title: Prouver le contrat HTTP dans les deux directions, sur toutes les routes
 type: non-functional
 domain: architecture
-status: approved
+status: implemented
 priority: must
 source: "PRD §7 (contrat d'API) et §8 (formats verbatim) ; plan d'outillage item C3 ; ADR 026"
 acceptance_criteria:
@@ -36,8 +36,19 @@ acceptance_criteria:
     when: "elle rend la main"
     then: "le dépôt est dans son état d'origine"
 implementation:
-  files: []
-  tests: []
+  files:
+    - apps/api/test/contract/route-contracts.ts
+    - apps/api/test/contract/contract-assertion.ts
+    - apps/api/test/contract/contract-registry-check.ts
+    - apps/api/test/contract/contract-harness.ts
+    - apps/api/test/integration/setup.ts
+    - turbo.json
+    - lefthook.yml
+    - .github/workflows/ci.yml
+  tests:
+    - apps/api/test/contract/contract-harness.spec.ts
+    - apps/api/test/integration/contract-harness.integration.spec.ts
+    - scripts/verify-contract-types.sh
 related:
   issues: []
   requirements:

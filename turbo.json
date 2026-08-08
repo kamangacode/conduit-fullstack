@@ -72,6 +72,18 @@
       "dependsOn": ["^build", "db:generate"],
       "cache": false
     },
+    // Même famille, mêmes besoins : la vérification retire un champ du contrat
+    // de la projection réelle et relance `tsc` sur `apps/api`, ce qui suppose
+    // `@repo/shared` compilé et le client Prisma généré. Passer par le graphe
+    // plutôt que par une étape brute du job, quatrième application de la même
+    // leçon.
+    //
+    // `cache: false` pour la raison ci-dessus : un « pass » resservi depuis le
+    // cache serait un garde-fou qui ne s'exécute plus.
+    "verify:contract-types": {
+      "dependsOn": ["^build", "db:generate"],
+      "cache": false
+    },
     "test:e2e": {
       "dependsOn": ["^build"],
       "cache": false

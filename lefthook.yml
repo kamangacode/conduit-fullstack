@@ -177,3 +177,21 @@ pre-push:
         - 'apps/web/**'
         - 'scripts/verify-type-boundary.sh'
       run: bash scripts/verify-type-boundary.sh
+
+    verify-contract-types:
+      # Moitié « compilation » des tests de contrat (REQ-ARCH-002 AC-6/AC-7,
+      # ADR 026) : retire un champ du contrat de la projection réelle et exige
+      # que `tsc` refuse. Le harnais d'intégration couvre l'autre moitié, celle
+      # que le compilateur ne peut pas voir — un champ **en trop** arrivé par un
+      # spread, forme mesurée comme acceptée par `tsc --strict`.
+      #
+      # Comme le canary d'environnement, la tâche passe par le graphe turbo
+      # (`^build`, `db:generate`) et non par un appel direct : la vérification
+      # relance `tsc` sur `apps/api`, qui a besoin de `@repo/shared` compilé et
+      # du client Prisma généré. Un appel direct passerait en local, où ces
+      # artefacts traînent, et échouerait sur un runner frais.
+      glob:
+        - 'packages/shared/**'
+        - 'apps/api/**'
+        - 'scripts/verify-contract-types.sh'
+      run: bash .lefthook/run-quiet.sh 'CI=true pnpm exec turbo run verify:contract-types'
