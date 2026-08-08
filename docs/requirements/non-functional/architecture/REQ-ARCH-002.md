@@ -56,7 +56,7 @@ implementation:
     - apps/web/src/lib/api-client.contract.spec.ts
     - scripts/verify-contract-types.sh
 related:
-  issues: []
+  issues: [37]
   requirements:
     - REQ-ARCH-001
     - REQ-ERROR-001
@@ -124,7 +124,9 @@ aurait aucune, et rien ne l'aurait dit.
   sert ressemble à ce que l'API envoie. La capture de vraies réponses, d'abord
   annoncée par l'ADR 026, a été écartée à l'épreuve — voir son second temps daté
   du 2026-08-08 — parce que la figer demanderait de nommer les champs volatils,
-  soit une seconde description du modèle.
+  soit une seconde description du modèle. La question reste ouverte et suivie en
+  **issue #37**, avec son instruction déjà faite et son déclencheur : le jour où
+  une fixture web se révélera fausse.
 - **La conformité du contrat à la spec RealWorld**, qui relève de REQ-CONF-001
   et de la suite Hurl vendorée : cette exigence prouve que l'API respecte le
   contrat qu'elle déclare, pas que ce contrat est le bon.

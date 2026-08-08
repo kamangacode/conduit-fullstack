@@ -176,8 +176,14 @@ geste précis (`toLowerCase`, `trim`, `sort`, `?? ''`).
 Ce que cela laisse ouvert, écrit plutôt que passé sous silence : les fixtures web
 restent **écrites à la main**, donc rien ne garantit qu'elles ressemblent à ce
 que l'API envoie vraiment. C'est la question que la capture devait fermer, et
-elle reste ouverte. Le jour où une fixture web se révélera fausse, ce sera le
-déclencheur — et ce second temps en est le cadrage déjà instruit.
+elle reste ouverte.
+
+Elle est suivie en **issue #37** plutôt que laissée ici seule : un manque qui ne
+vit que dans un ADR n'est pas un travail que quelqu'un retrouvera — personne ne
+relit une décision pour y chercher ce qu'il reste à faire. L'issue porte les deux
+formes envisageables (normaliseur aveugle au modèle, ou contrat de forme plutôt
+que de valeur) et son déclencheur : le jour où une fixture web se révélera
+fausse, l'instruction sera déjà faite.
 
 ### Ce que ce harnais ne voit pas, écrit ici plutôt que découvert plus tard
 
