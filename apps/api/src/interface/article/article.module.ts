@@ -24,6 +24,9 @@ import {
   PrismaCommentRepository,
 } from '../../infrastructure/persistence/prisma-comment.repository'
 import { PrismaFavoriteRepository } from '../../infrastructure/persistence/prisma-favorite.repository'
+import { PrismaIdempotencyStore } from '../../infrastructure/persistence/prisma-idempotency.store'
+import { IdempotencyInterceptor } from '../idempotency/idempotency.interceptor'
+import { IDEMPOTENCY_STORE } from '../idempotency/idempotency-store.port'
 import { UserModule } from '../user/user.module'
 import { ArticleController } from './article.controller'
 
@@ -42,8 +45,13 @@ import { ArticleController } from './article.controller'
  * produirait un second pool de connexions, invisible en test et coûteux en
  * production.
  *
- * Cinq ports rencontrent ici leur adapter, et c'est le seul endroit du dépôt où
+ * Six ports rencontrent ici leur adapter, et c'est le seul endroit du dépôt où
  * ça arrive pour eux. Aucun use-case ne sait que Prisma existe.
+ *
+ * Le sixième est d'une autre nature : `IDEMPOTENCY_STORE` ne sert aucun domaine,
+ * il porte une préoccupation de transport (ADR 027). Il est donc déclaré dans
+ * `interface/` et non dans `domain/`, et c'est la seule exception du dépôt à la
+ * provenance des ports.
  */
 @Module({
   imports: [UserModule],
@@ -54,6 +62,11 @@ import { ArticleController } from './article.controller'
     { provide: FAVORITE_REPOSITORY, useClass: PrismaFavoriteRepository },
     { provide: COMMENT_REPOSITORY, useClass: PrismaCommentRepository },
     { provide: COMMENT_QUERY, useClass: PrismaCommentQuery },
+    // Sixième port, de nature différente des cinq autres : il ne sert aucun
+    // domaine, il porte l'idempotence du transport (ADR 027). Il est déclaré ici
+    // parce que les deux seules routes protégées sont sur ce contrôleur.
+    { provide: IDEMPOTENCY_STORE, useClass: PrismaIdempotencyStore },
+    IdempotencyInterceptor,
     ListArticlesUseCase,
     GetFeedUseCase,
     GetArticleUseCase,

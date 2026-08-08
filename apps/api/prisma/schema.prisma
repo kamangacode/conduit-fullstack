@@ -44,7 +44,45 @@ model User {
   following Follow[]   @relation("follower")
   followers Follow[]   @relation("following")
 
+  idempotencyRecords IdempotencyRecord[]
+
   @@map("users")
+}
+
+/// Trace d'une création portant un en-tête `Idempotency-Key` (REQ-IDEM-001,
+/// ADR 027).
+///
+/// La contrainte porte sur le **triplet** `(userId, endpoint, key)` et jamais
+/// sur la clé seule : sans le compte, deux utilisateurs choisissant la même
+/// chaîne se serviraient mutuellement leurs réponses — une fuite de données par
+/// collision. C'est aussi cette contrainte qui tranche la concurrence : la
+/// réservation est un INSERT, donc c'est PostgreSQL qui arbitre le double-clic,
+/// pas un pré-contrôle applicatif qui laisserait la fenêtre ouverte.
+///
+/// `status` et `body` sont **nullables à dessein** : la ligne est écrite AVANT
+/// l'exécution, et ne reçoit la réponse qu'au succès. Une ligne sans réponse
+/// signifie donc « une requête est en cours », état que l'intercepteur distingue
+/// de « déjà répondu » — et qu'il efface si la requête échoue, sans quoi un
+/// échec consommerait la clé et interdirait la reprise.
+model IdempotencyRecord {
+  id     String @id @default(uuid()) @db.Uuid
+  userId String @db.Uuid
+  /// Identité de la route, méthode comprise (`POST /api/articles`). Deux
+  /// endpoints distincts ne partagent donc jamais une clé.
+  endpoint String
+  key      String
+  /// Empreinte du corps de la requête. Une même clé présentée avec un corps
+  /// différent est un bug client, refusé en 422 plutôt que servi en silence.
+  fingerprint String
+  status      Int?
+  body        Json?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, endpoint, key])
+  @@map("idempotency_records")
 }
 
 /// Article. Le `slug` est unique et dérivé du titre (value object Slug côté domaine).

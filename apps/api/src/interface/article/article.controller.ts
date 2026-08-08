@@ -12,6 +12,7 @@ import {
   Query,
   UnprocessableEntityException,
   UseGuards,
+  UseInterceptors,
 } from '@nestjs/common'
 import {
   type ArticleResponse,
@@ -41,6 +42,8 @@ import { DeleteCommentUseCase } from '../../application/comment/delete-comment.u
 import { ListCommentsUseCase } from '../../application/comment/list-comments.use-case'
 import { AuthGuard, OptionalAuthGuard } from '../auth/auth.guard'
 import { CurrentUserId, OptionalCurrentUserId } from '../auth/current-user.decorator'
+import { IdempotencyInterceptor } from '../idempotency/idempotency.interceptor'
+import { Idempotent } from '../idempotency/idempotent.decorator'
 import { zodEnvelope, zodQuery } from '../pipes/zod-validation.pipe'
 
 /**
@@ -73,6 +76,10 @@ const parseCommentId = new ParseIntPipe({
  * l'input du use-case — en particulier l'identité, qui vient toujours du jeton
  * vérifié et jamais du corps (rule 19) — et enveloppe la réponse.
  */
+// L'intercepteur est monté au niveau du contrôleur, mais il ne fait rien tant
+// qu'une route ne porte pas `@Idempotent()` : la protection reste déclarée route
+// par route, et se lit à l'endroit où elle s'applique (ADR 027).
+@UseInterceptors(IdempotencyInterceptor)
 @Controller('articles')
 export class ArticleController {
   constructor(
@@ -140,6 +147,7 @@ export class ArticleController {
 
   /** Publication (REQ-ARTICLE-003). 201, conformément à `openapi.yml`. */
   @Post()
+  @Idempotent()
   @UseGuards(AuthGuard)
   async create(
     @Body(zodEnvelope('article', createArticleDtoSchema)) dto: CreateArticleDto,
@@ -206,6 +214,7 @@ export class ArticleController {
 
   /** Commenter (REQ-COMMENT-002). 201. */
   @Post(':slug/comments')
+  @Idempotent()
   @UseGuards(AuthGuard)
   async addArticleComment(
     @Param('slug') slug: string,

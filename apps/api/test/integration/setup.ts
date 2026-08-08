@@ -48,9 +48,18 @@ export const prismaTestClient = new PrismaClient({ datasourceUrl: databaseUrl })
  * Le prix — la tenir à jour — est payé par `persistence.integration.spec.ts`,
  * qui échoue si un modèle du schéma Prisma n'y figure pas.
  */
-export const TRUNCATED_MODELS = ['Favorite', 'Follow', 'Comment', 'Article', 'Tag', 'User'] as const
+export const TRUNCATED_MODELS = [
+  'Favorite',
+  'Follow',
+  'Comment',
+  'Article',
+  'IdempotencyRecord',
+  'Tag',
+  'User',
+] as const
 
 export async function truncateAll(): Promise<void> {
+  await prismaTestClient.idempotencyRecord.deleteMany()
   await prismaTestClient.favorite.deleteMany()
   await prismaTestClient.follow.deleteMany()
   await prismaTestClient.comment.deleteMany()

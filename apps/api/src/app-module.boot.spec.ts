@@ -38,12 +38,15 @@ import {
 } from './infrastructure/persistence/prisma-comment.repository'
 import { PrismaFavoriteRepository } from './infrastructure/persistence/prisma-favorite.repository'
 import { PrismaFollowRepository } from './infrastructure/persistence/prisma-follow.repository'
+import { PrismaIdempotencyStore } from './infrastructure/persistence/prisma-idempotency.store'
 import { PrismaTagQuery } from './infrastructure/persistence/prisma-tag.query'
 import { PrismaUserRepository } from './infrastructure/persistence/prisma-user.repository'
 import { Argon2PasswordHasher } from './infrastructure/security/argon2-password-hasher'
 import { JoseTokenService } from './infrastructure/security/jose-token.service'
 import { AuthGuard, OptionalAuthGuard } from './interface/auth/auth.guard'
 import { HealthController } from './interface/health/health.controller'
+import { IdempotencyInterceptor } from './interface/idempotency/idempotency.interceptor'
+import { IDEMPOTENCY_STORE } from './interface/idempotency/idempotency-store.port'
 
 /**
  * Boot-smoke du graphe d'injection (rule 16, couture DI) et de la configuration.
@@ -125,6 +128,19 @@ describe('AppModule — boot smoke DI', () => {
     expect(moduleRef.get(AddCommentUseCase)).toBeInstanceOf(AddCommentUseCase)
     expect(moduleRef.get(ListCommentsUseCase)).toBeInstanceOf(ListCommentsUseCase)
     expect(moduleRef.get(DeleteCommentUseCase)).toBeInstanceOf(DeleteCommentUseCase)
+
+    await moduleRef.close()
+  })
+
+  it('câble l’intercepteur d’idempotence sur son magasin, non-null', async () => {
+    const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile()
+
+    // Couture particulière : l'intercepteur est instancié par NestJS, pas par un
+    // contrôleur, donc aucun test HTTP ne le voit être construit. Un magasin non
+    // résolu ne se manifesterait qu'au premier appel portant une clé — c'est-à-dire
+    // sur un chemin qu'aucune suite de conformité n'emprunte (ADR 027).
+    expect(moduleRef.get(IdempotencyInterceptor)).toBeInstanceOf(IdempotencyInterceptor)
+    expect(moduleRef.get(IDEMPOTENCY_STORE)).toBeInstanceOf(PrismaIdempotencyStore)
 
     await moduleRef.close()
   })

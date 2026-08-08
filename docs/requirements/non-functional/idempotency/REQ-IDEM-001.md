@@ -3,7 +3,7 @@ id: REQ-IDEM-001
 title: Rendre les créations rejouables sans produire de doublon
 type: non-functional
 domain: idempotency
-status: approved
+status: implemented
 priority: should
 source: "Plan d'outillage item C4 (proxy du paiement) ; ADR 027. Hors spec RealWorld : le PRD ne mentionne pas l'idempotence, l'en-tête est donc facultatif."
 acceptance_criteria:
@@ -36,8 +36,17 @@ acceptance_criteria:
     when: "la requête est traitée"
     then: "elle est refusée en 422, et aucun enregistrement n'est créé"
 implementation:
-  files: []
-  tests: []
+  files:
+    - apps/api/prisma/schema.prisma
+    - apps/api/src/interface/idempotency/idempotency-store.port.ts
+    - apps/api/src/interface/idempotency/idempotency.interceptor.ts
+    - apps/api/src/interface/idempotency/idempotent.decorator.ts
+    - apps/api/src/infrastructure/persistence/prisma-idempotency.store.ts
+    - apps/api/src/interface/article/article.controller.ts
+    - apps/api/src/interface/article/article.module.ts
+  tests:
+    - apps/api/test/integration/idempotency.integration.spec.ts
+    - apps/api/src/app-module.boot.spec.ts
 related:
   issues: []
   requirements:
