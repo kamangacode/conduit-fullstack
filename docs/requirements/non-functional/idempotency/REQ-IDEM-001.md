@@ -22,7 +22,7 @@ acceptance_criteria:
   - id: AC-4
     given: "deux requêtes concurrentes portant la même clé, la seconde partant avant que la première n'ait répondu"
     when: "elles sont traitées"
-    then: "une seule ressource est créée et la requête perdante reçoit 409 — la course est tranchée par la contrainte d'unicité, pas par un contrôle applicatif"
+    then: "une seule ressource est créée — la requête perdante reçoit 409 si la première n'a pas encore répondu, ou la réponse rejouée si elle a répondu, mais jamais elle ne crée une seconde ressource"
   - id: AC-5
     given: "une clé déjà utilisée par un compte, présentée par un autre compte"
     when: "la requête est traitée"
@@ -88,6 +88,13 @@ clé d'idempotence est la réponse de l'industrie.
 - La réservation précède l'exécution, et c'est la **contrainte d'unicité** qui
   tranche la concurrence — un pré-contrôle applicatif laisserait ouverte
   exactement la fenêtre que le double-clic exploite.
+- AC-4 porte sur le **nombre de ressources créées**, pas sur le statut rendu à
+  la perdante. Ce statut dépend d'une course que personne ne contrôle : 409 ou
+  rejeu selon que la seconde requête arrive avant ou après la réponse de la
+  première. La première rédaction de ce critère exigeait le 409 ; elle était
+  vraie sur un poste et fausse sur le runner, où 201/201 avec un seul article
+  est un comportement correct. Un critère qui fige un entrelacement décrit
+  l'ordonnanceur, pas le mécanisme.
 - Un échec **libère** la clé (AC-6). C'est la contrepartie obligatoire de la
   réservation anticipée : sans elle, le mécanisme protégerait du double envoi en
   échangeant ce défaut contre l'impossibilité de reprendre.

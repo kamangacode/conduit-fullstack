@@ -166,10 +166,23 @@ describe('REQ-IDEM-001 — la course est tranchée par la base', () => {
       publish(token, 'cle-simultanee'),
     ])
 
+    // **La propriété est le compte, pas le statut.** Sans clé, ces deux requêtes
+    // produiraient deux articles (le second sur `…-2`) ; avec elle, un seul.
+    // C'est vrai quel que soit l'entrelacement, donc c'est ce qu'on asserte.
+    expect(await prismaTestClient.article.count()).toBe(1)
+
+    // Deux issues sont légitimes pour la requête perdante, et laquelle survient
+    // dépend d'une course que personne ne contrôle : 409 si elle arrive pendant
+    // que la première s'exécute, rejeu en 201 si elle arrive après sa réponse.
+    //
+    // Le premier écrit de ce test n'admettait que le 409 — vrai sur mon poste,
+    // faux sur le runner, qui a rendu 201/201 avec un seul article, c'est-à-dire
+    // un comportement correct. Asserter un entrelacement revient à tester
+    // l'ordonnanceur plutôt que le mécanisme.
     const statuses = [first.status, second.status].sort()
 
-    expect(statuses).toEqual([201, 409])
-    expect(await prismaTestClient.article.count()).toBe(1)
+    expect(statuses[0]).toBe(201)
+    expect([201, 409]).toContain(statuses[1])
   })
 })
 
