@@ -55,6 +55,23 @@
       "dependsOn": ["^build", "db:generate"],
       "cache": false
     },
+    // Le canary de fail-fast démarre le vrai point d'entrée de l'API, donc il a
+    // besoin de tout ce dont un process de production a besoin : le client
+    // Prisma généré ET `@repo/shared` compilé. Il passe par le graphe pour la
+    // même raison que `test:integration` — la première version était une étape
+    // brute du job `Quality`, elle a échoué en CI sur
+    // `MODULE_NOT_FOUND: @repo/shared` alors qu'elle passait en local, où le
+    // build traînait d'un run précédent. Troisième occurrence du même patron
+    // dans ce dépôt.
+    //
+    // `cache: false` : c'est une vérification, pas une production d'artefact.
+    // Un « pass » resservi depuis le cache serait un garde-fou qui ne s'exécute
+    // plus, ce qui est précisément l'échec que ce canary existe pour rendre
+    // impossible.
+    "verify:env-fail-fast": {
+      "dependsOn": ["^build", "db:generate"],
+      "cache": false
+    },
     "test:e2e": {
       "dependsOn": ["^build"],
       "cache": false

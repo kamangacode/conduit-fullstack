@@ -143,10 +143,16 @@ pre-push:
       #
       # `glob` restreint la tâche à ce qu'elle peut prouver : un push qui ne
       # touche qu'un ADR n'a pas à payer sept démarrages de process.
+      #
+      # Passé par turbo comme en CI : démarrer le vrai point d'entrée exige le
+      # client Prisma et `@repo/shared` compilé, que la tâche déclare en
+      # `dependsOn`. En local ces artefacts traînent d'un run précédent et
+      # l'appel direct passait — c'est exactement ce qui a laissé partir un push
+      # dont la CI a rougi sur `MODULE_NOT_FOUND: @repo/shared`.
       glob:
         - 'apps/api/**'
         - 'scripts/verify-env-fail-fast.sh'
-      run: bash scripts/verify-env-fail-fast.sh
+      run: bash .lefthook/run-quiet.sh 'CI=true pnpm exec turbo run verify:env-fail-fast'
 
     verify-type-boundary:
       # Casse volontairement le modèle partagé et vérifie que les DEUX

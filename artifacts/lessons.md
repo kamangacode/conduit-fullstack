@@ -8,6 +8,44 @@
 
 ---
 
+## 2026-08-08 — Un poste de développement peut produire un faux VERT
+
+**Symptôme.** En vérifiant le gate de la Phase 3, l'API a démarré entièrement —
+34 routes montées — sans `DATABASE_URL` ni `JWT_SECRET` dans son environnement.
+Le fail-fast de B1 était en place, ses 12 tests unitaires passaient, et le
+journal de build affirmait qu'il avait été « constaté sur un vrai démarrage ».
+
+**La cause.** Deux, emboîtées. La validation s'exécutait après le chargement du
+graphe applicatif (imports hoistés), lequel tire `@prisma/client`, qui charge
+`.env` dans `process.env` par effet de bord. Et la vérification manuelle
+d'origine avait tourné sur une machine portant un `apps/api/.env` valide : elle
+constatait donc un démarrage réussi et en concluait que tout allait bien. Détail
+technique dans l'[ADR 025](../docs/adr/025-validation-env-avant-chargement-du-graphe.md).
+
+**Ce qui est nouveau.** La rule 02 décrit l'asymétrie poste/runner dans un seul
+sens : le poste porte des artefacts qui font passer ce que la CI casse — deux
+occurrences, `prisma generate` et le build de `@repo/shared`. Ici elle joue **à
+l'envers** : le poste porte un fichier qui fait *réussir* ce qui doit échouer. Le
+faux rouge se voit tout seul, parce que la CI l'affiche. Le faux vert ne se voit
+jamais, parce que personne ne va vérifier qu'un garde-fou refuse.
+
+**Et la troisième occurrence dans la foulée.** Le canary écrit pour fermer ce
+trou a été branché en étape brute du job `Quality`. Il est passé en local et a
+échoué en CI sur `MODULE_NOT_FOUND: @repo/shared` — même patron que les deux
+précédents, à un commit d'intervalle de la leçon qui le décrit. Corrigé en
+déclarant `verify:env-fail-fast` dans le graphe turbo (`^build`, `db:generate`),
+jamais en ajoutant une étape au job.
+
+**Règle à appliquer.** Un garde-fou « constaté à la main une fois » n'est pas
+vérifié : il est vérifié le jour où un script le met en échec **et** sait
+démontrer qu'il sait le voir réussir. Corollaire opératoire pour tout canary qui
+dépend d'un fichier d'environnement : la vérification doit **écarter le fichier
+du poste et écrire sa propre fixture**, sinon elle mesure la machine de celui qui
+la lance et non la propriété. Ici, les phases de rejet tournent sans aucun
+`.env`, et la phase qui teste le rattrapage écrit le sien.
+
+---
+
 ## 2026-08-07 — Une garde de session qui déborde sur le contenu public
 
 **Symptôme.** Sur la branche du lot #15, le commit `a4efb02` — 677 insertions

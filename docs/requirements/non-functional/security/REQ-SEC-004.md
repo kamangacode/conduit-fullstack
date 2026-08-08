@@ -31,7 +31,9 @@ implementation:
   files:
     - apps/api/src/main.ts
     - apps/api/src/config/env.ts
+    - apps/api/package.json
     - .dockerignore
+    - turbo.json
     - lefthook.yml
     - .github/workflows/ci.yml
   tests:

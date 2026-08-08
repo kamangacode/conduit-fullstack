@@ -124,7 +124,14 @@ jobs:
         # précisément le défaut — la validation s'exécutait après le chargement du
         # graphe, donc après que `@prisma/client` ait chargé le fichier. Le script
         # écrit sa propre fixture `.env` pour que le cas soit joué ici aussi.
-        run: bash scripts/verify-env-fail-fast.sh
+        #
+        # Passé par turbo, et non appelé directement : démarrer le vrai point
+        # d'entrée exige le client Prisma et `@repo/shared` compilé, que la tâche
+        # déclare en `dependsOn`. La première version de cette étape appelait le
+        # script en direct et a échoué ici sur `MODULE_NOT_FOUND: @repo/shared`
+        # en passant en local, où le build traînait d'un run précédent — réparer
+        # le graphe plutôt que le job, comme pour `db:generate` et l'Integration.
+        run: pnpm exec turbo run verify:env-fail-fast
       - name: Raisons des biome-ignore (PR uniquement)
         if: github.event_name == 'pull_request'
         # Garantit que la ref de base est résolvable côté runner : le script

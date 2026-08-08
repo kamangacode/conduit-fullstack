@@ -74,6 +74,15 @@ phase 5 soumet au même harnais un point d'entrée reproduisant l'ancien ordre e
 afficherait « ok » partout. Le script tourne en pre-push et dans le job CI
 `Quality`.
 
+La vérification passe par le **graphe turbo** (`verify:env-fail-fast`, déclaré
+`dependsOn: ["^build", "db:generate"]`) et non par un appel direct : démarrer le
+vrai point d'entrée exige le client Prisma généré et `@repo/shared` compilé. La
+première version était une étape brute du job `Quality` ; elle a échoué en CI sur
+`MODULE_NOT_FOUND: @repo/shared` tout en passant en local, où ces artefacts
+traînaient d'un run précédent. Réparer le graphe plutôt que le job est la même
+décision que celle déjà prise pour `db:generate` et pour la lane d'intégration —
+une étape ajoutée à un job répare un chemin et laisse ses frères ouverts.
+
 Un `.dockerignore` exclut par ailleurs les fichiers `.env` de tout contexte de
 build d'image, pour que la question ne se pose pas au moment où un `Dockerfile`
 apparaîtra.
@@ -100,9 +109,13 @@ apparaîtra.
   relecteur pressé, ou un outil de réécriture automatique, peut vouloir la
   « normaliser » — le commentaire explique pourquoi, et la vérification rougit si
   quelqu'un passe outre.
-- La vérification démarre sept fois le process sous `ts-node`, soit une
-  quarantaine de secondes ajoutées au pre-push et au job `Quality`. Coût réel,
-  assumé : c'est le seul niveau où la propriété est observable.
+- La vérification démarre sept fois le process sous `ts-node` : **11,7 s** en
+  pre-push, **13,5 s** depuis un arbre entièrement nettoyé (build de
+  `@repo/shared` et génération du client Prisma compris). Coût réel, assumé —
+  c'est le seul niveau où la propriété est observable. Il est borné par
+  construction : le harnais cesse d'attendre dès que le verdict est acquis,
+  plutôt que de laisser chaque démarrage aller au bout de son délai de connexion
+  PostgreSQL.
 - Le script déplace temporairement `apps/api/.env` pour se donner une fixture
   déterministe, et le restaure par trap. Un développeur qui tue le script au
   mauvais instant retrouve son fichier dans le répertoire temporaire du run —
