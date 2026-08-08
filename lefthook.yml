@@ -124,6 +124,30 @@ pre-push:
       # fichier ne prouve rien ; seul un refus effectif le fait.
       run: bash scripts/verify-sql-raw-guard.sh
 
+    verify-env-fail-fast:
+      # Démarre le point d'entrée réel de l'API sur cinq configurations invalides
+      # et exige un arrêt qui nomme la variable fautive (REQ-SEC-004, ADR 025).
+      #
+      # Le mécanisme existait depuis B1 et ses 12 tests unitaires passaient : ce
+      # qu'ils ne pouvaient pas voir, c'est que la validation s'exécutait APRÈS le
+      # chargement du graphe applicatif, lequel charge `.env` par un effet de bord
+      # de `@prisma/client`. Un `.env` sur le disque comblait donc la variable
+      # oubliée, et l'API démarrait sans `DATABASE_URL` ni `JWT_SECRET`. Une
+      # fonction pure n'a pas d'ordre d'exécution vis-à-vis d'un graphe d'imports
+      # — seul un démarrage réel le montre.
+      #
+      # La vérification porte son contrôle positif (une configuration valide doit
+      # être acceptée, sinon un garde-fou qui refuse tout passerait) et son
+      # contrôle négatif (l'ancien ordre doit être vu démarrer, sinon le harnais
+      # ne prouve pas ce qu'il annonce).
+      #
+      # `glob` restreint la tâche à ce qu'elle peut prouver : un push qui ne
+      # touche qu'un ADR n'a pas à payer sept démarrages de process.
+      glob:
+        - 'apps/api/**'
+        - 'scripts/verify-env-fail-fast.sh'
+      run: bash scripts/verify-env-fail-fast.sh
+
     verify-type-boundary:
       # Casse volontairement le modèle partagé et vérifie que les DEUX
       # applications refusent de compiler (REQ-ARCH-001). C'est la thèse du

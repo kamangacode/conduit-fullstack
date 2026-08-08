@@ -115,6 +115,16 @@ jobs:
         # ici ses refus prouve qu'il mord encore sur un runner frais, plutôt que
         # de constater qu'il est déclaré (REQ-SEC-002, ADR 024).
         run: bash scripts/verify-sql-raw-guard.sh
+      - name: Fail-fast de configuration (vérification active)
+        # Démarre le point d'entrée réel sur cinq configurations invalides et
+        # exige un arrêt qui nomme la variable (REQ-SEC-004, ADR 025).
+        #
+        # Ce runner est le seul endroit où la propriété se mesure sans biais : il
+        # n'a pas de `.env`, là où le poste du développeur en porte un qui masquait
+        # précisément le défaut — la validation s'exécutait après le chargement du
+        # graphe, donc après que `@prisma/client` ait chargé le fichier. Le script
+        # écrit sa propre fixture `.env` pour que le cas soit joué ici aussi.
+        run: bash scripts/verify-env-fail-fast.sh
       - name: Raisons des biome-ignore (PR uniquement)
         if: github.event_name == 'pull_request'
         # Garantit que la ref de base est résolvable côté runner : le script
