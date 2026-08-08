@@ -8,6 +8,90 @@
 
 ---
 
+## 2026-08-08 — Un test de concurrence qui asserte un entrelacement teste l'ordonnanceur
+
+**Symptôme.** AC-4 de REQ-IDEM-001 vérifie que deux requêtes simultanées portant
+la même clé d'idempotence ne créent qu'une ressource. Écrit et vert sur mon
+poste, il a rougi en CI : `expected [ 201, 201 ] to deeply equal [ 201, 409 ]`.
+
+**La cause.** Le mécanisme fonctionnait dans les deux cas — un seul article créé,
+des deux côtés. Ce qui changeait, c'est **quand** la seconde requête arrivait. Sur
+mon poste, pendant l'exécution de la première : elle perdait la course et
+recevait 409. Sur le runner, après sa réponse : elle **rejouait** et recevait 201.
+Les deux issues sont correctes et laquelle survient ne dépend de personne.
+
+Mon assertion `toEqual([201, 409])` figeait donc un ordonnancement. Le critère
+d'acceptation faisait pire : il l'écrivait dans l'exigence elle-même
+(« la requête perdante reçoit 409 »), c'est-à-dire qu'il décrivait le
+comportement d'une machine plutôt qu'une propriété du système.
+
+**Le détail qui rend l'affaire dangereuse : il ne se trompait pas, il flakait.**
+Le même test, inchangé, est passé au run suivant sur le même runner. Une
+assertion d'entrelacement ne produit pas un échec franc et reproductible : elle
+produit un **flake**, c'est-à-dire la seule catégorie d'échec qu'on est tenté de
+relancer plutôt que de lire. Sans l'ouverture du log, la conclusion naturelle
+aurait été « rouge transitoire, je repousse » — et le critère faux serait resté
+dans le référentiel, en attendant de rougir à nouveau chez quelqu'un d'autre.
+
+**Ce qui est nouveau.** Les leçons précédentes sur l'asymétrie poste/runner
+portaient sur un **artefact** que le poste possédait et pas le runner
+(`prisma generate`, `dist/` de `@repo/shared`, un `.env`). Ici les deux machines
+sont identiques : c'est leur **ordonnancement** qui diffère, et il n'y a rien à
+« reproduire » — le poste n'a pas tort, il est simplement une observation parmi
+d'autres. Un test qui n'accepte qu'une observation est faux à proportion du
+nombre d'observations possibles.
+
+**La contre-mesure.** Chercher la propriété **invariante par entrelacement**, et
+n'asserter que celle-là. Ici : *une seule ressource créée, jamais deux* — ce que
+prouve `article.count() === 1`. Le statut de la requête perdante n'est plus
+contraint qu'à appartenir à `{201, 409}`.
+
+La correction ne dilue pas la preuve, et c'est vérifiable : `@Idempotent()`
+retiré de la route, AC-4 tombe sur `expected 2 to be 1`. Le test attrape toujours
+l'absence du mécanisme ; c'est l'assertion de trop qui est partie.
+
+**Portée.** Vaut pour tout test de course : verrous, files, transactions,
+retries. La question à se poser avant d'écrire l'assertion est « cette égalité
+serait-elle encore vraie si les deux opérations s'ordonnaient dans l'autre
+sens ? ». Si non, elle décrit l'ordonnanceur.
+
+---
+
+## 2026-08-08 — Un garde-fou qui n'existe qu'en CI dément l'invariant que la CI revendique
+
+**Symptôme.** Le job `Quality` a rougi sur l'item C4 alors que `pnpm lint`,
+`pnpm typecheck`, `pnpm test` et le pre-push complet étaient verts. Cause
+immédiate : `IDEMPOTENCY_MESSAGES` exporté sans qu'aucun module ne l'importe — un
+export d'anticipation, que `knip` signale et que le linter ne voit pas.
+
+**La cause.** `ci.yml` affirme dès sa première ligne de commentaire être le
+« miroir distant des garde-fous locaux (lefthook) : ce qui bloque un push doit
+bloquer une PR, **et inversement** ». Or ni `knip` ni `depcruise` ne tournaient
+en pre-push. Deux gates de CI sans équivalent local, donc un invariant faux dans
+le fichier même qui l'énonce.
+
+**Ce qui est nouveau.** C'est le quatrième « local vert, CI rouge » du dépôt,
+mais d'une famille inédite. Les trois précédents venaient d'un **artefact** que le
+poste portait et qu'un runner frais n'avait pas ; le réflexe consigné était donc
+« reproduis la condition du runner, puis répare le graphe turbo ». Ici le poste
+ne portait rien de fautif : il lui **manquait le garde-fou**. Aucune reproduction
+n'était nécessaire — la commande de CI, lancée localement, échouait du premier
+coup. Le correctif n'était pas dans le graphe turbo mais dans `lefthook.yml`.
+
+Le diagnostic tient donc à une question préalable : *le local échoue-t-il quand je
+lance exactement la commande du job ?* Si oui, il ne manque pas un artefact, il
+manque un hook.
+
+**Et un piège de lecture, mesuré au passage.** Le run concerné s'est terminé en
+`cancelled` (deux jobs en échec, un troisième annulé), et
+`gh run watch <id> --exit-status` a rendu **0**. Ce n'est pas le piège déjà
+consigné du `| tail` : aucune redirection n'était en jeu. Un run annulé n'est
+simplement pas un run en échec du point de vue de cette commande. La consigne
+« lire le détail job par job plutôt que la ligne de résumé » gagne ici une raison
+de plus, et elle vaut aussi pour le code de sortie.
+
+---
+
 ## 2026-08-08 — Une valeur de test déjà normalisée ne peut pas révéler une normalisation
 
 **Symptôme.** La spec de contrat du client web (item C3, REQ-ARCH-002 AC-8) était
