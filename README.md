@@ -1,13 +1,14 @@
 # conduit-fullstack
 
-Implémentation **full-stack TypeScript** de [Conduit](https://realworld-docs.netlify.app/)
-(la spec **RealWorld** : un clone de Medium, avec articles, commentaires, favoris et suivi
-d'auteurs). Monorepo `api` + `web` + `shared`, tenu comme un vrai projet de production.
+Un vrai projet **full-stack TypeScript**, pensé pour montrer le software craft de A à Z :
+l'app [Conduit](https://realworld-docs.netlify.app/) (la spec **RealWorld**, un clone de
+Medium avec articles, commentaires, favoris et suivi d'auteurs), tenue comme un vrai projet
+de production. Monorepo `api` + `web` + `shared`, en NestJS + Next.js + Zod.
 
-Ce dépôt n'est pas une démo jetable : c'est la **matérialisation vivante** d'une méthode
-de craft. Chaque garde-fou (config, hook, test de contrat, workflow CI, migration) est un
-vrai fichier commenté, lisible sans contexte additionnel, pensé pour montrer *comment on
-lance et on tient un projet full-stack de A à Z*.
+Ce dépôt n'est pas une démo jetable : c'est la **matérialisation vivante** d'une méthode de
+craft. Architecture hexagonale, DDD, Clean Architecture, TDD, tests Vitest + Playwright, CI
+et sécurité by design : chaque principe a ici son fichier réel, commenté, lisible sans
+contexte additionnel. Pas des slides, des fichiers que tu peux ouvrir, lire et rejouer.
 
 ## Sommaire
 

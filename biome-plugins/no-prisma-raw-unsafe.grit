@@ -1,0 +1,56 @@
+// Interdit `$queryRawUnsafe` et `$executeRawUnsafe` (rule 19, REQ-SEC-002).
+//
+// Ces deux méthodes de Prisma prennent une chaîne SQL construite par
+// l'appelant. Toute concaténation de valeur utilisateur y devient une injection,
+// et la revue humaine est le seul filet dès lors qu'aucun outil ne les voit —
+// or elles ressemblent beaucoup à leurs jumelles sûres, `$queryRaw` et
+// `$executeRaw`, qui sont des tagged templates paramétrés par construction.
+// Quatre caractères séparent la forme sûre de la faille.
+//
+// Le plugin s'écrit ici, en GritQL, plutôt qu'en règle ESLint : le dépôt n'a
+// qu'un linter et l'ADR 024 explique pourquoi il n'en gagnera pas un second pour
+// une seule règle.
+//
+// ## Pourquoi le motif porte sur le *callee* entier
+//
+// La forme évidente — `$obj.$method($args)` avec un test sur `$method` — ne voit
+// pas `client?.$queryRawUnsafe(sql)` : le chaînage optionnel est un autre nœud
+// d'AST. Et l'alternative `or { … }` entre deux snippets ne compile pas ici
+// (« cannot create resolved snippet from unresolved variable »), parce qu'une
+// branche non retenue laisse ses métavariables non résolues.
+//
+// Tester le **callee** en entier couvre les trois formes réelles d'un seul
+// motif : `prisma.$queryRawUnsafe(…)`, `this.prisma.$executeRawUnsafe(…)` et
+// `client?.$queryRawUnsafe(…)`. Le texte du callee est respectivement
+// `prisma.$queryRawUnsafe`, `this.prisma.$executeRawUnsafe` et
+// `client?.$queryRawUnsafe` — d'où le préfixe libre `[\s\S]*` devant le nom.
+//
+// ## Ce que l'ancrage protège
+//
+// La comparaison est un **match complet**, pas une recherche : `$queryRawUnsafeWrapper`
+// n'est donc pas signalé, et l'appel paramétré `$queryRaw` non plus. Le groupe
+// est volontairement non capturant : un groupe capturant fait échouer le plugin
+// (« regex pattern matched 1 variables, but expected 0 »), et un plugin en
+// échec est rapporté par Biome en `info` avec un code de sortie **0** — c'est
+// dire s'il se dégrade en silence. `scripts/verify-sql-raw-guard.sh` ferme ce
+// mode de panne en exigeant un vrai rejet plutôt que la présence du fichier.
+//
+// ## Ce qu'il ne voit pas, et pourquoi c'est écrit ici
+//
+// Un alias sort la méthode de son receveur avant l'appel :
+//
+//     const run = prisma.$queryRawUnsafe
+//     run(sql)
+//
+// Le callee est alors `run`, et aucune analyse syntaxique ne peut le rattacher
+// à Prisma sans types. Ce trou est **connu et assumé** : ce verrou protège de
+// l'accident, pas d'un contournement délibéré — qui disposerait de toute façon
+// de `biome-ignore`. La revue reste responsable de l'intention ; l'outil, du
+// geste distrait.
+
+language js
+
+`$callee($args)` where {
+  $callee <: r"[\s\S]*\$(?:queryRawUnsafe|executeRawUnsafe)",
+  register_diagnostic(span=$callee, message="SQL brut non paramétré : `$queryRawUnsafe` / `$executeRawUnsafe` sont interdits (rule 19). Utiliser le tagged template `$queryRaw` / `$executeRaw`, ou le query builder Prisma — la valeur utilisateur y est liée, jamais concaténée.", severity="error")
+}

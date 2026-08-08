@@ -1,0 +1,54 @@
+# Contexte de build Docker — ce que l'image ne doit jamais recevoir.
+#
+# Posé **avant** le premier `Dockerfile` (item D7, Phase 6), et à dessein : la
+# règle qu'on veut voir appliquée le jour où une image sera construite est
+# beaucoup plus difficile à ajouter après, quand la question ne se pose plus à
+# personne parce que « ça marche ».
+#
+# Le motif de tête est le seul qui relève de la sécurité, les autres ne font que
+# réduire le contexte envoyé au démon.
+
+# --- Secrets ------------------------------------------------------------------
+#
+# Un `.env` embarqué dans une image est chargé dans `process.env` par
+# `@prisma/client` au `require`, sans qu'aucune ligne du dépôt ne le demande.
+# Comme `dotenv` n'écrase pas une variable déjà posée, le risque n'est pas qu'il
+# remplace une valeur légitime : c'est qu'il **comble silencieusement** la
+# variable que la plateforme d'hébergement n'a pas injectée, et prive le
+# fail-fast du seul cas où il sert (ADR 025, REQ-SEC-004).
+#
+# La frontière est celle du hook `no-env-files` de `lefthook.yml` : les variantes
+# documentaires restent admises, elles ne contiennent aucun secret et servent de
+# référence.
+.env
+.env.*
+!.env.example
+!.env.sample
+!.env.template
+!.env.test
+
+# --- Artefacts de build et dépendances ----------------------------------------
+#
+# Réinstallés et recompilés dans l'image. Les envoyer alourdirait le contexte et,
+# pire, laisserait un `dist/` périmé du poste prendre le pas sur la compilation —
+# exactement l'asymétrie poste/runner qui a déjà produit deux fausses CI vertes
+# dans ce dépôt.
+node_modules
+dist
+.next
+.turbo
+*.tsbuildinfo
+coverage
+
+# --- Historique, outillage local, rapports ------------------------------------
+.git
+.github
+.claude
+.lefthook
+playwright-report
+test-results
+docs/requirements/_generated
+
+# --- Divers -------------------------------------------------------------------
+.DS_Store
+*.log

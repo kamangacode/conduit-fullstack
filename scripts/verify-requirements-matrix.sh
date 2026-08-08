@@ -42,11 +42,12 @@ ORPHANS="$FIXTURES/out/orphans.md"
 # exigence absente du référentiel, l'autre hors de tout describe d'exigence.
 build_fixtures() {
   mkdir -p "$FIXTURES/requirements/functional/article" "$FIXTURES/requirements/functional/user"
-  mkdir -p "$FIXTURES/tests"
+  mkdir -p "$FIXTURES/requirements/functional/tag" "$FIXTURES/tests"
   cp docs/requirements/_template.md "$FIXTURES/requirements/_template.md"
 
   write_requirement "article" "REQ-ARTICLE-001" "Publier un article" "2"
   write_requirement "user" "REQ-USER-001" "S'inscrire" "1"
+  write_requirement "tag" "REQ-TAG-001" "Lister les étiquettes" "1"
 
   cat > "$FIXTURES/tests/article.spec.ts" <<'EOF'
 describe('REQ-ARTICLE-001 publier un article', () => {
@@ -60,6 +61,17 @@ EOF
 
   cat > "$FIXTURES/tests/errant.spec.ts" <<'EOF'
 it('AC-1: critère revendiqué hors de tout describe d’exigence', () => {})
+EOF
+
+  # Troisième famille de preuves : une vérification écrite en Node, dont les
+  # marqueurs sont des commentaires JS. Sans cette fixture, l'élargissement du
+  # collecteur aux `.mjs` ne serait constaté par rien — et un jour où `patternsFor`
+  # renverrait les motifs TypeScript pour un `.mjs`, la matrice cesserait en
+  # silence de compter cette famille.
+  cat > "$FIXTURES/tests/check-wiring.mjs" <<'EOF'
+// describe REQ-TAG-001
+// it AC-1: les étiquettes sont listées
+process.exit(0)
 EOF
 }
 
@@ -138,10 +150,17 @@ expect_in "AC-1 couvert cite le test et sa ligne" "$MATRIX" "article.spec.ts:2"
 expect_in "AC-2 apparaît dans la matrice" "$MATRIX" "| REQ-ARTICLE-001 | approved | AC-2 | — |"
 expect_in "exigence sans aucun test listée" "$MATRIX" "| REQ-USER-001 | approved | AC-1 | — |"
 
-# Le taux : 1 critère couvert sur 3 (AC-1 et AC-2 d'article, AC-1 de user).
-expect_in "taux de couverture calculé" "$MATRIX" "| Critères couverts par au moins un test | 1 (33 %) |"
-expect_in "critères comptés" "$MATRIX" "| Critères d'acceptation | 3 |"
-expect_in "exigences comptées" "$MATRIX" "| Exigences | 2 |"
+# Une preuve écrite en Node compte comme une preuve, et se cite comme les autres :
+# fichier ET ligne. Un collecteur qui aurait gardé l'extension `.sh` pour seule
+# famille non-spec laisserait ce critère orphelin sans rien signaler.
+expect_in "preuve .mjs citée avec sa ligne" "$MATRIX" "check-wiring.mjs:2"
+expect_not_in "critère prouvé en .mjs absent des orphelins" "$ORPHANS" "- REQ-TAG-001 / AC-1"
+
+# Le taux : 2 critères couverts sur 4 (AC-1 et AC-2 d'article, AC-1 de user,
+# AC-1 de tag).
+expect_in "taux de couverture calculé" "$MATRIX" "| Critères couverts par au moins un test | 2 (50 %) |"
+expect_in "critères comptés" "$MATRIX" "| Critères d'acceptation | 4 |"
+expect_in "exigences comptées" "$MATRIX" "| Exigences | 3 |"
 
 expect_in "critère non couvert listé en orphelin" "$ORPHANS" "- REQ-ARTICLE-001 / AC-2"
 expect_in "exigence sans test listée en orphelin" "$ORPHANS" "- REQ-USER-001"

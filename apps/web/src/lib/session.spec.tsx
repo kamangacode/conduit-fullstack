@@ -1,11 +1,17 @@
 import type { User } from '@repo/shared'
 import { act, render, screen, waitFor } from '@testing-library/react'
 import { renderToString } from 'react-dom/server'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ApiError } from './api-client'
-import { SessionProvider, TOKEN_STORAGE_KEY, useSession } from './session'
+import {
+  RECONNECT_DELAY_MS,
+  REHYDRATION_TIMEOUT_MS,
+  SessionProvider,
+  TOKEN_STORAGE_KEY,
+  useSession,
+} from './session'
 
-/** Tests écrits depuis les critères de REQ-WEB-002 et REQ-WEB-007. */
+/** Tests écrits depuis les critères de REQ-WEB-002, REQ-WEB-007 et REQ-WEB-016. */
 
 const jake: User = {
   email: 'jake@jake.jake',
@@ -154,8 +160,25 @@ describe('REQ-WEB-002 — session cliente', () => {
     expect(window.localStorage.getItem(TOKEN_STORAGE_KEY)).toBeNull()
   })
 
+  it('AC-6: purge aussi sur les autres verdicts 4xx', async () => {
+    // Un 400, un 403 ou un 404 sur `GET /user` ne disent pas la même chose
+    // qu'un 401, mais ils disent tous que **cette requête-là**, émise avec ce
+    // jeton, n'aboutira pas. Le garder ferait réessayer indéfiniment un jeton
+    // qu'aucune de ces réponses ne validera jamais.
+    for (const status of [400, 403, 404]) {
+      window.localStorage.setItem(TOKEN_STORAGE_KEY, 'jeton.refuse')
+      fetchCurrentUser.mockReset().mockRejectedValue(new ApiError(status, {}))
+
+      const { unmount } = renderProbe()
+
+      await waitFor(() => expect(screen.getByTestId('status')).toHaveTextContent('anonymous'))
+      expect(window.localStorage.getItem(TOKEN_STORAGE_KEY)).toBeNull()
+      unmount()
+    }
+  })
+
   it('AC-7: conserve le jeton quand l’API est injoignable', async () => {
-    // La distinction qui compte : un 401 est une réponse d'autorité, une panne
+    // La distinction qui compte : un 4xx est une réponse d'autorité, une panne
     // réseau n'en est pas une. Purger sur ce second signal transformerait une
     // coupure de trente secondes en déconnexion de tous les visiteurs.
     window.localStorage.setItem(TOKEN_STORAGE_KEY, 'jwt.token.here')
@@ -163,19 +186,19 @@ describe('REQ-WEB-002 — session cliente', () => {
 
     renderProbe()
 
-    await waitFor(() => expect(screen.getByTestId('status')).toHaveTextContent('anonymous'))
+    await waitFor(() => expect(screen.getByTestId('status')).toHaveTextContent('unavailable'))
     expect(window.localStorage.getItem(TOKEN_STORAGE_KEY)).toBe('jwt.token.here')
   })
 
   it('AC-7: ne purge pas non plus sur une panne serveur', async () => {
     // Un 500 n'est pas davantage un verdict sur le jeton qu'une coupure réseau.
-    // Seul le 401 l'est.
+    // Seuls les 4xx le sont.
     window.localStorage.setItem(TOKEN_STORAGE_KEY, 'jwt.token.here')
     fetchCurrentUser.mockRejectedValue(new ApiError(500, {}))
 
     renderProbe()
 
-    await waitFor(() => expect(screen.getByTestId('status')).toHaveTextContent('anonymous'))
+    await waitFor(() => expect(screen.getByTestId('status')).toHaveTextContent('unavailable'))
     expect(window.localStorage.getItem(TOKEN_STORAGE_KEY)).toBe('jwt.token.here')
   })
 
@@ -352,6 +375,22 @@ describe('REQ-WEB-007 — contrat de sélecteurs, stockage et interface de débo
     expect(window.__conduit_debug__?.getCurrentUser()).toBeNull()
   })
 
+  it('AC-6: rapporte le jeton conservé avant même que la session soit résolue', async () => {
+    // La fenêtre de réhydratation dure le temps d'une requête (ADR 014). Un
+    // outil externe qui interroge pendant cette fenêtre — ce que fait la suite
+    // amont juste après un rechargement — lirait `null` si l'interface rapportait
+    // l'instantané de session, et conclurait que le jeton a été purgé. Le test
+    // qui l'a révélé était instable : vert ou rouge selon la vitesse du poste.
+    window.localStorage.setItem(TOKEN_STORAGE_KEY, 'jwt.token.here')
+    fetchCurrentUser.mockReturnValue(new Promise(() => {}))
+
+    renderProbe()
+
+    await waitFor(() => expect(window.__conduit_debug__).toBeDefined())
+    expect(window.__conduit_debug__?.getAuthState()).toBe('loading')
+    expect(window.__conduit_debug__?.getToken()).toBe('jwt.token.here')
+  })
+
   it('AC-7: rapporte « authenticated » une fois la session ouverte', async () => {
     window.localStorage.setItem(TOKEN_STORAGE_KEY, 'jwt.token.here')
 
@@ -382,5 +421,155 @@ describe('REQ-WEB-007 — contrat de sélecteurs, stockage et interface de débo
 
     await waitFor(() => expect(window.__conduit_debug__?.getAuthState()).toBe('unauthenticated'))
     expect(window.__conduit_debug__?.getToken()).toBeNull()
+  })
+})
+
+describe('REQ-WEB-016 — mode indisponible au démarrage', () => {
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  it('AC-1: entre en mode indisponible sur une panne serveur, jeton conservé', async () => {
+    window.localStorage.setItem(TOKEN_STORAGE_KEY, 'mon.jeton')
+    fetchCurrentUser.mockRejectedValue(new ApiError(500, {}))
+
+    renderProbe()
+
+    // « unavailable » et non « anonymous » : c'est toute la différence entre
+    // « votre session a expiré » et « je n'ai pas pu vérifier ».
+    await waitFor(() => expect(screen.getByTestId('status')).toHaveTextContent('unavailable'))
+    expect(window.localStorage.getItem(TOKEN_STORAGE_KEY)).toBe('mon.jeton')
+  })
+
+  it('AC-2: entre en mode indisponible quand aucune réponse ne revient', async () => {
+    window.localStorage.setItem(TOKEN_STORAGE_KEY, 'mon.jeton')
+    fetchCurrentUser.mockRejectedValue(new TypeError('Failed to fetch'))
+
+    renderProbe()
+
+    await waitFor(() => expect(screen.getByTestId('status')).toHaveTextContent('unavailable'))
+    expect(window.localStorage.getItem(TOKEN_STORAGE_KEY)).toBe('mon.jeton')
+  })
+
+  it('AC-2 (étendu) : entre en mode indisponible quand la requête ne répond jamais', async () => {
+    // AC-2 couvrait déjà le rejet immédiat (panne de transport). Ce qu'il ne
+    // couvrait pas est la requête qui ne se termine **jamais** — ni succès, ni
+    // rejet, une connexion que le serveur ne referme pas. Depuis REQ-WEB-005
+    // AC-7, `pending` gate aussi `ArticleView` et `ProfileView` : sans borne,
+    // ce contenu public resterait bloqué indéfiniment derrière un `GET /user`
+    // qui pend.
+    vi.useFakeTimers()
+    window.localStorage.setItem(TOKEN_STORAGE_KEY, 'mon.jeton')
+    fetchCurrentUser.mockReturnValue(new Promise<User>(() => undefined))
+
+    renderProbe()
+
+    expect(screen.getByTestId('status')).toHaveTextContent('pending')
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(REHYDRATION_TIMEOUT_MS)
+    })
+
+    expect(screen.getByTestId('status')).toHaveTextContent('unavailable')
+    expect(window.localStorage.getItem(TOKEN_STORAGE_KEY)).toBe('mon.jeton')
+  })
+
+  it('AC-3: traite un corps illisible comme une panne, pas comme un refus', async () => {
+    // Le cas qu'on classe à tort du côté de l'authentification : un JSON
+    // malformé arrive avec un **200**, donc l'API n'a rien refusé. Purger ici
+    // déconnecterait tout le monde pour un défaut de sérialisation.
+    window.localStorage.setItem(TOKEN_STORAGE_KEY, 'mon.jeton')
+    fetchCurrentUser.mockRejectedValue(new SyntaxError('Unexpected token } in JSON'))
+
+    renderProbe()
+
+    await waitFor(() => expect(screen.getByTestId('status')).toHaveTextContent('unavailable'))
+    expect(window.localStorage.getItem(TOKEN_STORAGE_KEY)).toBe('mon.jeton')
+  })
+
+  it('AC-5: rapporte « unavailable » au contrat de débogage', async () => {
+    window.localStorage.setItem(TOKEN_STORAGE_KEY, 'mon.jeton')
+    fetchCurrentUser.mockRejectedValue(new ApiError(503, {}))
+
+    renderProbe()
+
+    await waitFor(() => expect(window.__conduit_debug__?.getAuthState()).toBe('unavailable'))
+    // Le jeton reste lisible par le contrat : c'est ce qu'un outil externe
+    // vérifie pour distinguer « conservé » de « purgé ».
+    expect(window.__conduit_debug__?.getToken()).toBe('mon.jeton')
+  })
+
+  it('AC-6: rouvre la session dès qu’une tentative aboutit, sans rechargement', async () => {
+    vi.useFakeTimers()
+    window.localStorage.setItem(TOKEN_STORAGE_KEY, 'mon.jeton')
+    fetchCurrentUser.mockRejectedValueOnce(new ApiError(500, {})).mockResolvedValue(jake)
+
+    renderProbe()
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0)
+    })
+    expect(screen.getByTestId('status')).toHaveTextContent('unavailable')
+
+    // Sans cette reprise, l'indicateur « reconnexion en cours » annoncerait une
+    // tentative qui n'aura jamais lieu : l'état ne se rouvrirait qu'au
+    // rechargement, que rien n'invite à faire.
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(RECONNECT_DELAY_MS)
+    })
+
+    expect(screen.getByTestId('status')).toHaveTextContent('authenticated')
+    expect(screen.getByTestId('username')).toHaveTextContent('jake')
+  })
+
+  it('AC-7: réessaie avec le jeton conservé tant que l’API ne répond pas', async () => {
+    vi.useFakeTimers()
+    window.localStorage.setItem(TOKEN_STORAGE_KEY, 'mon.jeton')
+    fetchCurrentUser.mockRejectedValue(new ApiError(500, {}))
+
+    renderProbe()
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0)
+    })
+    expect(fetchCurrentUser).toHaveBeenCalledTimes(1)
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(RECONNECT_DELAY_MS * 2)
+    })
+
+    // Le jeton n'a pas bougé entre les tentatives : c'est ce qui permet à un
+    // rechargement manuel, au milieu de tout ça, de retrouver la session.
+    expect(fetchCurrentUser.mock.calls.length).toBeGreaterThan(1)
+    expect(fetchCurrentUser).toHaveBeenLastCalledWith('mon.jeton')
+    expect(window.localStorage.getItem(TOKEN_STORAGE_KEY)).toBe('mon.jeton')
+  })
+
+  it('AC-7: arrête de réessayer dès qu’une connexion explicite ouvre la session', async () => {
+    // La reprise doit mourir avec l'état qui l'a justifiée. Sans cette garde,
+    // une tentative en vol retomberait après le `signIn` et réécrirait l'ancien
+    // jeton par-dessus le nouveau — le défaut que la génération ferme déjà pour
+    // la première tentative, et qu'une boucle de reprise rouvrirait.
+    vi.useFakeTimers()
+    window.localStorage.setItem(TOKEN_STORAGE_KEY, 'mon.jeton')
+    fetchCurrentUser.mockRejectedValue(new ApiError(500, {}))
+
+    renderProbe()
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0)
+    })
+
+    await act(async () => {
+      screen.getByRole('button', { name: 'connexion' }).click()
+    })
+    const callsAtSignIn = fetchCurrentUser.mock.calls.length
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(RECONNECT_DELAY_MS * 3)
+    })
+
+    expect(fetchCurrentUser.mock.calls.length).toBe(callsAtSignIn)
+    expect(screen.getByTestId('status')).toHaveTextContent('authenticated')
+    expect(window.localStorage.getItem(TOKEN_STORAGE_KEY)).toBe(jake.token)
   })
 })

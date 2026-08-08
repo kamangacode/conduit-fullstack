@@ -1,6 +1,7 @@
 'use client'
 
 import { useQuery } from '@tanstack/react-query'
+import Link from 'next/link'
 import { useApi } from '../lib/api-provider'
 import { type FeedKind, feedQueryKey, fetchFeed } from '../lib/feed-query'
 import { ArticlePreview } from './ArticlePreview'
@@ -56,7 +57,7 @@ export function FeedList({ feed, page, pathname, searchParams }: FeedListProps) 
     // Classe imposée par le contrat de sélecteurs : une liste vide muette
     // laisserait le lecteur devant un écran blanc sans savoir si la page a fini
     // de charger.
-    return <div className="empty-feed-message">No articles are here... yet.</div>
+    return <EmptyFeedMessage feed={feed} />
   }
 
   return (
@@ -72,4 +73,29 @@ export function FeedList({ feed, page, pathname, searchParams }: FeedListProps) 
       />
     </>
   )
+}
+
+/**
+ * Message d'absence, **spécifique au flux personnel** (REQ-WEB-009 AC-8, AC-9).
+ *
+ * « Aucun article » ne veut pas dire la même chose des deux côtés. Sur un flux
+ * public, c'est un constat : le site est vide, ou le tag ne contient rien, et le
+ * lecteur n'a rien à faire. Sur le flux personnel, c'est une **conséquence de
+ * son propre état** — il ne suit personne — et le geste qui en sort est
+ * d'aller voir le flux global. D'où le lien, et non seulement une phrase :
+ * refermer soi-même l'impasse qu'on vient d'annoncer.
+ *
+ * Le lien pointe vers `/` sans paramètre : c'est ce que le contrat vise
+ * (`a[href="/"]`), et cela remet aussi la page à 1 par construction.
+ */
+function EmptyFeedMessage({ feed }: { readonly feed: FeedKind }) {
+  if (feed.kind === 'following') {
+    return (
+      <div className="empty-feed-message">
+        Your feed is empty. <Link href="/">Read the Global Feed</Link> to find people to follow.
+      </div>
+    )
+  }
+
+  return <div className="empty-feed-message">No articles are here... yet.</div>
 }

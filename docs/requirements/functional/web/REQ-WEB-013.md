@@ -14,7 +14,7 @@ acceptance_criteria:
   - id: AC-2
     given: "un visiteur anonyme"
     when: "il atteint la section des commentaires"
-    then: "aucun formulaire ne lui est proposé, mais des liens de connexion et d'inscription"
+    then: "aucun formulaire ne lui est proposé et un message lui indique que la connexion est requise, sans dupliquer les liens d'authentification portés par la barre de navigation"
   - id: AC-3
     given: "un utilisateur connecté"
     when: "il publie un commentaire"
@@ -35,14 +35,19 @@ acceptance_criteria:
     given: "une publication ou une suppression qui échoue"
     when: "l'API renvoie une erreur"
     then: "l'échec est signalé et la liste reste conforme à ce que l'API a confirmé"
+  - id: AC-8
+    given: "un visiteur anonyme sur la page d'un article chargé"
+    when: "la page est rendue"
+    then: "elle expose exactement un élément `a[href=\"/login\"]` visible et aucun `textarea[placeholder=\"Write a comment...\"]`"
 implementation:
   files:
     - apps/web/src/components/CommentSection.tsx
+    - apps/web/src/components/Navbar.tsx
     - "apps/web/src/app/article/[slug]/page.tsx"
   tests:
     - apps/web/src/components/CommentSection.spec.tsx
 related:
-  issues: [8]
+  issues: [8, 16]
   requirements:
     - REQ-WEB-008
     - REQ-WEB-012
@@ -74,6 +79,29 @@ corps d'un commentaire ne peut pas être vide, et cette règle vit dans
 `@repo/shared`, appliquée à l'identique par l'API. La revalider localement
 ferait diverger les deux au premier changement.
 
+AC-2 a été **réécrit**, et AC-8 dit pourquoi. La formulation d'origine demandait
+« des liens de connexion et d'inscription » dans la section, et l'implémentation
+les a rendus. Or la barre de navigation en porte déjà, et le contrat de
+sélecteurs traite `a[href="/login"]` comme un **singleton de page** : ses
+assertions de visibilité sont strictes, donc un locator qui résout deux éléments
+lève au lieu de réussir sur le premier. La même assertion passe partout ailleurs,
+et toujours depuis une page où seule la barre porte ce lien.
+
+`templates.md` ne décrit d'ailleurs aucune invite anonyme dans la section
+commentaires : c'était un ajout de ce dépôt, écrit pour l'AC-2 d'origine, et
+c'est lui qui cassait l'invariant. L'invite reste — elle explique l'absence de
+formulaire — mais elle ne porte plus les liens : **une affordance par route
+d'authentification et par page**, à l'endroit stable qu'est la barre. Le coût est
+un aller vers le haut de page.
+
+Deux autres façons d'y arriver ont été écartées, et la raison vaut d'être
+écrite. Rendre l'affordance en `<button>` qui navigue ferait disparaître le match
+sans rien changer au comportement : c'est réécrire l'assertion par un autre
+chemin, et un bouton qui navigue est un lien mal déguisé. Un
+`/login?returnTo=<article>` donnerait une meilleure UX et un `href` distinct,
+mais le lien mentirait tant que la page de connexion n'honore pas le paramètre —
+fonctionnalité neuve, à traiter pour elle-même.
+
 Le markup mérite une attention particulière parce que le contrat de sélecteurs
 **compte** les commentaires par `.card:not(.comment-form) .card-block` : le
 formulaire porte donc la classe `comment-form` en plus de `card`, faute de quoi
@@ -91,6 +119,9 @@ classe des aperçus.
   l'API de vérifier que le commentaire lui appartient (motif IDOR, rule 19).
 - Markup `templates.md` §Article : `.card`, `.card-block`, `.card-footer`,
   `.comment-author`, `.comment-author-img`, `.mod-options`.
+- L'invite anonyme ne porte **aucun** lien d'authentification : la barre les
+  porte, et le contrat n'en admet qu'un par page (AC-8). Un `<button>` qui
+  naviguerait vers `/login` ne satisfait pas cette règle — il la contourne.
 
 ## Hors périmètre
 

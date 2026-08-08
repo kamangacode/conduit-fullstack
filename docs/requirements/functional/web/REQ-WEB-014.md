@@ -35,15 +35,34 @@ acceptance_criteria:
     given: "une publication refusée par l'API"
     when: "la réponse arrive"
     then: "les messages par champ du contrat §10 s'affichent et la saisie est préservée"
+  - id: AC-8
+    given: "un auteur qui publie depuis l'éditeur, en création comme en modification"
+    when: "l'API répond"
+    then: "l'article renvoyé est écrit dans l'entrée de cache de son slug **avant** la redirection — la page article atteinte affiche le contenu enregistré sans attendre de rafraîchissement"
+  - id: AC-9
+    given: "une modification qui retire toutes les étiquettes sans toucher au titre"
+    when: "la redirection amène sur la page de l'article"
+    then: "aucune pastille n'est rendue, y compris à l'intérieur de la fenêtre de fraîcheur de trente secondes"
+  - id: AC-10
+    given: "une modification qui change le titre, donc le slug"
+    when: "l'enregistrement réussit"
+    then: "l'entrée de cache du slug d'origine est retirée — revenir à l'ancienne URL n'affiche pas un article qui n'y existe plus"
+  - id: AC-11
+    given: "une publication refusée par l'API"
+    when: "l'erreur arrive"
+    then: "aucune entrée de cache n'est modifiée et la saisie reste à l'écran — l'affichage continue de décrire le dernier état que l'API a confirmé"
 implementation:
   files:
     - apps/web/src/components/ArticleEditor.tsx
     - apps/web/src/app/editor/page.tsx
     - "apps/web/src/app/editor/[slug]/page.tsx"
+    - apps/web/src/components/ArticleEditorLoader.tsx
+    - apps/web/src/lib/content-query.ts
   tests:
     - apps/web/src/components/ArticleEditor.spec.tsx
+    - apps/web/src/lib/content-query.spec.ts
 related:
-  issues: [8]
+  issues: [8, 29]
   requirements:
     - REQ-WEB-008
     - REQ-WEB-012
@@ -79,6 +98,30 @@ connexion plutôt que laisser saisir un article entier avant de découvrir qu'on
 peut pas le publier. Le contrôle d'autorisation reste côté API — masquer un
 formulaire n'est pas une sécurité.
 
+AC-8 à AC-11 sont venus d'un échec mesuré, pas d'une revue de cadrage. Depuis
+l'[ADR 020](../../../adr/020-chargement-client-des-pages-de-contenu.md),
+`/article/:slug` et `/editor/:slug` chargent depuis le navigateur : elles ont
+perdu la réparation implicite qu'apportait l'hydratation, où toute navigation
+vers une page préchargée écrasait le cache client. Sur ces routes, **le cache
+client fait autorité** — une mutation qui n'y écrit pas laisse `staleTime` servir
+l'état d'avant pendant trente secondes.
+
+L'éditeur redirigeait sans rien écrire. Le défaut n'était atteignable qu'à
+**titre inchangé** : la règle R-1 fait dériver le slug du titre, donc un
+renommage menait à une clé de cache vide, chargée depuis l'API, et AC-3 restait
+vert. Retirer toutes les étiquettes sans toucher au titre reste sur la même clé,
+et la page atteinte affichait l'article d'avant l'enregistrement, pastilles
+comprises.
+
+AC-8 pose l'écriture plutôt que l'invalidation : c'est le geste que `ArticleMeta`
+pose déjà pour le favori, et celui que le docblock de `staleTime` affirme — « les
+mutations mettent l'affichage à jour depuis la réponse de l'API, sans attendre un
+refetch ». Invalider paierait un aller-retour et laisserait l'ancien contenu à
+l'écran pendant sa durée. AC-10 est sa contrepartie sur l'ancien slug : la
+ressource n'y existe plus, donc l'entrée est **retirée** plutôt qu'écrasée.
+AC-11 garde le tout d'un excès inverse — un refus de l'API ne doit rien écrire du
+tout.
+
 ## Règles
 
 - La validation vient des schémas partagés (`createArticleDtoSchema`,
@@ -91,6 +134,10 @@ formulaire n'est pas une sécurité.
   placeholder `Enter tags` (contrat de sélecteurs).
 - Le bouton porte le texte `Publish Article` dans les deux modes, comme le
   template — le contrat de sélecteurs le vise ainsi.
+- L'écriture du cache passe par `cacheSavedArticle` (`apps/web/src/lib/content-query.ts`),
+  à côté des clés qu'elle vise et non dans l'éditeur : quelles entrées un
+  enregistrement rend fausses est une propriété du modèle de cache, pas de
+  l'écran qui enregistre — même raison qu'`invalidateAuthorCaches`.
 
 ## Hors périmètre
 

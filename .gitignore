@@ -36,6 +36,13 @@ pnpm-debug.log*
 # Journal de build local (mémoire de session, hors historique public)
 /artifacts/build-log.md
 
+# État et coûts d'orchestration Forge : mémoire de session interne, hors vitrine publique
+# (les dossiers de planification req-driven, eux, sont versionnés)
+/artifacts/cost/
+artifacts/forge/**/state.md
+artifacts/forge/**/*-shadow.md
+artifacts/forge/**/*-shadow.json
+
 # OS / éditeurs
 .DS_Store
 .idea/

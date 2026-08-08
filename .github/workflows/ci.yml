@@ -104,6 +104,34 @@ jobs:
         run: pnpm lint
       - name: Verrou hard-fail Biome (vérification active)
         run: bash scripts/verify-biome-hardfail.sh
+      - name: Garde-fou de secrets (vérification active)
+        # Le hook pre-commit ne protège que celui qui l'a installé. Rejouer le
+        # canary ici prouve que le garde-fou mord aussi sur un runner frais,
+        # et attrape le cas où quelqu'un aurait dégradé ses motifs (REQ-SEC-001).
+        run: bash scripts/verify-secret-guard.sh
+      - name: Verrou SQL brut (vérification active)
+        # Le plugin GritQL qui interdit `$queryRawUnsafe` se dégrade en silence :
+        # s'il ne compile pas, Biome le rapporte en `info` et sort en 0. Rejouer
+        # ici ses refus prouve qu'il mord encore sur un runner frais, plutôt que
+        # de constater qu'il est déclaré (REQ-SEC-002, ADR 024).
+        run: bash scripts/verify-sql-raw-guard.sh
+      - name: Fail-fast de configuration (vérification active)
+        # Démarre le point d'entrée réel sur cinq configurations invalides et
+        # exige un arrêt qui nomme la variable (REQ-SEC-004, ADR 025).
+        #
+        # Ce runner est le seul endroit où la propriété se mesure sans biais : il
+        # n'a pas de `.env`, là où le poste du développeur en porte un qui masquait
+        # précisément le défaut — la validation s'exécutait après le chargement du
+        # graphe, donc après que `@prisma/client` ait chargé le fichier. Le script
+        # écrit sa propre fixture `.env` pour que le cas soit joué ici aussi.
+        #
+        # Passé par turbo, et non appelé directement : démarrer le vrai point
+        # d'entrée exige le client Prisma et `@repo/shared` compilé, que la tâche
+        # déclare en `dependsOn`. La première version de cette étape appelait le
+        # script en direct et a échoué ici sur `MODULE_NOT_FOUND: @repo/shared`
+        # en passant en local, où le build traînait d'un run précédent — réparer
+        # le graphe plutôt que le job, comme pour `db:generate` et l'Integration.
+        run: pnpm exec turbo run verify:env-fail-fast
       - name: Raisons des biome-ignore (PR uniquement)
         if: github.event_name == 'pull_request'
         # Garantit que la ref de base est résolvable côté runner : le script
@@ -111,6 +139,12 @@ jobs:
         run: |
           git fetch --no-tags origin "${{ github.base_ref }}"
           bash scripts/check-biome-ignore-reasons.sh "origin/${{ github.base_ref }}"
+      - name: Le job E2E bloque bien la CI (vérification active)
+        # Rejoué ici, et non dans le job e2e : un job qu'on aurait désactivé
+        # emporterait avec lui le contrôle de sa propre blocance. Le filtre
+        # `code` de `detect-changes` liste `ci.yml`, donc toute PR qui touche au
+        # workflow réveille cette vérification (REQ-CONF-002 AC-5).
+        run: node scripts/check-e2e-gate-wiring.mjs
       - name: Code mort (knip)
         run: pnpm knip
       - name: Frontières hexagonales (dependency-cruiser)
@@ -351,20 +385,37 @@ jobs:
         run: pnpm conformance:verify
 
   e2e:
-    name: E2E (suite Playwright officielle — rapport)
+    name: E2E (suite Playwright officielle — gate)
     runs-on: ubuntu-latest
     needs: detect-changes
     if: needs.detect-changes.outputs.code == 'true'
-    # **Ce job ne bloque pas, et son absence du `needs` de `ci-success` est
-    # délibérée** (REQ-CONF-002 AC-5, ADR 018). La suite pilote un navigateur réel
-    # à travers l'hydratation de Next : ses modes d'échec incluent des situations
-    # qui ne disent rien de la conformité (un `waitForURL` qui expire sur un
-    # runner chargé). Poser le gate avant d'avoir mesuré ce bruit, c'est choisir
-    # un seuil au jour 1 — et six mois plus tard, c'est le job qu'on désactive,
-    # emportant avec lui les échecs qui, eux, disaient quelque chose.
+    # **Ce job bloque** (REQ-CONF-002 AC-5, ADR 018) — depuis le 2026-08-07, et
+    # pas depuis le premier jour. Il a d'abord tourné en rapport le temps de
+    # mesurer son bruit, parce qu'il pilote un navigateur réel à travers
+    # l'hydratation de Next : ses modes d'échec incluent des situations qui ne
+    # disent rien de la conformité (un `waitForURL` qui expire sur un runner
+    # chargé). Un seuil posé au jour 1 sur ce médium produit le gate qu'on
+    # désactive six mois plus tard, et qui emporte alors dans sa chute les échecs
+    # qui, eux, disaient quelque chose (rule 21, étapes 3 à 5).
     #
-    # La bascule en gate est inscrite au plan d'outillage comme item distinct :
-    # elle se fait après quelques runs réels, pas de mémoire.
+    # Ce qui a été mesuré avant de basculer, et qui justifie de le faire
+    # maintenant plutôt que de le parier :
+    #
+    #   - **1 à 2 instables sur 139** pendant toute la phase de rapport, avec un
+    #     ensemble d'échecs strictement identique d'un run à l'autre — donc un
+    #     signal, pas du bruit (relevé dans l'issue #17) ;
+    #   - **trois runs verts consécutifs sur `staging`** une fois l'epic #11
+    #     fermée, dont un déclenché à la main sur un arbre inchangé : le taux
+    #     d'instables se mesure sur une suite qui **passe**, pas sur une suite
+    #     qui échoue déjà ;
+    #   - les `retries: 2` de la configuration amont absorbent déjà un instable,
+    #     et ce chiffre n'est **pas** relevé pour l'occasion — ce serait faire
+    #     passer par la configuration ce qui doit passer par le code (rule 13).
+    #
+    # `scripts/check-e2e-gate-wiring.mjs` (job `Quality`) empêche que cette
+    # propriété se défasse en silence : un `continue-on-error` remis « le temps
+    # de déboguer » laisserait le job tourner et afficher son verdict sans que
+    # rien ne change de couleur.
     services:
       # Troisième base dédiée, distincte de `conduit_test` (intégration) et
       # `conduit_conformance` (Hurl). Son nom doit contenir « e2e » : la garde du
@@ -400,30 +451,37 @@ jobs:
       # un `testDir` erroné rendrait « 0 test, code 0 » — le vert le plus creux
       # qu'un dépôt puisse afficher, et celui qu'on croirait.
       - name: Modes de défaillance du harnais e2e
-        continue-on-error: true
         run: bash scripts/verify-e2e-gate.sh
-      - name: Suite e2e RealWorld (rapport)
-        continue-on-error: true
+      # Le même principe appliqué à l'étape de données : le jeu minimal que la
+      # suite suppose doit être idempotent et savoir rougir (REQ-CONF-003 AC-2,
+      # AC-3). Contre un stub d'API, donc quelques secondes et aucune dépendance
+      # à la base ni au navigateur — les deux propriétés portent sur la séquence
+      # d'appels du script, pas sur le comportement de l'API.
+      - name: Idempotence du jeu de données e2e
+        run: bash scripts/verify-e2e-seed.sh
+      - name: Suite e2e RealWorld
         env:
           E2E_DATABASE_URL: postgresql://conduit:conduit@localhost:5432/conduit_e2e?schema=public
         # `pipefail` explicite : le shell par défaut des runners est `bash -e`,
         # sans lui. Le code de sortie du run serait donc celui de `tee`, donc 0,
-        # et l'étape s'afficherait verte quel qu'ait été le verdict — le
-        # `continue-on-error` ci-dessus deviendrait décoratif et l'échec
-        # invisible jusque dans le journal.
+        # et l'étape s'afficherait verte quel qu'ait été le verdict. C'était déjà
+        # vrai en rapport ; sous le gate, c'est la ligne qui **fait** le gate —
+        # le retrait des `continue-on-error` ne bloque rien si le code de sortie
+        # observé est celui du dernier maillon du tube.
         run: |
           set -o pipefail
           pnpm conformance:e2e 2>&1 | tee /tmp/e2e.log
-      # Un rapport que personne ne lit ne rapporte rien. Le job ne bloque pas :
-      # sans ce résumé, connaître le verdict imposerait d'ouvrir le journal d'un
-      # job vert, ce que personne ne fait. Les comptes remontent donc dans le
-      # résumé du run, comme la couverture des tests et celle des exigences —
-      # lisible depuis la PR, sans permission d'écriture.
+      # Le résumé survit à la bascule en gate, et son intérêt se déplace : il ne
+      # sert plus à rendre lisible le verdict d'un job vert, mais à donner le
+      # **compte** d'un job rouge sans ouvrir son journal — 1 échec sur 139 et 50
+      # sur 139 se corrigent très différemment. `if: always()`, donc il s'écrit
+      # aussi quand l'étape précédente vient de faire échouer le job : c'est
+      # précisément le cas où on le lit.
       - name: Verdict e2e (résumé de run)
         if: always()
         run: |
           {
-            echo "## Conformité e2e RealWorld (rapport, non bloquant)"
+            echo "## Conformité e2e RealWorld (gate)"
             echo ""
             if grep -qE '^\s+[0-9]+ (passed|failed|flaky)' /tmp/e2e.log 2> /dev/null; then
               grep -E '^\s+[0-9]+ (passed|failed|flaky|skipped)' /tmp/e2e.log \
@@ -445,6 +503,82 @@ jobs:
             apps/web/test-results/
           retention-days: 14
           if-no-files-found: ignore
+
+  secrets:
+    name: Secrets (TruffleHog — rapport)
+    runs-on: ubuntu-latest
+    # **Aucun filtre de chemin, et c'est délibéré.** Les autres jobs se
+    # déclenchent sur `code`, parce qu'un diff de documentation ne casse pas un
+    # test. Un secret, lui, entre par n'importe quel fichier — un README, un
+    # workflow, un fichier de configuration d'éditeur. Filtrer ici reviendrait à
+    # ne pas regarder là où on ne s'attend pas à trouver, c'est-à-dire là où on
+    # trouve.
+    #
+    # Skip sur le cron hebdomadaire : sans événement, la plage serait « toute
+    # l'histoire », donc le même rapport tous les lundis sur des constats déjà
+    # connus. Un rapport qui se répète à l'identique cesse d'être lu, et emporte
+    # avec lui celui qui aurait dit quelque chose.
+    if: github.event_name != 'schedule'
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          # Histoire complète : le scan travaille sur une plage de commits. Avec
+          # la profondeur par défaut (1), `git rev-list base..head` ne résout
+          # rien et le scan n'examinerait qu'un arbre sans passé — vert, et vide.
+          fetch-depth: 0
+      # Le contrôle du contrôle, et il vient **avant** le scan. Un scanner de
+      # secrets affiche « 0 trouvé » quand il marche et « 0 trouvé » quand il ne
+      # regarde rien : sans cette étape, le job ne distinguerait pas les deux.
+      # Bloquante, à la différence du scan lui-même — elle ne dépend d'aucun
+      # tiers, seulement du dépôt.
+      - name: Modes de défaillance du scan de secrets
+        run: bash scripts/verify-secret-scan.sh
+      - name: Scan de secrets sur la plage du push ou de la PR
+        # **Rapport, pas gate** (rule 21, étape 3). La vérification en ligne
+        # appelle l'API du fournisseur : un gate qui rougit parce qu'AWS répond
+        # mal est un gate qu'on désactive, et B2 tient déjà la porte d'entrée en
+        # pre-commit. La bascule éventuelle se décidera sur du bruit mesuré.
+        continue-on-error: true
+        env:
+          EVENT: ${{ github.event_name }}
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
+          PR_HEAD: ${{ github.event.pull_request.head.sha }}
+          PUSH_BEFORE: ${{ github.event.before }}
+          PUSH_AFTER: ${{ github.event.after }}
+        # `pipefail` explicite, pour la même raison que dans le job e2e : sans
+        # lui, le code de sortie observé serait celui de `tee`.
+        run: |
+          set -o pipefail
+          if [ "$EVENT" = "pull_request" ]; then
+            BASE="$PR_BASE"; HEAD="$PR_HEAD"
+          elif [ "$EVENT" = "push" ]; then
+            HEAD="$PUSH_AFTER"
+            # Première poussée d'une branche : `before` vaut quarante zéros et ne
+            # désigne aucun commit. La plage devient toute l'histoire, ce qui est
+            # le bon défaut — mieux vaut scanner deux fois qu'ouvrir une fenêtre.
+            case "$PUSH_BEFORE" in
+              0000000000000000000000000000000000000000) BASE="" ;;
+              *) BASE="$PUSH_BEFORE" ;;
+            esac
+          else
+            BASE=""; HEAD="HEAD"
+          fi
+          bash scripts/secret-scan.sh "$BASE" "$HEAD" 2>&1 | tee /tmp/secret-scan.log
+      # Un rapport que personne ne lit ne rapporte rien — même leçon que pour le
+      # verdict e2e. Le job ne bloquant pas, connaître son résultat imposerait
+      # sinon d'ouvrir le journal d'un job vert, ce que personne ne fait.
+      - name: Verdict du scan (résumé de run)
+        if: always()
+        run: |
+          {
+            echo "## Scan de secrets (rapport, non bloquant)"
+            echo ""
+            if [ -s /tmp/secret-scan.log ]; then
+              sed -n '1,4p' /tmp/secret-scan.log | sed 's/^/- /'
+            else
+              echo "_Le scan n'a pas atteint son terme : voir le journal du job._"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
 
   build:
     name: Build
@@ -494,22 +628,60 @@ jobs:
     if: always()
     runs-on: ubuntu-latest
     needs:
-      [detect-changes, quality, adr, requirements, typecheck, test, integration, conformance, build]
+      [
+        detect-changes,
+        quality,
+        adr,
+        requirements,
+        typecheck,
+        test,
+        integration,
+        conformance,
+        e2e,
+        build,
+      ]
     steps:
-      - name: Vérifie qu'aucun job requis n'a échoué
+      # Liste **blanche**, et c'est tout l'intérêt : seuls `success` et `skipped`
+      # laissent passer, tout autre statut — connu ou non — fait échouer le check.
+      #
+      # La garde précédente listait les statuts interdits (`failure`, `cancelled`).
+      # Elle a laissé passer un run vert le 2026-08-06 alors que cinq jobs requis
+      # (build, test, integration, requirements, adr) n'avaient jamais tourné :
+      # faute de runner, GitHub leur avait donné le statut `abandoned`, absent de
+      # la liste. Le seul check requis par la protection de branche annonçait donc
+      # « tous les jobs requis sont passés » pour un run où la moitié n'avait pas
+      # démarré (run 31127768013).
+      #
+      # Une liste noire échoue **ouverte** sur l'inattendu, et l'inattendu est
+      # précisément ce contre quoi un gate existe. `skipped` reste accepté parce
+      # qu'il est produit délibérément par `detect-changes` sur un diff sans code
+      # (une PR de doc pure ne doit pas être bloquée) : c'est le seul statut
+      # non-`success` dont on sait qu'il ne cache rien.
+      - name: Vérifie que tout job requis a réussi ou a été délibérément skippé
         run: |
-          for r in \
-            "${{ needs.quality.result }}" \
-            "${{ needs.adr.result }}" \
-            "${{ needs.requirements.result }}" \
-            "${{ needs.integration.result }}" \
-            "${{ needs.conformance.result }}" \
-            "${{ needs.typecheck.result }}" \
-            "${{ needs.test.result }}" \
-            "${{ needs.build.result }}"; do
-            if [ "$r" = "failure" ] || [ "$r" = "cancelled" ]; then
-              echo "Un job requis a échoué (statut: $r)."
-              exit 1
-            fi
+          failed=0
+          for pair in \
+            "quality=${{ needs.quality.result }}" \
+            "adr=${{ needs.adr.result }}" \
+            "requirements=${{ needs.requirements.result }}" \
+            "integration=${{ needs.integration.result }}" \
+            "conformance=${{ needs.conformance.result }}" \
+            "e2e=${{ needs.e2e.result }}" \
+            "typecheck=${{ needs.typecheck.result }}" \
+            "test=${{ needs.test.result }}" \
+            "build=${{ needs.build.result }}"; do
+            job="${pair%%=*}"
+            r="${pair#*=}"
+            case "$r" in
+              success|skipped) ;;
+              *)
+                echo "::error::Job requis « $job » : statut « $r » (attendu success ou skipped)."
+                failed=1
+                ;;
+            esac
           done
+          if [ "$failed" -ne 0 ]; then
+            echo "Au moins un job requis n'a pas réussi. Ce run n'atteste rien."
+            exit 1
+          fi
           echo "Tous les jobs requis sont passés (ou skippés faute de changement de code)."

@@ -11,14 +11,14 @@ import { ErrorMessages } from './ErrorMessages'
 /**
  * Bouton de suivi (REQ-WEB-005), markup RealWorld (rule 11).
  *
- * C'est le **fragment client** d'une page rendue côté serveur : le profil est
- * public et arrive déjà rendu, seul `following` dépend du lecteur (R-5) et doit
- * donc être résolu ici. C'est la frontière de l'ADR 012 dans sa forme la plus
- * concrète.
+ * `following` est la seule donnée du profil qui dépende du lecteur (règle R-5) :
+ * c'est la frontière de l'ADR 012 dans sa forme la plus concrète.
  *
- * L'état initial vient du serveur, où l'appel est anonyme : `following` y vaut
- * toujours `false`. Après hydratation, le composant reflète la relation réelle
- * du lecteur — et c'est pourquoi il ne peut pas se contenter de la prop.
+ * La prop **fait foi**. Depuis l'[ADR 020] elle ne vient plus d'un rendu serveur
+ * anonyme mais de la requête cliente de `ProfileView` ou d'`ArticleView`, toutes
+ * deux émises une fois la session résolue (AC-7) : la valeur reçue est donc
+ * déjà celle du lecteur, et la recopier dans un état local ne ferait que la
+ * figer.
  */
 
 export interface FollowButtonProps {
@@ -26,26 +26,62 @@ export interface FollowButtonProps {
 }
 
 /**
- * État de suivi, **resynchronisé** quand on change de profil sans démonter.
+ * L'écart qu'une bascule vient de produire, en attendant que la prop rattrape.
  *
- * En navigation cliente d'un profil à l'autre, React réconcilie la même
- * instance du composant et `useState` ne relit pas son argument : sans cette
- * remise à niveau, le bouton de jake affiche l'état de suivi de jacob.
+ * Il porte le username **et** la valeur que la prop affichait au moment du clic.
+ * Les deux servent à l'invalider : le premier quand le composant est réutilisé
+ * pour un autre profil sans démontage, le second dès que le serveur a parlé.
+ */
+interface FollowOverride {
+  readonly username: string
+  /** Valeur portée par la prop à l'instant du clic. */
+  readonly from: boolean
+  /** Valeur renvoyée par l'API. */
+  readonly to: boolean
+}
+
+/**
+ * État de suivi **dérivé de la prop**, avec un écart local qui ne survit qu'à la
+ * bascule qui l'a produit (AC-9).
  *
- * L'ajustement se fait **pendant le rendu** et non dans un effet — c'est le
- * motif que React documente pour ce cas, et il évite le rendu intermédiaire
- * faux qu'un `useEffect` laisserait passer.
+ * La version précédente copiait `profile.following` dans un `useState` et ne se
+ * resynchronisait que sur un **changement de username**. Une réponse fraîche
+ * pour le *même* profil, portant un `following` différent, était donc
+ * silencieusement ignorée : le cas exact du lecteur qui recharge son profil
+ * cible après avoir suivi depuis un autre onglet — ou, avant AC-7, à chaque
+ * chargement de page.
+ *
+ * C'est le motif déjà appliqué à `ArticlePreview` : ne garder en local que ce
+ * que le serveur ne sait pas encore, et laisser les props gouverner le reste.
+ * Le commentaire de ce fichier voisin l'affirmait déjà de ce bouton-ci ; il
+ * n'était pas vrai, il l'est maintenant.
+ *
+ * **L'invalidation supprime l'écart, elle ne le masque pas.** Une première
+ * version se contentait d'exclure l'écart du calcul par comparaison
+ * (`override.from === profile.following ? override : null`) sans jamais vider
+ * l'état. La comparaison seule ne distingue pas « la prop n'a pas encore
+ * rattrapé le clic » de « la prop a rattrapé, puis une réponse plus tardive l'a
+ * ramenée par coïncidence à sa valeur de départ » — un cas réel dès qu'une
+ * requête en vol répond dans le désordre. Dans le second cas, l'écart
+ * ressuscitait et affichait de nouveau la valeur d'un clic déjà résolu.
+ * `setOverride(null)` pendant le rendu ferme le cas : l'état disparaît la
+ * première fois que la prop diverge et ne peut plus revenir, quelle que soit la
+ * valeur qu'elle prend ensuite. C'est le remède documenté pour « ajuster un
+ * état dérivé d'une prop » — appeler `setState` pendant le rendu est sûr ici
+ * parce que la condition qui déclenche l'appel devient fausse dès qu'il a eu
+ * lieu, ce qui exclut toute boucle.
  */
 function useFollowState(profile: Profile): [boolean, (next: boolean) => void] {
-  const [following, setFollowing] = useState(profile.following)
-  const [renderedFor, setRenderedFor] = useState(profile.username)
+  const [override, setOverride] = useState<FollowOverride | null>(null)
 
-  if (profile.username !== renderedFor) {
-    setRenderedFor(profile.username)
-    setFollowing(profile.following)
+  if (override && (override.username !== profile.username || override.from !== profile.following)) {
+    setOverride(null)
   }
 
-  return [following, setFollowing]
+  const setFollowing = (next: boolean) =>
+    setOverride({ username: profile.username, from: profile.following, to: next })
+
+  return [override?.to ?? profile.following, setFollowing]
 }
 
 /** Ce que le front de référence affiche à la place du bouton, sur son propre profil. */

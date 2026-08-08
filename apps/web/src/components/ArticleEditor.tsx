@@ -1,11 +1,13 @@
 'use client'
 
 import { type Article, createArticleDtoSchema, updateArticleDtoSchema } from '@repo/shared'
+import { useQueryClient } from '@tanstack/react-query'
 import { useRouter } from 'next/navigation'
-import { type FormEvent, type KeyboardEvent, useEffect, useState } from 'react'
+import { type FormEvent, type KeyboardEvent, useState } from 'react'
 import { useApi } from '../lib/api-provider'
+import { useAuthenticatedAccount } from '../lib/authenticated-page'
+import { cacheSavedArticle } from '../lib/content-query'
 import { toMessages } from '../lib/errors'
-import { useSession } from '../lib/session'
 import { ErrorMessages } from './ErrorMessages'
 
 /**
@@ -27,10 +29,44 @@ export interface ArticleEditorProps {
   readonly article?: Article
 }
 
+/**
+ * Messages génériques de l'éditeur, pour les statuts que le contrat §10 laisse
+ * sans détail par champ.
+ *
+ * Le 401 est le plus important des deux, et il manquait. Depuis REQ-WEB-019, un
+ * 401 à la publication ne fait plus disparaître le formulaire : encore
+ * faut-il qu'il **dise quelque chose**. Sans cette entrée, `toMessages` retombe
+ * sur « request failed » — l'auteur reste devant son texte sans savoir que sa
+ * session vient de se fermer, donc sans savoir que se reconnecter suffirait.
+ *
+ * La formulation est celle des autres formulaires authentifiés du front. Elle
+ * n'est pas encore posée en constante partagée : les deux autres porteurs
+ * (`SettingsForm`, `CommentSection`) relèvent d'autres lots en cours sur la même
+ * vague, et les rallier ici produirait un conflit sans rapport avec ce
+ * changement. Le regroupement est la prochaine occasion de toucher l'un d'eux.
+ */
+const EDITOR_MESSAGES: Readonly<Record<number, string>> = {
+  401: 'your session has expired, please sign in again',
+  500: 'something went wrong, please try again',
+}
+
 export function ArticleEditor({ article }: ArticleEditorProps) {
   const api = useApi()
   const router = useRouter()
-  const { user, status } = useSession()
+  const queryClient = useQueryClient()
+  /**
+   * Le compte **retenu** par la page, et non `user` de la session.
+   *
+   * La nuance est tout le sujet de REQ-WEB-019 : un 401 à la publication purge
+   * le jeton (REQ-WEB-002 AC-4), donc `user` retombe à `null` et `status` à
+   * `anonymous` alors que l'auteur est encore devant son texte. Rediriger là —
+   * ce que faisait la redirection sur statut anonyme que portait ce composant —
+   * emportait la saisie **et** le message qui l'expliquait, dans le même rendu.
+   *
+   * Le hook garde la redirection pour qui **arrive** sans session (AC-2,
+   * REQ-WEB-014 AC-6) et ne la déclenche pas pour qui la perd en route (AC-1).
+   */
+  const account = useAuthenticatedAccount()
 
   const [title, setTitle] = useState(article?.title ?? '')
   const [description, setDescription] = useState(article?.description ?? '')
@@ -38,15 +74,6 @@ export function ArticleEditor({ article }: ArticleEditorProps) {
   const [tagList, setTagList] = useState<readonly string[]>(article?.tagList ?? [])
   const [errors, setErrors] = useState<string[]>([])
   const [pending, setPending] = useState(false)
-
-  useEffect(() => {
-    // Redirection **dans un effet** et sur `status`, pas sur `user` : au premier
-    // rendu la session n'est pas résolue et `user` vaut `null` pour tout le
-    // monde — rediriger là éjecterait les utilisateurs connectés (AC-6).
-    if (status === 'anonymous') {
-      router.push('/login')
-    }
-  }, [status, router])
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -66,13 +93,21 @@ export function ArticleEditor({ article }: ArticleEditorProps) {
       const saved = article
         ? await api.updateArticle(article.slug, parsed.data)
         : await api.createArticle(parsed.data as Parameters<typeof api.createArticle>[0])
+      // **Avant** la redirection, jamais après : la page cible lit son entrée
+      // de cache dès qu'elle monte. Depuis l'ADR 020, `/article/:slug` charge
+      // depuis le navigateur et plus rien n'écrase le cache client à la
+      // navigation — une entrée écrite par le chargeur de l'éditeur quelques
+      // secondes plus tôt est encore fraîche (`staleTime: 30_000`), donc servie
+      // telle quelle. Sans cette ligne, publier sans toucher au titre conduit
+      // sur une page qui affiche l'article d'avant l'enregistrement.
+      cacheSavedArticle(queryClient, saved, article?.slug)
       // Le slug **de la réponse** : sous un titre modifié, il diffère de celui
       // qu'on avait, et suivre l'ancien mènerait à une page introuvable.
       router.push(`/article/${saved.slug}`)
     } catch (error) {
       // La saisie est préservée : refaire écrire un article entier après un
       // refus serait la pire réponse possible à une erreur de validation.
-      setErrors(toMessages(error, { 500: 'something went wrong, please try again' }))
+      setErrors(toMessages(error, EDITOR_MESSAGES))
     } finally {
       setPending(false)
     }
@@ -123,10 +158,19 @@ export function ArticleEditor({ article }: ArticleEditorProps) {
 
                 <TagField tagList={tagList} onChange={setTagList} />
 
+                {/*
+                  Désactivé tant qu'aucun compte n'a été résolu — donc pendant
+                  la fenêtre de réhydratation (REQ-WEB-002 AC-5), où publier
+                  partirait sans jeton. Après une purge en cours d'édition, le
+                  compte retenu maintient le bouton actionnable : l'auteur peut
+                  réessayer, échouer à nouveau, et lire pourquoi (REQ-WEB-019
+                  AC-1) — plutôt que se retrouver devant un formulaire inerte
+                  qu'aucun message n'explique.
+                */}
                 <button
                   className="btn btn-lg pull-xs-right btn-primary"
                   type="submit"
-                  disabled={pending || !user}
+                  disabled={pending || !account}
                 >
                   Publish Article
                 </button>

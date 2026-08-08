@@ -24,25 +24,44 @@ acceptance_criteria:
     when: "le front est construit pour l'exécution e2e"
     then: "le bundle servi porte l'URL de l'API de test, et non celle par défaut — un artefact de cache construit avec une autre URL ferait interroger à la suite une API qui n'existe pas"
   - id: AC-5
-    given: "le job de CI qui exécute la suite e2e"
-    when: "la suite échoue"
-    then: "le job remonte le signal sans faire échouer la CI et n'entre pas dans l'agrégat `ci-success` — la bascule en gate est un geste ultérieur et délibéré, pas un oubli"
+    given: "le job de CI qui exécute la suite e2e, bloquant depuis le 2026-08-07"
+    when: "la suite échoue, ou que le câblage qui la rend bloquante est défait"
+    then: "la CI échoue — aucune étape du job n'est en `continue-on-error`, `e2e` est dans le `needs` de `ci-success` et dans la liste blanche de sa garde, et ces trois maillons sont vérifiés à chaque changement de `ci.yml`"
+  - id: AC-6
+    given: "deux fichiers de la suite qui figent l'hôte d'API dans leurs interceptions"
+    when: "le front est construit pour l'exécution e2e"
+    then: "le bundle client porte cet hôte, faute de quoi aucun de leurs `page.route()` ne matche et leurs tests éprouvent l'API réelle au lieu des pannes décrites"
+  - id: AC-7
+    given: "l'hôte figé par la suite, qui désigne une démo publique"
+    when: "le harnais démarre"
+    then: "il est résolu vers l'API de ce run et le relais est vérifié avant le lancement — aucune requête du navigateur ne quitte le poste, y compris celles qu'aucun mock n'intercepte"
+  - id: AC-8
+    given: "un test de la suite qui crée son propre contexte via `browser.newContext()`"
+    when: "la page chargée appelle l'hôte d'API relayé en TLS par le harnais"
+    then: "l'appel aboutit et la page rend son contenu — la tolérance au certificat jetable est portée au niveau du navigateur, pas seulement du contexte fabriqué par la config"
+  - id: AC-9
+    given: "`staging` à jour et le harnais e2e"
+    when: "`pnpm conformance:e2e social.spec.ts` est exécuté"
+    then: "les six tests du fichier passent, sans relèvement d'aucun délai de `playwright.config.ts` ni de `playwright.base.ts`"
 implementation:
   files:
     - apps/web/conformance/UPSTREAM.md
     - apps/web/playwright.config.ts
     - scripts/test-e2e.sh
+    - scripts/e2e-tls-terminator.mjs
+    - apps/web/src/lib/env.ts
     - turbo.json
     - .github/workflows/ci.yml
   tests:
     - scripts/verify-e2e-gate.sh
     - scripts/verify-conformance-drift.sh
+    - scripts/check-e2e-gate-wiring.mjs
 related:
-  issues: [10, 11]
+  issues: [10, 11, 15, 16, 17]
   requirements:
     - REQ-CONF-001
     - REQ-WEB-007
-  adrs: ["014", "018"]
+  adrs: ["014", "018", "019", "020"]
 ---
 
 # REQ-CONF-002 — Confronter le front aux parcours e2e officiels, contre l'API réelle
@@ -82,11 +101,54 @@ défaut puis servi pour l'e2e enverrait ses requêtes ailleurs, et les échecs
 ressembleraient à des défauts de conformité. AC-4 vérifie l'artefact plutôt que
 l'intention.
 
-AC-5 enfin acte que ce contrôle démarre en **rapport** et non en gate
+**La suite suppose de son environnement plus qu'elle ne le dit.** Deux de ses
+douze fichiers — `error-handling.spec.ts` et `user-fetch-errors.spec.ts` — figent
+l'hôte d'API dans leurs interceptions (`https://api.realworld.show/api`) là où
+les helpers lisent une variable. Un `page.route()` filtrant sur l'URL demandée,
+leurs mocks ne s'appliquent que si le **navigateur** demande cet hôte : tant que
+le front visait l'API locale, leurs 24 tests éprouvaient l'API réelle au lieu des
+pannes qu'ils décrivent, et aucune correction du front ne pouvait les rendre
+verts. AC-6 et AC-7 portent la réponse de
+l'[ADR 019](../../../adr/019-alignement-de-l-hote-d-api-pour-la-suite-e2e.md) :
+le navigateur demande cet hôte, et le harnais le résout vers l'API du run. AC-7
+est le critère de **sûreté** de ce montage — sans lui, une requête qu'aucun mock
+n'intercepte partirait vers la démo publique et la modifierait.
+
+**Le harnais peut aussi mentir dans l'autre sens.** AC-8 ferme un faux
+**négatif**, découvert en corrigeant les échecs de `comments.spec.ts`. Les
+options du bloc `use` de la configuration Playwright — `ignoreHTTPSErrors` en
+particulier — sont appliquées par la fixture `_contextFactory`, donc aux seuls
+contextes que la configuration fabrique. Quatre tests de la suite créent le leur
+avec `browser.newContext()` et n'en héritent pas. Composé avec l'ADR 019 (l'hôte
+d'API servi par un terminateur à certificat jetable) et l'ADR 020 (la page
+article charge son contenu depuis le navigateur), cela donnait : tous les appels
+de ces pages en erreur de certificat, la coquille « indisponible » rendue à la
+place du contenu, et des assertions de non-visibilité qui passaient **parce que**
+la page n'avait rien chargé.
+
+C'est exactement ce que la [rule 02](../../../../.claude/rules/02-workflow-dev.md)
+nomme : un vert obtenu sur un artefact qui n'est pas celui qu'on croit tester. Le
+correctif vit dans **notre** configuration et jamais dans la suite — un argument
+de lancement, porté par le navigateur, donc hérité par tout contexte. Il épingle
+l'empreinte SPKI du certificat de ce run plutôt que d'accepter n'importe quel
+certificat : le run reste hors ligne par la règle de résolution dans les deux
+cas, mais dire *ce* certificat coûte une commande `openssl` et une variable.
+
+AC-5 enfin porte l'**autorité** du contrôle, et il a changé une fois — c'est le
+seul critère de ce REQ dans ce cas, et son historique fait partie de ce qu'il
+énonce. Il a d'abord acté que le contrôle démarrait en **rapport** et non en gate
 ([ADR 018](../../../adr/018-conformite-e2e-suite-officielle-vendoree.md)) : la
 suite pilote un navigateur réel, ses modes d'échec incluent des situations qui ne
 disent rien de la conformité, et poser le seuil avant d'avoir mesuré le bruit
 produit le gate qu'on désactive six mois plus tard (rule 21, étape 3).
+
+Le bruit a été mesuré — 1 à 2 instables sur 139, absorbés par les `retries: 2`
+amont — puis la suite est devenue verte avec l'epic #11, et trois runs verts
+consécutifs sur `staging` ont confirmé le taux sur une suite qui *passe*. Le
+critère est donc passé en **gate** le 2026-08-07 (issue #17, second temps de
+l'ADR 018), et sa formulation a suivi : elle porte désormais sur les trois
+maillons qui font qu'un job bloque, parce qu'aucun ne suffit seul et qu'ils se
+défont indépendamment.
 
 ## Règles
 
@@ -104,8 +166,11 @@ produit le gate qu'on désactive six mois plus tard (rule 21, étape 3).
 ## Hors périmètre
 
 - La conformité de l'API, couverte par [REQ-CONF-001](REQ-CONF-001.md).
-- La bascule du job de rapport en gate : elle demande quelques runs réels pour
-  calibrer, et reste inscrite au plan d'outillage comme item distinct.
+- ~~La bascule du job de rapport en gate~~ — **faite le 2026-08-07** (issue #17).
+  Elle était hors périmètre tant qu'elle demandait des runs réels pour calibrer ;
+  ces runs ont eu lieu, et la propriété est passée dans AC-5 plutôt que de rester
+  dans cette liste. La ligne est barrée et non supprimée : ce qu'un REQ a un jour
+  écarté explicitement se lit mieux que ce qu'il n'a jamais mentionné.
 - Une suite e2e **maison** en Page Object Model : écartée par
   l'[ADR 018](../../../adr/018-conformite-e2e-suite-officielle-vendoree.md), qui
   distingue conformité (assertions d'un tiers) et régression (assertions de nous).
@@ -115,15 +180,49 @@ produit le gate qu'on désactive six mois plus tard (rule 21, étape 3).
 AC-1 est prouvé par l'exécution elle-même. AC-2 et AC-4 sont prouvés par
 `verify-e2e-gate.sh`, qui oppose la suite à un front factice et vérifie
 l'artefact compilé. AC-3 est prouvé par le mode « fichier imbriqué retouché »
-de `verify-conformance-drift.sh`.
+de `verify-conformance-drift.sh`. AC-6 et AC-7 sont prouvés dans `test-e2e.sh`
+lui-même, avant que la suite ne démarre : l'un inspecte le bundle compilé,
+l'autre interroge l'hôte figé — résolu comme le navigateur le résoudra — et
+vérifie que c'est bien l'API de ce run qui répond. Les deux **arrêtent le run**
+en cas d'échec, plutôt que de laisser la suite produire un diagnostic qui ne
+parlerait pas de la vraie cause.
 
-**AC-5 n'est pas couvert par un test, et c'est délibéré** — comme l'AC-5 de
-[REQ-CONF-001](REQ-CONF-001.md), et pour une raison voisine. Le prouver
-demanderait de faire échouer la suite dans un vrai run de CI et de constater que
-`ci-success` reste vert : un test qui rend la CI rouge pour vérifier qu'elle ne
-l'est pas. La propriété se lit dans `.github/workflows/ci.yml` — le job `E2E` est
-en `continue-on-error` et absent du `needs` de `ci-success` — et c'est cette
-lecture qui fait foi. Critère **sciemment non couvert**, pas oublié.
+AC-9 est prouvé par l'**exécution** de `social.spec.ts`, et par rien d'autre :
+c'est le dernier des cinq manques du tableau ci-dessous à être payé, et le seul
+verdict qui vaille est celui de la suite elle-même. Sa formulation nomme
+explicitement ce qui ne compte pas comme une preuve — relever un délai de la
+configuration Playwright ferait passer les six tests sans que le front ait
+changé, et serait la même triche qu'éditer une assertion, en un chiffre.
+
+AC-8 n'a pas de test unitaire possible : la propriété porte sur ce qu'un
+navigateur réel accorde à un contexte qu'un test fabrique, et rien en dessous du
+navigateur ne peut en répondre. `test-e2e.sh` arrête le run si l'empreinte est
+vide — un drapeau vide n'épingle rien tout en ayant l'air de le faire — et la
+preuve est l'exécution de `comments.spec.ts`, dont l'assertion anonyme
+n'atteignait jamais une page chargée avant ce correctif.
+
+**AC-5 était sciemment non couvert ; il ne l'est plus, et ce qui a changé n'est
+pas notre rigueur mais la propriété elle-même.** Tant que le critère disait « la
+CI reste verte quand la suite échoue », le prouver demandait de faire échouer la
+suite dans un vrai run et de constater le vert : un test qui rend la CI rouge
+pour vérifier qu'elle ne l'est pas. Il n'était donc pas testable, comme l'AC-5 de
+[REQ-CONF-001](REQ-CONF-001.md), et pour la même raison.
+
+Depuis la bascule, il dit l'inverse — et l'inverse est une propriété du
+**câblage**, pas du verdict : aucune étape du job en `continue-on-error`, `e2e`
+dans le `needs` de `ci-success` et dans la liste blanche de sa garde.
+[`check-e2e-gate-wiring.mjs`](../../../../scripts/check-e2e-gate-wiring.mjs) la
+constate sur `ci.yml`, et le job `Quality` la rejoue à chaque changement du
+workflow. Le script commence par se soumettre trois copies délibérément abîmées
+du workflow réel — étape redevenue tolérante, job sorti du `needs`, job sorti de
+la garde — et s'arrête s'il en accepte une : un vérificateur de configuration qui
+ne trouve plus rien à examiner affiche « ok » exactement comme un vérificateur
+satisfait.
+
+Ce que ce contrôle ne prouve pas, et qu'il ne faut pas lui prêter : que la CI
+rougit effectivement sur une suite rouge. Ça, seul un run le rend, et le
+2026-08-07 en a rendu un — 35 tests rouges sous un job vert, sous l'ancien
+régime. C'est ce run qui a montré ce que coûtait la propriété inverse.
 
 ## Ce que le premier run a rendu
 

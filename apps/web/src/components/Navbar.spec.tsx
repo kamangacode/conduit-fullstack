@@ -33,6 +33,47 @@ beforeEach(() => {
   pathname.current = '/'
 })
 
+describe('REQ-WEB-016 — mode indisponible dans la barre de navigation', () => {
+  /** Réhydratation qui échoue sans verdict d'autorité : l'API ne répond pas. */
+  const renderUnavailable = () => {
+    window.localStorage.setItem(TOKEN_STORAGE_KEY, jake.token)
+
+    return render(
+      <SessionProvider fetchCurrentUser={() => Promise.reject(new TypeError('Failed to fetch'))}>
+        <Navbar />
+      </SessionProvider>
+    )
+  }
+
+  it('AC-4: annonce la reconnexion en cours', async () => {
+    renderUnavailable()
+
+    await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent(/Connecting/))
+  })
+
+  it('AC-4: n’invite pas à se reconnecter, puisque le jeton est conservé', async () => {
+    // Le défaut que ce critère ferme : afficher « Sign in » revient à annoncer
+    // à l'utilisateur que sa session a expiré. Il se reconnecte, et le
+    // formulaire échoue aussi — le problème n'a jamais été son jeton.
+    renderUnavailable()
+
+    await waitFor(() => expect(screen.getByRole('status')).toBeInTheDocument())
+    expect(screen.queryByRole('link', { name: 'Sign in' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: 'Sign up' })).not.toBeInTheDocument()
+  })
+
+  it('AC-4: n’affiche pas non plus les liens d’un compte qu’elle n’a pas résolu', async () => {
+    renderUnavailable()
+
+    await waitFor(() => expect(screen.getByRole('status')).toBeInTheDocument())
+    expect(screen.queryByRole('link', { name: /New Article/ })).not.toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: /Settings/ })).not.toBeInTheDocument()
+    // Le retour à l'accueil reste possible : la suite e2e navigue dans ce mode,
+    // et une barre réduite au seul indicateur y enfermerait le visiteur.
+    expect(screen.getByRole('link', { name: 'Home' })).toBeInTheDocument()
+  })
+})
+
 describe('REQ-WEB-006 — barre de navigation', () => {
   it('AC-1: propose connexion et inscription à un anonyme', async () => {
     renderNavbar()

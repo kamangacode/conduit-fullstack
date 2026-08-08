@@ -6,10 +6,13 @@ import { ProfilePage } from '../../../profile-page'
  * Même écran que `/profile/:username`, au filtre près. Le contrat de sélecteurs
  * E2E décrit cette route explicitement : elle doit exister comme URL, pas
  * seulement comme état d'un onglet.
+ *
+ * `username` n'est pas redécodé : voir le commentaire de `/profile/:username`,
+ * même défaut, même raison.
  */
 export async function generateMetadata({ params }: { params: Promise<{ username: string }> }) {
   const { username } = await params
-  return { title: `@${decodeURIComponent(username)} — Favorited — Conduit` }
+  return { title: `@${username} — Favorited — Conduit` }
 }
 
 export default async function Page({
@@ -21,11 +24,5 @@ export default async function Page({
 }) {
   const { username } = await params
 
-  return (
-    <ProfilePage
-      username={decodeURIComponent(username)}
-      tab="favorited"
-      searchParams={await searchParams}
-    />
-  )
+  return <ProfilePage username={username} tab="favorited" searchParams={await searchParams} />
 }

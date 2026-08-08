@@ -36,12 +36,13 @@ implementation:
     - apps/web/src/lib/feed-query.ts
     - apps/web/src/components/ArticlesToggle.tsx
     - apps/web/src/app/profile-page.tsx
+    - apps/web/src/components/ProfileView.tsx
     - "apps/web/src/app/profile/[username]/page.tsx"
     - "apps/web/src/app/profile/[username]/favorites/page.tsx"
   tests:
     - apps/web/src/lib/feed-query.spec.ts
     - apps/web/src/components/ArticlesToggle.spec.tsx
-    - apps/web/src/app/profile-page.spec.tsx
+    - apps/web/src/components/ProfileView.spec.tsx
 related:
   issues: [8]
   requirements:

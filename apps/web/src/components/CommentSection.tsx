@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { type FormEvent, useState } from 'react'
 import { useApi } from '../lib/api-provider'
 import { avatarUrl } from '../lib/avatar'
+import { toMessages } from '../lib/errors'
 import { formatDate } from '../lib/format-date'
 import { useSession } from '../lib/session'
 import { ErrorMessages } from './ErrorMessages'
@@ -42,10 +43,19 @@ export function CommentSection({ slug, initialComments }: CommentSectionProps) {
             onPosted={(comment) => setComments((current) => [comment, ...current])}
           />
         ) : (
-          <p>
-            <Link href="/login">Sign in</Link> or <Link href="/register">sign up</Link> to add
-            comments on this article.
-          </p>
+          // Invite **sans lien** (REQ-WEB-013 AC-2, AC-8). Le contrat de
+          // sélecteurs traite `a[href="/login"]` comme un singleton de page :
+          // toutes ses assertions de visibilité sont strictes et la barre de
+          // navigation porte déjà ce lien, à un endroit stable et testé
+          // ailleurs. Deux affordances pour la même route rendaient donc le
+          // locator ambigu, et la page article était la seule à en porter deux.
+          //
+          // Le geste honnête est de retirer le doublon, pas de le déguiser : un
+          // `<button>` qui navigue vers `/login` ferait disparaître le match
+          // sans rien changer au comportement — c'est réécrire l'assertion par
+          // un autre chemin (ADR 018). La phrase reste, elle explique l'absence
+          // de formulaire ; l'affordance vit dans la barre.
+          <p>Sign in or sign up to add comments on this article.</p>
         )}
 
         {comments.map((comment) => (
@@ -73,6 +83,12 @@ export function CommentSection({ slug, initialComments }: CommentSectionProps) {
  * mode d'échec que l'indicateur de chargement qui portait la classe des aperçus
  * d'article.
  */
+/** Messages génériques propres au dépôt de commentaire (voir `lib/errors.ts`). */
+const COMMENT_MESSAGES: Readonly<Record<number, string>> = {
+  401: 'your session has expired, please sign in again',
+  500: 'something went wrong, please try again',
+}
+
 function CommentForm({
   slug,
   authorImage,
@@ -104,8 +120,13 @@ function CommentForm({
     try {
       onPosted(await api.addComment(slug, parsed.data))
       setBody('')
-    } catch {
-      setErrors(['unable to post this comment'])
+    } catch (error) {
+      // Traduction **partagée** (REQ-WEB-017 AC-4) : le message figé qui vivait
+      // ici disait « unable to post this comment » quelle que soit la cause, y
+      // compris quand l'API avait répondu et expliqué son refus. Il masquait
+      // donc la seule information utile, et il divergeait de ce que les autres
+      // formulaires affichent pour le même échec.
+      setErrors(toMessages(error, COMMENT_MESSAGES))
     } finally {
       setPending(false)
     }

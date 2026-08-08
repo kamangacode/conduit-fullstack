@@ -23,6 +23,83 @@ import { baseConfig } from './conformance/e2e/playwright.base'
  */
 const webPort = process.env.E2E_WEB_PORT ?? '3100'
 
+/**
+ * Hôte d'API que la suite vendorée **fige** dans deux de ses fichiers, et port
+ * local du terminateur TLS qui le sert (ADR 019).
+ *
+ * `error-handling.spec.ts` et `user-fetch-errors.spec.ts` écrivent leurs mocks
+ * sur `https://api.realworld.show/api` en dur, là où les helpers lisent la
+ * variable `API_BASE`. Un `page.route()` filtrant sur l'URL demandée, ces
+ * interceptions ne matchent que si le **navigateur** demande cet hôte-là.
+ *
+ * On le lui fait donc demander, et on le résout vers l'API de ce run. Les deux
+ * valeurs sont lues de l'environnement pour que `test-e2e.sh` reste le seul
+ * endroit qui choisit un port.
+ */
+const mockedApiHost = process.env.E2E_MOCKED_API_HOST ?? 'api.realworld.show'
+const tlsPort = process.env.E2E_TLS_PORT ?? '3102'
+
+/**
+ * Empreinte SHA-256 du SPKI du certificat jetable de ce run, en base64
+ * (REQ-CONF-002 AC-8). Posée par `test-e2e.sh`, qui génère le certificat.
+ *
+ * Elle existe parce que `use.ignoreHTTPSErrors` ne couvre pas tout : les options
+ * du bloc `use` sont appliquées par la fixture `_contextFactory` de Playwright,
+ * donc aux seuls contextes que **la config** fabrique. Quatre tests de la suite
+ * vendorée appellent `browser.newContext()` eux-mêmes (`comments.spec.ts:102`,
+ * `articles.spec.ts:292`, `social.spec.ts:74/165`) : leur contexte naît sans
+ * aucune de ces options, donc sans tolérance au certificat.
+ *
+ * L'effet était un faux **négatif**, le pire des deux. Depuis l'ADR 020, la page
+ * article charge son contenu depuis le navigateur : sur ces contextes, tous ses
+ * appels finissaient en erreur de certificat, la page rendait son mode
+ * « indisponible », et l'assertion passait **parce que** rien n'avait chargé.
+ * Un vert qui ne prouvait rien.
+ *
+ * Les `launchOptions`, elles, sont portées par le **navigateur** : tout contexte
+ * en hérite, y compris ceux qu'un test fabrique. On y épingle donc la clé
+ * publique de ce certificat-ci, et non `--ignore-certificate-errors` qui
+ * accepterait n'importe lequel. Le run reste hors ligne par
+ * `--host-resolver-rules` dans les deux cas ; dire *ce* certificat plutôt que
+ * *n'importe lequel* coûte une commande `openssl` et une variable.
+ */
+const tlsSpki = process.env.E2E_TLS_SPKI
+
+/**
+ * Arguments passés au navigateur.
+ *
+ * La règle de résolution est ce qui garde le run **hors ligne** : sans elle, les
+ * requêtes qu'aucun `page.route()` n'intercepte partiraient vers la vraie démo
+ * publique, et la suite éprouverait le front de ce dépôt contre les données de
+ * quelqu'un d'autre — en les modifiant.
+ *
+ * L'épinglage n'est ajouté que s'il est fourni : lancé hors de `test-e2e.sh`, le
+ * navigateur n'a aucun certificat jetable à accepter, et un drapeau portant une
+ * empreinte vide n'épinglerait rien tout en ayant l'air de le faire.
+ *
+ * Son absence est en revanche **annoncée**. Le défaut à éviter ici n'est pas la
+ * conditionnalité — hors du script, il n'existe aucune empreinte à épingler —
+ * mais qu'un run dégradé ressemble à un run complet. C'est exactement le mode
+ * d'échec que l'épinglage corrige : une suite verte sur des pages qui n'ont rien
+ * chargé. Un run sans empreinte reste possible (`--list`, `verify-e2e-gate.sh`),
+ * il ne doit simplement pas passer pour l'autre.
+ */
+const browserArgs = [`--host-resolver-rules=MAP ${mockedApiHost} 127.0.0.1:${tlsPort}`]
+if (tlsSpki) {
+  browserArgs.push(`--ignore-certificate-errors-spki-list=${tlsSpki}`)
+} else {
+  console.warn(
+    [
+      '[e2e] E2E_TLS_SPKI absent : aucun épinglage de certificat pour ce run.',
+      '      Les contextes qu’un test fabrique lui-même (browser.newContext) ne',
+      '      feront confiance à aucun certificat jetable : leurs appels d’API',
+      '      échoueront en erreur TLS, et leurs assertions peuvent passer au vert',
+      '      sur une page qui n’a rien chargé.',
+      '      Pour un run complet : bash scripts/test-e2e.sh',
+    ].join('\n')
+  )
+}
+
 export default defineConfig({
   ...baseConfig,
 
@@ -34,6 +111,24 @@ export default defineConfig({
   use: {
     ...baseConfig.use,
     baseURL: `http://localhost:${webPort}`,
+
+    // Le certificat du terminateur est auto-signé et jetable (ADR 019). Cette
+    // option ne touche **aucune** assertion : elle dit au navigateur de test
+    // d'accepter un certificat qu'il est le seul à voir, et qui n'existe que le
+    // temps du run. Sans elle, chaque appel du front finirait en erreur TLS —
+    // un échec qui ne parlerait pas de conformité.
+    //
+    // Elle reste, et l'épinglage `launchOptions` ne la remplace pas. Ce ne sont
+    // pas deux politiques concurrentes sur la même surface, mais deux **piles
+    // TLS** : un drapeau de lancement est appliqué par Chromium, alors que la
+    // fixture `request` de Playwright (`APIRequestContext`) négocie le sien dans
+    // Node — hors d'atteinte de tout drapeau du navigateur. `health.spec.ts` s'en
+    // sert pour un appel `https` direct. Retirer cette option laisserait donc
+    // cette pile-là au magasin de certificats du système, où le certificat
+    // jetable n'est justement jamais installé.
+    ignoreHTTPSErrors: true,
+
+    launchOptions: { args: browserArgs },
   },
 
   // `list` pour que l'échec soit lisible dans les logs d'un job de CI sans

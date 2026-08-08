@@ -60,8 +60,28 @@ export const TOKEN_STORAGE_KEY = 'jwtToken'
  * Depuis l'ADR 014, `pending` n'est plus quasi instantané — il dure le temps
  * d'une requête. La distinction n'est donc plus une précaution : c'est l'état
  * dans lequel une page authentifiée se trouve réellement à chaque chargement.
+ *
+ * `unavailable` est la seconde distinction du même ordre (REQ-WEB-016) : un
+ * jeton conservé mais **invérifiable** n'est pas une absence de session. Sans cet
+ * état, une API en rade se lit à l'écran comme une déconnexion, et l'utilisateur
+ * se reconnecte pour rien — le formulaire échouera aussi.
  */
-type SessionStatus = 'pending' | 'anonymous' | 'authenticated'
+export type SessionStatus = 'pending' | 'anonymous' | 'authenticated' | 'unavailable'
+
+/**
+ * Une requête relative au lecteur (`following`, `favorited`…) peut-elle partir
+ * (REQ-WEB-005 AC-7) ?
+ *
+ * `pending` est le seul état où l'on ignore encore quel jeton envoyer :
+ * `anonymous`, `authenticated` et `unavailable` sont trois réponses, chacune
+ * avec un jeton à envoyer ou non déjà tranché. `ArticleView` et `ProfileView`
+ * gardaient chacun sa propre copie de ce prédicat — deux endroits qu'un futur
+ * cinquième statut aurait dû faire évoluer de concert, sans qu'aucun test ne
+ * le rappelle. Exportée pour qu'il n'y en ait plus qu'un.
+ */
+export function isReaderScopedQueryEnabled(status: SessionStatus): boolean {
+  return status !== 'pending'
+}
 
 /** Noms d'états du contrat de débogage E2E (REQ-WEB-007 AC-7). */
 type DebugAuthState = 'authenticated' | 'unauthenticated' | 'unavailable' | 'loading'
@@ -91,14 +111,53 @@ const DEBUG_STATES: Record<SessionStatus, DebugAuthState> = {
   pending: 'loading',
   anonymous: 'unauthenticated',
   authenticated: 'authenticated',
+  unavailable: 'unavailable',
 }
+
+/**
+ * Délai entre deux tentatives de réhydratation en mode indisponible
+ * (REQ-WEB-016 AC-6).
+ *
+ * Exporté pour que les tests décrivent la reprise sans attendre réellement cinq
+ * secondes — et surtout sans recopier la valeur, ce qui ferait passer une suite
+ * verte au premier changement de délai.
+ *
+ * Cinq secondes : assez long pour ne pas marteler une API déjà en difficulté,
+ * assez court pour qu'un utilisateur resté sur la page voie sa session revenir
+ * sans penser à recharger.
+ */
+export const RECONNECT_DELAY_MS = 5_000
+
+/**
+ * Délai maximal accordé à la réhydratation avant de la traiter comme une panne
+ * (REQ-WEB-016 AC-2, étendu).
+ *
+ * AC-2 couvre déjà « aucune réponse » quand `fetch` **rejette** sans attendre —
+ * panne de transport. Ce qu'il ne couvrait pas est la requête qui ne se termine
+ * **jamais**, ni par un succès ni par un rejet : une connexion ouverte que le
+ * serveur ne referme pas. Tant que `pending` ne gardait que la barre de
+ * navigation (REQ-WEB-016 AC-4), l'écart restait cosmétique. Depuis
+ * REQ-WEB-005 AC-7, `pending` retarde aussi `ArticleView` et `ProfileView` —
+ * du contenu **public**, sans rapport avec le lecteur — et une requête qui pend
+ * l'y bloquerait indéfiniment. La borne referme cet écart en traitant
+ * l'absence de réponse comme l'absence de réponse, quelle qu'en soit la cause.
+ */
+export const REHYDRATION_TIMEOUT_MS = 8_000
 
 interface SessionState {
   /** Compte courant, ou `null` si anonyme **ou** si la session n'est pas encore résolue. */
   readonly user: User | null
-  /** Jeton courant, ou `null`. Dérivé de `user`, jamais porté séparément. */
+  /**
+   * Jeton courant, ou `null`.
+   *
+   * Il survit à `user` dans un seul cas — le mode indisponible, où le jeton est
+   * conservé sans que le compte ait pu être résolu (REQ-WEB-016).
+   */
   readonly token: string | null
-  /** Distingue « pas encore résolu » de « anonyme ». À interroger avant toute redirection. */
+  /**
+   * Distingue « pas encore résolu », « anonyme » et « invérifiable ». À
+   * interroger avant toute redirection : `user === null` recouvre les trois.
+   */
   readonly status: SessionStatus
   /** Ouvre la session à partir de la réponse `User` d'une connexion ou d'une inscription. */
   signIn(user: User): void
@@ -157,10 +216,32 @@ export interface SessionProviderProps {
   fetchCurrentUser?(token: string): Promise<User>
 }
 
-/** Ce que le fournisseur détient : le compte, et le fait qu'il soit résolu. */
-interface ResolvedSession {
+/**
+ * Ce que le fournisseur détient : le compte, et où en est sa résolution.
+ *
+ * Le drapeau `resolved` qui tenait ce rôle ne savait dire que « résolu / pas
+ * encore », donc il ne pouvait pas porter un troisième cas — le jeton conservé
+ * qu'on n'a pas pu vérifier. Un statut explicite le peut, et il évite surtout de
+ * dériver l'état d'une combinaison (`resolved && !user`) que chaque lecteur
+ * aurait recalculée à sa façon.
+ */
+interface SessionSnapshot {
   readonly user: User | null
-  readonly resolved: boolean
+  readonly status: SessionStatus
+  /**
+   * Jeton courant.
+   *
+   * Porté par l'instantané plutôt que dérivé de `user`, parce que le mode
+   * indisponible est exactement le cas où les deux divergent : un jeton
+   * conservé, aucun compte résolu. Le déduire de `user` rendrait `getToken()`
+   * nul là où le contrat de débogage attend la valeur conservée — c'est ce que
+   * la suite e2e interroge pour distinguer « conservé » de « purgé ».
+   *
+   * Il n'est jamais relu depuis le stockage pendant un rendu : chaque
+   * transition le pose, ce qui garde la lecture du stockage confinée à l'effet
+   * de réhydratation (REQ-WEB-002 AC-5).
+   */
+  readonly token: string | null
 }
 
 /**
@@ -173,7 +254,11 @@ interface ResolvedSession {
 function useSessionState() {
   // Toujours anonyme et non résolu au premier rendu — donc identique au rendu
   // serveur, qui ne connaît pas le stockage.
-  const [session, setSession] = useState<ResolvedSession>({ user: null, resolved: false })
+  const [session, setSession] = useState<SessionSnapshot>({
+    user: null,
+    status: 'pending',
+    token: null,
+  })
   const generation = useRef(0)
 
   const signIn = useCallback((next: User) => {
@@ -182,24 +267,42 @@ function useSessionState() {
     // c'est aussi la seule donnée du compte qui ait besoin de survivre à la
     // visite (ADR 014).
     writeStoredToken(next.token)
-    // `resolved: true` n'est pas décoratif : sans lui, une connexion survenue
+    // Le statut est posé explicitement : sans lui, une connexion survenue
     // pendant une réhydratation en vol laisserait l'état à « pas encore
     // résolu », et toute page qui attend `authenticated` resterait bloquée
     // alors que l'utilisateur vient de s'authentifier.
-    setSession({ user: next, resolved: true })
+    setSession({ user: next, status: 'authenticated', token: next.token })
   }, [])
 
   const signOut = useCallback(() => {
     generation.current += 1
     clearStoredToken()
-    setSession({ user: null, resolved: true })
+    setSession({ user: null, status: 'anonymous', token: null })
   }, [])
 
   return { session, setSession, generation, signIn, signOut }
 }
 
 /**
- * Réhydrate la session au démarrage (REQ-WEB-002 AC-2, AC-6, AC-7).
+ * Un échec de réhydratation est-il un **verdict sur le jeton** ?
+ *
+ * La frontière est la classe du statut, et elle est mécanique : l'API a répondu
+ * 4xx, donc elle a examiné la requête que ce jeton a permis d'émettre et l'a
+ * refusée — 401 parce qu'il est invalide, 403 parce qu'il ne donne pas ce droit,
+ * 404 parce que le compte n'existe plus. Aucune de ces réponses ne deviendra
+ * vraie en réessayant.
+ *
+ * Tout le reste — 5xx, absence de réponse, corps illisible — ne dit rien du
+ * jeton. Un corps illisible est le cas le plus trompeur : il arrive avec un
+ * **200**, donc l'API n'a rien refusé du tout (REQ-WEB-016 AC-3).
+ */
+function isTokenVerdict(error: unknown): boolean {
+  return error instanceof ApiError && error.status >= 400 && error.status < 500
+}
+
+/**
+ * Réhydrate la session au démarrage, et reprend tant qu'elle reste indisponible
+ * (REQ-WEB-002 AC-2, AC-6, AC-7 ; REQ-WEB-016).
  *
  * Extrait du fournisseur pour deux raisons : il dépassait le seuil de la
  * rule 17, et cet effet est la seule partie du fichier qui parle au réseau.
@@ -211,7 +314,9 @@ function useSessionState() {
  * est en vol. Sans ce compteur, la réponse tardive réappliquerait l'ancien
  * compte et réécrirait l'ancien jeton par-dessus le nouveau — une session
  * fraîchement ouverte disparaîtrait, ou une déconnexion serait ressuscitée,
- * dans les deux cas sans la moindre erreur.
+ * dans les deux cas sans la moindre erreur. La reprise périodique rendrait ce
+ * défaut permanent au lieu de fugace : elle est donc soumise au même contrôle,
+ * avant chaque nouvelle tentative comme après chaque réponse.
  */
 function useRehydration(
   fetchCurrentUser: (token: string) => Promise<User>,
@@ -230,45 +335,116 @@ function useRehydration(
       // Aucun jeton : inutile d'interroger l'API, elle ne pourrait que refuser.
       // C'est le cas du premier écran d'un visiteur anonyme, celui qu'on ne
       // veut surtout pas ralentir d'un aller-retour.
-      setSession((current) => ({ ...current, resolved: true }))
+      setSession({ user: null, status: 'anonymous', token: null })
       return
     }
 
-    const startedAt = generation.current
-    let cancelled = false
-    /** Démonté, ou doublé par une connexion/déconnexion entre-temps. */
-    const isStale = () => cancelled || generation.current !== startedAt
+    return runRehydration({
+      token,
+      fetchCurrentUser: (current) => fetchRef.current(current),
+      setSession,
+      generation,
+    })
+  }, [setSession, generation])
+}
 
-    fetchRef.current(token).then(
-      (current) => {
-        if (isStale()) {
-          return
-        }
-        // Le jeton retenu est celui de la **réponse**, pas celui du stockage :
-        // l'API est libre d'en émettre un neuf, et conserver l'ancien ferait
-        // expirer la session sans raison visible.
-        writeStoredToken(current.token)
-        setSession({ user: current, resolved: true })
+/**
+ * Borne une promesse dans le temps, sans annuler l'appel sous-jacent.
+ *
+ * `fetch` n'expose pas de délai par défaut, et ce module n'a aucune raison
+ * d'ajouter un `AbortController` au client API partagé pour un seul appelant :
+ * la requête réelle peut continuer en arrière-plan, elle sera ignorée si elle
+ * répond après coup — exactement ce que `isStale()` fait déjà pour une réponse
+ * tardive ordinaire. Rejeter avec une erreur simple (non `ApiError`) suffit :
+ * `isTokenVerdict` la classe alors comme la panne qu'elle est.
+ */
+function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error(`sans réponse après ${ms}ms`)), ms)
+    promise.then(
+      (value) => {
+        clearTimeout(timer)
+        resolve(value)
       },
-      (error: unknown) => {
-        if (isStale()) {
-          return
-        }
-        // Seul un 401 est un **verdict sur le jeton**. Une panne réseau ou un
-        // 500 n'en sont pas : purger sur ces signaux transformerait une coupure
-        // de trente secondes en déconnexion de tous les visiteurs
-        // (REQ-WEB-002 AC-6 et AC-7).
-        if (error instanceof ApiError && error.status === 401) {
-          clearStoredToken()
-        }
-        setSession({ user: null, resolved: true })
+      (error) => {
+        clearTimeout(timer)
+        reject(error)
       }
     )
+  })
+}
 
-    return () => {
-      cancelled = true
+/**
+ * Boucle de réhydratation : une tentative, puis une reprise tant que la session
+ * reste indisponible. Rend la fonction d'annulation attendue par `useEffect`.
+ *
+ * Sortie du hook parce qu'elle ne dépend d'aucun état de React — seulement d'un
+ * jeton, d'un moyen d'appeler l'API et d'un moyen de publier le résultat. Le
+ * hook garde ainsi la seule chose qui lui revient : décider s'il y a lieu
+ * d'appeler.
+ */
+function runRehydration({
+  token,
+  fetchCurrentUser,
+  setSession,
+  generation,
+}: {
+  token: string
+  fetchCurrentUser: (token: string) => Promise<User>
+  setSession: ReturnType<typeof useSessionState>['setSession']
+  generation: ReturnType<typeof useSessionState>['generation']
+}): () => void {
+  const startedAt = generation.current
+  let cancelled = false
+  let retry: ReturnType<typeof setTimeout> | undefined
+  /** Démonté, ou doublé par une connexion/déconnexion entre-temps. */
+  const isStale = () => cancelled || generation.current !== startedAt
+
+  const onResolved = (current: User): void => {
+    if (isStale()) {
+      return
     }
-  }, [setSession, generation])
+    // Le jeton retenu est celui de la **réponse**, pas celui du stockage :
+    // l'API est libre d'en émettre un neuf, et conserver l'ancien ferait
+    // expirer la session sans raison visible.
+    writeStoredToken(current.token)
+    setSession({ user: current, status: 'authenticated', token: current.token })
+  }
+
+  const onRejected = (error: unknown): void => {
+    if (isStale()) {
+      return
+    }
+
+    if (isTokenVerdict(error)) {
+      clearStoredToken()
+      setSession({ user: null, status: 'anonymous', token: null })
+      return
+    }
+
+    // Rien n'est purgé : le jeton reste disponible pour la tentative suivante
+    // comme pour un rechargement manuel (REQ-WEB-016 AC-7), et il reste exposé
+    // — un outil externe doit pouvoir constater qu'il a été conservé, et une
+    // requête cliente n'a aucune raison de partir anonyme alors qu'on en
+    // dispose.
+    setSession({ user: null, status: 'unavailable', token })
+    retry = setTimeout(() => {
+      if (!isStale()) {
+        attempt()
+      }
+    }, RECONNECT_DELAY_MS)
+  }
+
+  const attempt = (): void => {
+    withTimeout(fetchCurrentUser(token), REHYDRATION_TIMEOUT_MS).then(onResolved, onRejected)
+  }
+
+  attempt()
+
+  return () => {
+    cancelled = true
+    clearTimeout(retry)
+  }
 }
 
 export function SessionProvider({
@@ -276,14 +452,14 @@ export function SessionProvider({
   fetchCurrentUser = fetchCurrentUserWithToken,
 }: SessionProviderProps) {
   const { session, setSession, generation, signIn, signOut } = useSessionState()
-  const { user, resolved } = session
+  const { user, status, token } = session
 
   useRehydration(fetchCurrentUser, { setSession, generation })
 
-  const value = useMemo<SessionState>(() => {
-    const status: SessionStatus = !resolved ? 'pending' : user ? 'authenticated' : 'anonymous'
-    return { user, token: user?.token ?? null, status, signIn, signOut }
-  }, [user, resolved, signIn, signOut])
+  const value = useMemo<SessionState>(
+    () => ({ user, token, status, signIn, signOut }),
+    [user, token, status, signIn, signOut]
+  )
 
   useDebugInterface(value)
 
@@ -306,7 +482,13 @@ function useDebugInterface(session: SessionState) {
 
   useEffect(() => {
     window.__conduit_debug__ = {
-      getToken: () => sessionRef.current.token,
+      // Le **stockage**, pas l'instantané de session. Les deux coïncident sauf
+      // pendant la fenêtre de réhydratation, où la session n'a pas encore résolu
+      // son jeton alors qu'il est bien conservé : un outil externe qui interroge
+      // à ce moment-là lirait `null` et conclurait à une purge. C'est ce qui
+      // rendait instable le test amont qui recharge la page puis lit le jeton —
+      // vert ou rouge selon la vitesse du poste.
+      getToken: () => readStoredToken(),
       getAuthState: () => DEBUG_STATES[sessionRef.current.status],
       getCurrentUser: () => sessionRef.current.user,
     }
