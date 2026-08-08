@@ -18,10 +18,13 @@
 #
 # Ce que ce script vérifie n'est donc pas que `parseEnv` sait refuser — `env.spec.ts`
 # le fait déjà, et le faisait pendant que le défaut était en place. C'est que **le
-# process réel s'arrête**, ce qui est une propriété du point d'entrée et de rien
-# d'autre. La phase 5 le dit explicitement en soumettant au même harnais un point
-# d'entrée qui reproduit l'ancien ordre : il doit démarrer, sans quoi le harnais ne
-# distingue pas le défaut de sa correction.
+# process réel s'arrête**, et surtout qu'il s'arrête **avant d'avoir chargé le
+# moindre module applicatif** : une propriété du point d'entrée, et de rien d'autre.
+#
+# Ce dernier point est formulé sur l'ordre et non sur le rattrapage par `.env`,
+# parce que le rattrapage s'est révélé dépendre de la plateforme (voir la sonde
+# plus bas) alors que l'ordre, lui, est le même partout — et que c'est l'ordre
+# que l'ADR 025 décide.
 #
 # Lancé en pre-push (lefthook) et dans le job CI `Quality`. Item B1 du plan.
 #
@@ -122,6 +125,44 @@ EOF
 # exécutable dans le job `Quality` qui n'en a pas.
 MARKER_REFUSED="Configuration d'environnement invalide"
 MARKER_PAST_GATE="Starting Nest application"
+MARKER_GRAPH_LOADED="SONDE: graphe applicatif chargé"
+
+# --- Sonde de chargement du graphe --------------------------------------------
+#
+# Préchargée dans chaque démarrage, elle annonce la première fois que le graphe
+# applicatif est requis. C'est ce qui rend les phases 4 et 5 **indépendantes de
+# la plateforme**.
+#
+# La première version de ces deux phases observait autre chose : le rattrapage
+# d'une variable absente par le `.env` que `@prisma/client` charge au `require`.
+# Ce comportement est réel — `dotenv` 16.5.0 est empaqueté dans son runtime, et
+# un `require('@prisma/client')` seul suffit à repeupler `DATABASE_URL` sur le
+# poste de développement — mais il **ne s'est pas produit sur le runner Linux**
+# de la CI, où le même point d'entrée à import statique s'est vu refuser sa
+# configuration. Un contrôle dont la prémisse dépend du comportement implicite
+# d'une dépendance tierce, et qui diffère d'un environnement à l'autre, est un
+# contrôle qui finira supprimé pour cause de bruit.
+#
+# La sonde observe donc l'invariant que l'ADR 025 décide réellement, et qui ne
+# dépend ni de `.env`, ni de Prisma, ni du système : **une configuration
+# invalide ne doit charger aucun module applicatif.** Que ce graphe ait ou non
+# des effets de bord sur `process.env` est précisément ce qu'on refuse d'avoir à
+# savoir.
+PROBE="$SANDBOX/probe-graph-load.cjs"
+cat > "$PROBE" <<'EOF'
+// Préchargée par --require. Annonce le premier chargement d'un module du graphe
+// applicatif, sans rien modifier d'autre au comportement du process.
+const Module = require('node:module')
+const originalLoad = Module._load
+let announced = false
+Module._load = function (request, ...rest) {
+  if (!announced && /app\.module/.test(request)) {
+    announced = true
+    console.log('SONDE: graphe applicatif chargé')
+  }
+  return originalLoad.call(this, request, ...rest)
+}
+EOF
 
 LAST_OUTPUT=""
 BOOT_STATUS=0
@@ -140,7 +181,8 @@ boot() {
     env -u DATABASE_URL -u JWT_SECRET -u JWT_EXPIRES_IN -u CORS_ORIGIN -u PORT \
         TS_NODE_TRANSPILE_ONLY=true \
         "$@" \
-        node --require ts-node/register --require tsconfig-paths/register "$entrypoint"
+        node --require "$PROBE" \
+             --require ts-node/register --require tsconfig-paths/register "$entrypoint"
   ) > "$logfile" 2>&1 &
   pid=$!
 
@@ -267,41 +309,50 @@ echo "phase 3 — contrôle positif : une configuration complète est acceptée"
 expect_gate_passed "configuration complète" "$ENTRYPOINT" \
   DATABASE_URL="$VALID_DB_URL" JWT_SECRET="$VALID_JWT_SECRET" PORT="$TEST_PORT"
 
-# it AC-4: un fichier .env présent ne rattrape pas une variable absente
+# it AC-4: une configuration invalide ne charge aucun module applicatif
 #
-# LE critère de cette exigence. Un `.env` sur le disque est chargé dans
-# `process.env` par `@prisma/client` au `require`, donc par un effet de bord
-# d'import que personne n'a écrit dans ce dépôt et que rien ne rend visible à la
-# lecture de `main.ts`. Tant que la validation s'exécutait après ce chargement,
-# une image de production embarquant un `.env` par accident démarrait avec les
-# valeurs du fichier au lieu de celles injectées par la plateforme — et la
-# variable oubliée par l'opérateur ne faisait rougir personne.
+# LE critère de cette exigence, et le seul qui porte sur l'ordre plutôt que sur
+# le verdict. Tant que la validation s'exécutait après le chargement du graphe,
+# tout effet de bord de ce graphe sur `process.env` la précédait — celui de
+# `@prisma/client`, qui charge `.env`, mais aussi bien n'importe quel autre
+# introduit un jour par une dépendance transitive.
 #
-# `dotenv` n'écrase pas une variable déjà posée : le risque n'est donc pas qu'un
-# `.env` remplace une valeur légitime, mais qu'il **comble un trou** que le
-# fail-fast avait pour seul rôle de signaler.
-echo "phase 4 — un fichier .env ne peut pas rattraper une variable absente"
+# C'est pourquoi le critère est écrit en négatif : on n'exige pas de connaître
+# ces effets de bord, on exige qu'aucun n'ait la possibilité de se produire. Un
+# `.env` est posé sur le disque pendant cette phase parce que c'est la condition
+# réaliste — un poste de développement en a un, une image mal construite aussi —
+# et parce que `dotenv` n'écrase pas une variable déjà posée : le risque n'est
+# pas qu'un fichier remplace une valeur légitime, mais qu'il **comble un trou**
+# que le fail-fast avait pour seul rôle de signaler.
+echo "phase 4 — une configuration invalide ne charge aucun module applicatif"
 write_dotenv_fixture
-if grep -qF 'DATABASE_URL=' "$DOTENV" 2>/dev/null; then
-  expect_refusal "DATABASE_URL absente malgré un .env qui la définit" "DATABASE_URL" \
-    JWT_SECRET="$VALID_JWT_SECRET"
-else
+if ! grep -qF 'DATABASE_URL=' "$DOTENV" 2>/dev/null; then
   echo "  ECHEC : la fixture .env n'a pas été écrite, la phase ne prouve rien"
   FAILURES=$((FAILURES + 1))
+else
+  expect_refusal "DATABASE_URL absente malgré un .env qui la définit" "DATABASE_URL" \
+    JWT_SECRET="$VALID_JWT_SECRET"
+  if printf '%s' "$LAST_OUTPUT" | grep -qF "$MARKER_GRAPH_LOADED"; then
+    echo "  ECHEC : le graphe applicatif a été chargé malgré une configuration invalide"
+    FAILURES=$((FAILURES + 1))
+  else
+    echo "  ok : la sonde est restée muette — aucun module applicatif n'a été chargé"
+  fi
 fi
 
-# it AC-5: le harnais sait distinguer un point d'entrée qui valide d'un qui ne valide pas
+# it AC-5: la sonde distingue l'ancien ordre du nouveau
 #
-# Contrôle négatif. Sans lui, un `boot()` qui rendrait toujours « arrêté » — chemin
-# faux, `node` introuvable, `cd` en échec — afficherait « ok » sur toutes les
-# phases de rejet, et cette vérification deviendrait le garde-fou fantôme qu'elle
-# est censée empêcher.
+# Contrôle négatif. Sans lui, une sonde cassée — expression fausse, préchargement
+# ignoré, `Module._load` non atteint — resterait muette en toutes circonstances
+# et la phase 4 afficherait « ok » pour la pire des raisons : elle ne mesurerait
+# plus rien.
 #
-# Le point d'entrée soumis ici reproduit **l'ordre exact du défaut du 2026-08-08** :
-# le graphe de modules est chargé d'abord, la validation ensuite. S'il ne démarre
-# pas, c'est que le harnais conclut sur autre chose que le comportement réel, et
-# les quatre phases précédentes ne prouvent rien.
-echo "phase 5 — contrôle négatif : l'ancien ordre d'exécution doit être vu démarrer"
+# Le point d'entrée soumis ici reproduit **l'ordre exact du défaut du 2026-08-08**,
+# sur la même configuration amputée qu'en phase 4. Son import statique charge le
+# graphe avant toute instruction, donc la sonde DOIT parler. Si elle se taisait,
+# les deux phases seraient d'accord pour une raison qui n'a rien à voir avec
+# l'invariant qu'elles prétendent vérifier.
+echo "phase 5 — contrôle négatif : l'ancien ordre doit faire parler la sonde"
 # Le point d'entrée régressé doit vivre dans `src/` : ses imports sont relatifs au
 # graphe applicatif. Il est écrit à l'exécution et retiré aussitôt la phase
 # terminée, y compris en cas d'échec (trap) — le laisser traînerait un second
@@ -328,12 +379,22 @@ async function bootstrap(): Promise<void> {
 void bootstrap()
 EOF
 # Même environnement amputé qu'en phase 4 — `DATABASE_URL` absente, `.env`
-# présent. Le point d'entrée régressé doit **franchir** la porte : c'est le `.env`
-# chargé par `@prisma/client` avant la validation qui comble le trou. S'il était
-# refusé lui aussi, c'est que le refus viendrait d'autre chose que de l'ordre, et
-# la phase 4 ne prouverait pas ce qu'elle annonce.
-expect_gate_passed "ancien ordre, DATABASE_URL absente mais .env présent" \
-  "$REGRESSED_IN_SRC" JWT_SECRET="$VALID_JWT_SECRET" PORT="$TEST_PORT"
+# présent. Seul l'ordre change.
+#
+# On n'assertionne **pas** le verdict de configuration : selon que le graphe
+# repeuple ou non `process.env` au chargement, l'ancien ordre démarre (poste de
+# développement) ou se fait refuser (runner Linux de la CI). C'est précisément
+# cette variabilité qui a fait rougir la première version de cette phase, et
+# c'est aussi la meilleure illustration de pourquoi l'invariant se formule sur
+# l'ordre : le chargement du graphe, lui, est certain dans les deux cas.
+boot "$REGRESSED_IN_SRC" JWT_SECRET="$VALID_JWT_SECRET" PORT="$TEST_PORT"
+if printf '%s' "$LAST_OUTPUT" | grep -qF "$MARKER_GRAPH_LOADED"; then
+  echo "  ok : la sonde voit l'ancien ordre charger le graphe avant de valider"
+else
+  echo "  ECHEC : la sonde est muette sur un point d'entrée qui charge pourtant le graphe en premier"
+  printf '%s\n' "$LAST_OUTPUT" | tail -3
+  FAILURES=$((FAILURES + 1))
+fi
 rm -f "$REGRESSED_IN_SRC"
 
 echo
@@ -341,4 +402,4 @@ if [ "$FAILURES" -ne 0 ]; then
   echo "ECHEC : $FAILURES cas en défaut — le fail-fast de configuration ne tient pas ses promesses." >&2
   exit 1
 fi
-echo "ok: l'API refuse de démarrer sans configuration valide, y compris quand un .env pourrait la fournir."
+echo "ok: l'API refuse de démarrer sans configuration valide, et ne charge aucun module applicatif avant de l'avoir validée."

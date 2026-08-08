@@ -36,13 +36,26 @@ précédents, à un commit d'intervalle de la leçon qui le décrit. Corrigé en
 déclarant `verify:env-fail-fast` dans le graphe turbo (`^build`, `db:generate`),
 jamais en ajoutant une étape au job.
 
+**Et une quatrième panne, la plus instructive.** Le critère central du canary
+observait d'abord le rattrapage lui-même : variable absente, `.env` présent, donc
+démarrage attendu sous l'ancien ordre. Vrai sur le poste (macOS, Node 25), **faux
+sur le runner Linux**, où le même point d'entrée s'est vu refuser sa
+configuration — écart non élucidé. Un contrôle dont la prémisse est le
+comportement implicite d'une dépendance tierce hérite de sa variabilité.
+Reformulé sur l'ordre — « aucun module applicatif chargé avant validation »,
+constaté par une sonde sur `Module._load` — il devient identique partout, et
+couvre au passage les effets de bord qu'une dépendance introduira demain.
+
 **Règle à appliquer.** Un garde-fou « constaté à la main une fois » n'est pas
 vérifié : il est vérifié le jour où un script le met en échec **et** sait
-démontrer qu'il sait le voir réussir. Corollaire opératoire pour tout canary qui
-dépend d'un fichier d'environnement : la vérification doit **écarter le fichier
-du poste et écrire sa propre fixture**, sinon elle mesure la machine de celui qui
-la lance et non la propriété. Ici, les phases de rejet tournent sans aucun
-`.env`, et la phase qui teste le rattrapage écrit le sien.
+démontrer qu'il sait le voir réussir. Deux corollaires opératoires. (1) Tout
+canary qui dépend d'un fichier d'environnement doit **écarter celui du poste et
+écrire sa propre fixture**, sinon il mesure la machine de celui qui le lance.
+(2) **Formuler l'invariant sur ce qu'on décide, pas sur le symptôme observé.**
+Le symptôme (un `.env` rattrape une variable) appartient à une dépendance et
+varie ; la décision (valider avant de charger quoi que ce soit) est à nous et ne
+varie pas. Un critère écrit sur le symptôme est vrai là où on l'a écrit et
+ailleurs on ne sait pas.
 
 ---
 

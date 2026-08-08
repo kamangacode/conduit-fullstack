@@ -20,13 +20,13 @@ acceptance_criteria:
     when: "le point d'entrée est démarré"
     then: "la porte de configuration est franchie et l'amorçage se poursuit — sans ce contrôle positif, un garde-fou qui refuse tout satisferait tous les autres critères"
   - id: AC-4
-    given: "un fichier `.env` présent sur le disque qui définit la variable manquante"
-    when: "le point d'entrée est démarré sans cette variable dans son environnement"
-    then: "le démarrage est refusé quand même : le fichier ne peut pas combler le trou que le fail-fast a pour rôle de signaler"
+    given: "une configuration invalide, et un fichier `.env` présent sur le disque qui définirait la variable manquante"
+    when: "le point d'entrée est démarré"
+    then: "le démarrage est refusé **et aucun module applicatif n'est chargé** — critère écrit en négatif pour ne dépendre d'aucun effet de bord particulier : on n'exige pas de les connaître, on exige qu'aucun n'ait la possibilité de se produire"
   - id: AC-5
     given: "un point d'entrée reproduisant l'ordre d'exécution antérieur — graphe applicatif importé statiquement, validation ensuite"
     when: "il est soumis au même harnais dans les conditions d'AC-4"
-    then: "il est vu franchir la porte, ce qui prouve que le harnais distingue le défaut de sa correction — sans quoi les quatre critères précédents ne prouveraient rien"
+    then: "la sonde de chargement le voit charger le graphe avant de valider, ce qui prouve qu'une sonde muette en AC-4 est un fait et non une panne de sonde"
 implementation:
   files:
     - apps/api/src/main.ts
@@ -125,8 +125,25 @@ de le hisser au-dessus des instructions qui le précèdent. L'ordre est donc une
 propriété que le compilateur préserve, pas une coïncidence à revérifier.
 
 AC-5 est le contrôle du contrôle. Le point d'entrée qu'il soumet reproduit
-l'ordre exact du défaut et **doit être vu démarrer**. S'il était refusé lui
-aussi, le refus viendrait d'autre chose que de l'ordre, et AC-4 ne prouverait pas
-ce qu'il annonce. Le dépôt a déjà payé deux fois l'absence d'un tel contrôle : un
-faux « ok » de `grep` en E3, et un plugin GritQL en erreur rapporté avec un code
-de sortie 0 en B6.
+l'ordre exact du défaut, et sa sonde **doit parler**. Sans lui, une sonde cassée
+resterait muette en toutes circonstances et AC-4 afficherait « ok » pour la pire
+des raisons : il ne mesurerait plus rien. Le dépôt a déjà payé deux fois
+l'absence d'un tel contrôle — un faux « ok » de `grep` en E3, et un plugin GritQL
+en erreur rapporté avec un code de sortie 0 en B6.
+
+**Pourquoi ces deux critères portent sur l'ordre et non sur le `.env`.** Ils
+observaient d'abord le rattrapage lui-même : variable absente, `.env` présent,
+donc démarrage attendu sous l'ancien ordre. Ce comportement est réel et mesuré —
+`dotenv` 16.5.0 est empaqueté dans le runtime de `@prisma/client`, et un
+`require('@prisma/client')` seul suffit à repeupler `DATABASE_URL` sur le poste
+de développement. Mais **il ne s'est pas reproduit sur le runner Linux de la
+CI**, où le même point d'entrée s'est vu refuser sa configuration. Une prémisse
+qui dépend du comportement implicite d'une dépendance tierce, et qui varie d'un
+environnement à l'autre, ne fait pas un bon contrôle : elle fait un contrôle
+qu'on finit par supprimer pour cause de bruit.
+
+La reformulation ne réduit pas la portée, elle l'élargit. L'invariant tenu n'est
+plus « le `.env` de Prisma ne rattrape rien » mais « **aucun module applicatif
+n'est chargé avant que la configuration ne soit validée** » — ce qui couvre
+l'effet de bord de Prisma, ceux qu'une dépendance transitive introduira demain,
+et dispense d'avoir à les inventorier.

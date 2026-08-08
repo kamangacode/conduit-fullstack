@@ -46,6 +46,18 @@ fail-fast a pour seul rôle de signaler : une image de production embarquant un
 plateforme n'a pas injectées. Le dépôt n'a aujourd'hui ni `Dockerfile` ni
 `.dockerignore`, donc rien ne s'y oppose structurellement.
 
+**Portée exacte de l'observation.** Le chargement de `.env` par
+`@prisma/client` a été mesuré sur le poste de développement (macOS, Node 25) :
+`dotenv` 16.5.0 est empaqueté dans son runtime, et un `require('@prisma/client')`
+isolé suffit à repeupler `DATABASE_URL`. Il **ne s'est pas reproduit sur le
+runner Linux** de la CI, où un point d'entrée à import statique s'est vu refuser
+la même configuration amputée. La cause de cet écart n'a pas été élucidée, et
+c'est précisément ce qui rend la décision ci-dessous nécessaire plutôt que
+facultative : le comportement d'un graphe de modules vis-à-vis de `process.env`
+est une propriété de tierces parties, variable selon l'environnement, qu'on n'a
+aucun moyen fiable de connaître à l'avance. La bonne réponse n'est pas de
+l'inventorier, c'est de valider avant qu'il ne s'exécute.
+
 ## Options Considered
 
 | Option | Trade-off |
@@ -67,12 +79,19 @@ a été vérifié module par module.
 L'ordre n'est pas laissé à la garde d'un commentaire.
 [`scripts/verify-env-fail-fast.sh`](../../scripts/verify-env-fail-fast.sh)
 démarre le point d'entrée réel sur cinq configurations invalides et exige un
-arrêt qui nomme la variable, puis — c'est le critère central — refait le test
-avec un `.env` présent sur le disque qui définirait la variable manquante. Sa
-phase 5 soumet au même harnais un point d'entrée reproduisant l'ancien ordre et
-**exige de le voir démarrer** : sans ce contrôle négatif, un harnais cassé
-afficherait « ok » partout. Le script tourne en pre-push et dans le job CI
-`Quality`.
+arrêt qui nomme la variable, puis — c'est le critère central — exige qu'une
+configuration invalide **ne charge aucun module applicatif**, constaté par une
+sonde qui annonce le premier `require` du graphe. Sa phase 5 soumet au même
+harnais un point d'entrée reproduisant l'ancien ordre et exige que la sonde y
+parle : sans ce contrôle négatif, une sonde cassée resterait muette partout et le
+critère central deviendrait un no-op vert. Le script tourne en pre-push et dans
+le job CI `Quality`.
+
+L'invariant est formulé **en négatif et sur l'ordre**, pas sur le rattrapage par
+`.env`, pour la raison exposée en contexte : le rattrapage dépend de
+l'environnement, l'ordre non. « Aucun module applicatif chargé avant validation »
+couvre l'effet de bord de Prisma, ceux qu'une dépendance transitive introduira
+demain, et dispense d'avoir à les inventorier.
 
 La vérification passe par le **graphe turbo** (`verify:env-fail-fast`, déclaré
 `dependsOn: ["^build", "db:generate"]`) et non par un appel direct : démarrer le
