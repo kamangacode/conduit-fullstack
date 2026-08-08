@@ -12,6 +12,7 @@ import request from 'supertest'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { AppModule } from '@/app.module'
 import { applyHttpConventions } from '@/interface/http-conventions'
+import { initWithContractHarness } from '../contract/contract-harness'
 
 /**
  * Le contrat HTTP de la slice F3, de bout en bout : application NestJS réelle,
@@ -35,7 +36,7 @@ beforeAll(async () => {
   const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile()
   app = moduleRef.createNestApplication()
   applyHttpConventions(app)
-  await app.init()
+  await initWithContractHarness(app)
 
   http = () => request(app.getHttpServer())
 })

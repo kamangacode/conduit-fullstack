@@ -5,6 +5,7 @@ import request from 'supertest'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { AppModule } from '@/app.module'
 import { applyHttpConventions } from '@/interface/http-conventions'
+import { initWithContractHarness } from '../contract/contract-harness'
 import { prismaTestClient } from './setup'
 
 /**
@@ -34,7 +35,7 @@ beforeAll(async () => {
   // des chemins que l'application ne sert pas — ce qui s'est produit avant que
   // le préfixe `/api` ne soit posé.
   applyHttpConventions(app)
-  await app.init()
+  await initWithContractHarness(app)
 
   http = () => request(app.getHttpServer())
 })

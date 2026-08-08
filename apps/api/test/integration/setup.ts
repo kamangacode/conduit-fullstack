@@ -1,5 +1,6 @@
 import { PrismaClient } from '@prisma/client'
-import { afterAll, beforeEach } from 'vitest'
+import { afterAll, afterEach, beforeEach } from 'vitest'
+import { drainViolations } from '../contract/contract-harness'
 
 /**
  * Amorçage de la lane d'intégration : garde de sécurité, client Prisma partagé,
@@ -63,6 +64,27 @@ export async function truncateAll(): Promise<void> {
 // d'une table vide. Purger après laisserait le débogage sans données à regarder.
 beforeEach(async () => {
   await truncateAll()
+})
+
+/**
+ * Drainage du harnais de contrat (REQ-ARCH-002, ADR 026).
+ *
+ * L'intercepteur accumule les écarts au lieu de lever : une exception jetée
+ * depuis un intercepteur deviendrait une 500, et le test échouerait sur
+ * « attendu 200, reçu 500 » — un diagnostic qui ne nomme jamais la vraie cause.
+ * Ce hook les impute au test qui les a provoqués, avec leur motif complet.
+ *
+ * Il s'applique à **toutes** les specs de la lane, y compris celles qui
+ * n'écrivent aucune assertion de contrat : c'est précisément ce qui fait de
+ * chacune, en plus de ce qu'elle testait, un test de contrat.
+ */
+afterEach(() => {
+  const violations = drainViolations()
+  if (violations.length === 0) return
+
+  throw new Error(
+    `Contrat de sortie violé pendant ce test (REQ-ARCH-002) :\n  - ${violations.join('\n  - ')}`
+  )
 })
 
 afterAll(async () => {
