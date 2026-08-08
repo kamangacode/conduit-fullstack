@@ -35,6 +35,10 @@ acceptance_criteria:
     given: "la vérification de compilation, y compris interrompue ou en échec"
     when: "elle rend la main"
     then: "le dépôt est dans son état d'origine"
+  - id: AC-8
+    given: "une enveloppe du contrat servie telle quelle au client web"
+    when: "le client la déballe pour rendre la ressource à l'appelant"
+    then: "la valeur rendue est exactement le contenu de l'enveloppe — aucun champ perdu, aucun champ ajouté, aucune valeur normalisée au passage"
 implementation:
   files:
     - apps/api/test/contract/route-contracts.ts
@@ -42,12 +46,14 @@ implementation:
     - apps/api/test/contract/contract-registry-check.ts
     - apps/api/test/contract/contract-harness.ts
     - apps/api/test/integration/setup.ts
+    - apps/web/src/lib/api-client.ts
     - turbo.json
     - lefthook.yml
     - .github/workflows/ci.yml
   tests:
     - apps/api/test/contract/contract-harness.spec.ts
     - apps/api/test/integration/contract-harness.integration.spec.ts
+    - apps/web/src/lib/api-client.contract.spec.ts
     - scripts/verify-contract-types.sh
 related:
   issues: []
@@ -113,6 +119,12 @@ aurait aucune, et rien ne l'aurait dit.
 - **La validation de sortie en production.** L'intercepteur n'est monté que par
   les tests. Le choix de ne pas parser à l'exécution, côté API comme côté front,
   est tranché par l'[ADR 026](../../../adr/026-tests-de-contrat-assertion-symetrique-et-intercepteur.md).
+- **La fidélité des fixtures du front aux réponses réelles.** AC-8 prouve que le
+  client ne déforme pas ce qu'on lui sert ; il ne prouve pas que ce qu'on lui
+  sert ressemble à ce que l'API envoie. La capture de vraies réponses, d'abord
+  annoncée par l'ADR 026, a été écartée à l'épreuve — voir son second temps daté
+  du 2026-08-08 — parce que la figer demanderait de nommer les champs volatils,
+  soit une seconde description du modèle.
 - **La conformité du contrat à la spec RealWorld**, qui relève de REQ-CONF-001
   et de la suite Hurl vendorée : cette exigence prouve que l'API respecte le
   contrat qu'elle déclare, pas que ce contrat est le bon.

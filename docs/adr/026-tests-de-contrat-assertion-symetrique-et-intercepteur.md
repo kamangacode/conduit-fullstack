@@ -135,10 +135,49 @@ un harnais qui rendrait toujours « conforme » afficherait du vert partout — 
 dépôt a déjà attrapé un faux `ok` de ce genre sur un `grep` (E3) et un plugin
 Biome mort à code de sortie 0 (ADR 024).
 
-Côté front, la vérification reste **en test** : des fixtures capturées depuis les
-réponses réelles de l'API sont rejouées contre les schémas partagés dans la lane
-web. Ce qui est prouvé est « ce que l'API envoie, le front sait le lire », sans
-rien changer au chemin de production.
+Côté front, la vérification reste **en test**, sans rien changer au chemin de
+production. Sa forme exacte a changé à l'épreuve : voir le second temps ci-dessous.
+
+### Second temps — 2026-08-08 : la capture de réponses réelles, écartée à l'épreuve
+
+Cette décision annonçait d'abord « des fixtures capturées depuis les réponses
+réelles de l'API, rejouées contre les schémas partagés dans la lane web ».
+L'implémentation a rendu une mesure qui la disqualifie.
+
+Une vraie réponse n'est jamais deux fois la même. Elle porte un **jeton signé**
+(différent à chaque signature), deux **horodatages**, et un **identifiant de
+commentaire** qui monte : la purge de la lane d'intégration passe par
+`deleteMany`, qui ne réinitialise pas la séquence PostgreSQL — donc le compteur
+repart à 1 sur la base neuve d'un runner CI et continue de grimper sur le poste
+d'un développeur. Une fixture committée serait différente à chaque exécution, et
+le contrôle de dérive censé la garder honnête rougirait en permanence sans jamais
+signaler quoi que ce soit de réel.
+
+La stabiliser demanderait de **nommer les champs volatils** quelque part. C'est
+exactement la forme que les options C et I ci-dessus écartent : une seconde
+description du modèle, à tenir alignée sur les schémas Zod, qui divergera. Tenir
+la promesse aurait donc coûté le principe au nom duquel les deux autres options
+avaient été refusées.
+
+Ce qui est livré à la place couvre le trou réellement nommé dans le contexte —
+« le front ne parse rien à l'exécution » — sans fixture capturée : **le déballage
+de l'enveloppe ne perd ni n'invente de champ**, vérifié pour chacune des dix-sept
+méthodes du client qui rendent une valeur, avec la même assertion symétrique que
+côté API. Le contrôle de complétude compare les **noms** des méthodes couvertes à
+ceux du client réel, sur le modèle du registre de routes.
+
+Une leçon en est sortie, qui vaut au-delà de ce cas. Le premier écrit de cette
+spec servait `username: 'jake'` ; un sabotage ajoutant `.toLowerCase()` au
+déballage du profil ne la faisait **pas** rougir. Une valeur déjà normalisée ne
+peut pas révéler une normalisation. Les fixtures portent désormais une casse
+mélangée, un espace final et des listes en désordre — chaque forme visant un
+geste précis (`toLowerCase`, `trim`, `sort`, `?? ''`).
+
+Ce que cela laisse ouvert, écrit plutôt que passé sous silence : les fixtures web
+restent **écrites à la main**, donc rien ne garantit qu'elles ressemblent à ce
+que l'API envoie vraiment. C'est la question que la capture devait fermer, et
+elle reste ouverte. Le jour où une fixture web se révélera fausse, ce sera le
+déclencheur — et ce second temps en est le cadrage déjà instruit.
 
 ### Ce que ce harnais ne voit pas, écrit ici plutôt que découvert plus tard
 
