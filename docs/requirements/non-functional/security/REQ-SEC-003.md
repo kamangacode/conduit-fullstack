@@ -30,7 +30,7 @@ implementation:
   tests:
     - scripts/verify-secret-scan.sh
 related:
-  issues: []
+  issues: [34, 35]
   requirements:
     - REQ-SEC-001
   adrs: []
@@ -59,13 +59,20 @@ machine sans hook, ou par un motif que B2 ne connaissait pas.
 
 - **Rapport, pas gate** (rule 21, étape 3). La vérification dépend du réseau et
   de l'API d'un tiers ; un gate qui rougit parce qu'un fournisseur répond mal est
-  un gate qu'on désactive, et il emporte alors ce qu'il protégeait.
+  un gate qu'on désactive, et il emporte alors ce qu'il protégeait. La bascule
+  éventuelle est un item distinct, avec ses conditions écrites à l'avance :
+  [#34](https://github.com/kamangacode/conduit-fullstack/issues/34). C'est ce
+  qui a permis de faire proprement celle de l'e2e, trois semaines après l'avoir
+  décidée.
 - Le scan n'a **aucun filtre de chemin**. Les autres jobs se déclenchent sur un
   diff de code ; un secret entre par n'importe quel fichier, y compris ceux où on
   ne l'attend pas — c'est-à-dire ceux où on le trouve.
 - La version du scanner est **épinglée**. Un outil qui suit `latest` change de
   verdict sans qu'aucun commit n'ait bougé, et la première conclusion qu'on en
-  tirerait serait fausse.
+  tirerait serait fausse. Contrepartie assumée : la constante vit dans un script
+  shell, donc hors de portée des écosystèmes déclarés à Dependabot — elle ne
+  bougera pas d'elle-même, et un scanner qui vieillit perd les détecteurs ajoutés
+  depuis. Dette suivie en [#35](https://github.com/kamangacode/conduit-fullstack/issues/35).
 - La valeur d'un secret trouvé n'est **jamais** réaffichée dans un journal de CI
   public : le détecteur et le fichier suffisent à agir.
 

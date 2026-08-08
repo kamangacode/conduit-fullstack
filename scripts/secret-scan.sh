@@ -37,6 +37,16 @@
 # commits couverts. Un scan qui n'a rien vu ne doit pas ressembler à un scan qui
 # n'a rien trouvé.
 #
+# **Ce que ce choix coûte, et qui manquait à cet argumentaire.** L'action aurait
+# été suivie par l'écosystème `github-actions` de Dependabot, qui l'aurait mise à
+# jour toute seule. La version épinglée ci-dessous, elle, est une constante dans
+# un fichier shell : aucun écosystème déclaré dans `.github/dependabot.yml` ne la
+# voit, et elle ne bougera donc jamais d'elle-même. Un scanner de secrets qui
+# vieillit perd exactement ce qui fait sa valeur — les détecteurs ajoutés depuis.
+# Dette suivie en [#35](https://github.com/kamangacode/conduit-fullstack/issues/35),
+# avec le second symptôme de la même cause : le binaire local et l'image épinglée
+# peuvent diverger, donc rendre deux verdicts pour un même commit.
+#
 # ## Report, pas gate
 #
 # Ce scan démarre en **rapport** (rule 21, étape 3) : le job CI le porte en
