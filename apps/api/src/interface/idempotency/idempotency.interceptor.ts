@@ -44,7 +44,7 @@ import { IDEMPOTENT_ROUTE } from './idempotent.decorator'
  * second cas — aucun client de l'écosystème RealWorld ne les attend — et les y
  * ranger diluerait la seule chose qui rend cette table fiable.
  */
-export const IDEMPOTENCY_MESSAGES = {
+const IDEMPOTENCY_MESSAGES = {
   invalidKey: `must be a non-empty string of at most ${255} characters`,
   payloadMismatch: 'was already used with a different request body',
   inFlight: 'is already being processed',

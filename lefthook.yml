@@ -71,6 +71,21 @@ pre-push:
   commands:
     lint:
       run: bash .lefthook/run-quiet.sh 'CI=true pnpm lint'
+    knip:
+      # Code mort : exports, fichiers et dépendances que plus personne n'importe.
+      #
+      # Ne tournait qu'en CI jusqu'au 2026-08-08, ce qui contredisait
+      # l'invariant que `ci.yml` revendique dès son en-tête — « ce qui bloque un
+      # push doit bloquer une PR, et inversement ». L'écart s'est payé sur
+      # l'item C4 : un `export` d'anticipation, `pnpm lint` vert en local, job
+      # `Quality` rouge en CI. Le poste ne portait aucun artefact fautif cette
+      # fois-ci ; il lui manquait simplement le garde-fou.
+      run: bash .lefthook/run-quiet.sh 'CI=true pnpm knip'
+    depcruise:
+      # Frontières hexagonales et absence de cycles. Même écart, même correctif :
+      # il gardait une propriété d'architecture sans jamais pouvoir bloquer un
+      # push. Coût mesuré : environ une seconde sur 117 modules.
+      run: bash .lefthook/run-quiet.sh 'CI=true pnpm depcruise'
     typecheck:
       run: bash .lefthook/run-quiet.sh 'CI=true pnpm typecheck'
     test:
