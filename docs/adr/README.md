@@ -39,6 +39,7 @@ elle porte la mécanique : gabarit, numérotation, statuts, vérification.
 | [024](024-verrou-sql-brut-plugin-biome.md) | Verrou SQL brut : plugin GritQL Biome, plutôt qu'un second linter | Accepted | 2026-08-07 |
 | [025](025-validation-env-avant-chargement-du-graphe.md) | Valider l'environnement avant de charger le graphe applicatif | Accepted | 2026-08-08 |
 | [026](026-tests-de-contrat-assertion-symetrique-et-intercepteur.md) | Tests de contrat : assertion symétrique et intercepteur de harnais | Accepted | 2026-08-08 |
+| [027](027-idempotence-des-creations-intercepteur-opt-in.md) | Idempotence des créations : intercepteur opt-in, réponse rejouée verbatim | Accepted | 2026-08-08 |
 
 ## Écrire un ADR
 
