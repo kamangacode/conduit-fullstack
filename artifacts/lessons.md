@@ -8,6 +8,48 @@
 
 ---
 
+## 2026-08-08 — Une valeur de test déjà normalisée ne peut pas révéler une normalisation
+
+**Symptôme.** La spec de contrat du client web (item C3, REQ-ARCH-002 AC-8) était
+écrite, verte, et vérifiait que le déballage de l'enveloppe ne perd ni n'invente
+de champ sur les dix-sept méthodes. Sabotage de contrôle : `.toLowerCase()` ajouté
+au déballage du profil. **Aucun test n'a rougi.** `tsc` non plus, ce qui était
+attendu — une mutation de valeur ne change pas la forme.
+
+**La cause.** La fixture portait `username: 'jake'`. En minuscules. Le sabotage
+était donc, sur cette donnée précise, l'identité : `'jake'.toLowerCase()` vaut
+`'jake'`. Le test ne pouvait pas distinguer un client correct d'un client qui
+normalise, non pas à cause de son assertion — `toEqual` était le bon outil — mais
+à cause de la **valeur** qu'il lui donnait à comparer.
+
+**Ce qui est nouveau.** La rule 16 porte déjà une heuristique anti-tautologie :
+« supprime mentalement le guard ou la ligne testée ; si le test passe encore, il
+est tautologique ». Elle interroge le **code**. Celle-ci en est le pendant, et
+elle interroge la **donnée** : *ma valeur de test est-elle capable de rendre
+visible la transformation que je crains ?* Une chaîne déjà en minuscules ne peut
+pas révéler un `toLowerCase`, une liste déjà triée ne peut pas révéler un `sort`,
+une chaîne sans espace de bord ne peut pas révéler un `trim`, et une valeur non
+nulle ne peut pas révéler un `?? ''`.
+
+Les deux heuristiques attrapent des choses différentes, et l'assertion peut être
+parfaite alors que la fixture est aveugle. Le cas est d'autant plus glissant que
+la fixture *plausible* est presque toujours la fixture normalisée : on écrit
+spontanément `'jake'`, pas `'Jake-The-Trainer'`.
+
+**La contre-mesure.** Les fixtures de
+[`api-client.contract.spec.ts`](../apps/web/src/lib/api-client.contract.spec.ts)
+sont désormais **hostiles à la normalisation**, et chaque forme y vise un geste
+nommé en commentaire : casse mélangée (`toLowerCase`/`toUpperCase`), espace final
+(`trim`), listes en ordre non alphabétique (`sort`), `null` conservés (`?? ''`).
+Le sabotage rejoué fait tomber trois tests. Rule 16 amendée en conséquence.
+
+**Portée.** Cela vaut pour toute assertion d'égalité sur une donnée que le code
+sous test pourrait transformer sans en changer la forme — donc bien au-delà de ce
+fichier. Un test de sérialisation, de mapping DTO ou de cache est exposé au même
+angle mort.
+
+---
+
 ## 2026-08-08 — Un poste de développement peut produire un faux VERT
 
 **Symptôme.** En vérifiant le gate de la Phase 3, l'API a démarré entièrement —
