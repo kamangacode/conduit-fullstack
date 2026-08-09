@@ -111,3 +111,14 @@ vérifier mécaniquement.
 - La création et la mise à jour renvoient elles aussi un article complet. Elles
   écrivent via le repository, puis relisent via le port de lecture — un aller
   supplémentaire, accepté pour que la réponse soit produite par un seul endroit.
+- **2026-08-08 — le rayon d'action d'un défaut de projection, mesuré.** Le
+  harnais de contrat (item C3, [ADR 026](026-tests-de-contrat-assertion-symetrique-et-intercepteur.md))
+  a injecté deux champs hors contrat dans la projection du port de lecture, puis
+  interrogé `GET /api/articles/:slug`. Il a relevé **deux** écarts, pas un :
+  `POST /api/articles` en portait le même, parce que la publication relit par ce
+  port au lieu de fabriquer sa réponse — la conséquence exacte de la puce
+  ci-dessus, jamais écrite jusqu'ici. Elle se lit dans les deux sens : un défaut
+  de projection se corrige **à un seul endroit** pour tous les endpoints d'article,
+  et il se manifeste sur des endpoints qu'on n'aurait pas soupçonnés, dont ceux
+  d'écriture. À savoir avant de diagnostiquer un écart de forme sur un `POST` en
+  cherchant la cause dans le chemin d'écriture.

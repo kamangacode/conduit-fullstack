@@ -227,6 +227,13 @@ jobs:
       # référence : le script refuse de conclure si le dépôt ne compile pas déjà.
       - name: Frontière typée bout-en-bout (vérification active)
         run: bash scripts/verify-type-boundary.sh
+      # Moitié « compilation » des tests de contrat (REQ-ARCH-002 AC-6/AC-7) :
+      # retirer un champ du contrat de la projection réelle doit faire refuser
+      # `tsc`. Passe par le graphe turbo, qui déclare `^build` et `db:generate` —
+      # la vérification relance un typecheck, donc elle a besoin des mêmes
+      # artefacts qu'un typecheck ordinaire.
+      - name: Producteur des réponses lié au contrat (vérification active)
+        run: pnpm exec turbo run verify:contract-types
 
   test:
     name: Test
