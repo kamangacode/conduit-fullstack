@@ -154,6 +154,24 @@ pre-push:
       # tout se fait contourner par `--no-verify` avant la fin de la semaine.
       run: bash scripts/verify-secret-guard.sh
 
+    verify-action-pinning:
+      # Soumet au contrôle d'épinglage les formes qu'il doit refuser et celles
+      # qu'il doit laisser passer (REQ-SEC-006).
+      #
+      # `uses: foo/bar@v4` désigne un **pointeur**, pas un contenu : son
+      # propriétaire peut le déplacer, et la CI exécutera un autre code au run
+      # suivant — sans PR, sans diff, sans notification. Compromettre le
+      # mainteneur amont suffit, le dépôt n'a pas besoin d'être touché.
+      #
+      # Le cas décisif du harnais est la frontière de propriétaire : la dispense
+      # porte sur `actions/` et `github/` **avec le `/`**, sans quoi un dépôt
+      # nommé `actionsxyz/…` serait dispensé par simple préfixe.
+      glob:
+        - '.github/workflows/*.yml'
+        - 'scripts/check-action-pinning.sh'
+        - 'scripts/verify-action-pinning.sh'
+      run: bash scripts/verify-action-pinning.sh
+
     verify-codeql-wiring:
       # Sabote le workflow CodeQL, une propriété à la fois, et exige que le
       # contrôle de câblage la voie manquer (REQ-SEC-005).

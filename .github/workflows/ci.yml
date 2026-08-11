@@ -46,7 +46,7 @@ jobs:
       docs: ${{ steps.filter.outputs.docs }}
     steps:
       - uses: actions/checkout@v5
-      - uses: dorny/paths-filter@v4
+      - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d  # v4.0.3
         id: filter
         with:
           filters: |
@@ -109,7 +109,7 @@ jobs:
         with:
           # Le check des raisons de biome-ignore diffe contre la base : besoin de l'historique.
           fetch-depth: 0
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1  # v4
       - uses: actions/setup-node@v5
         with:
           node-version: ${{ env.NODE_VERSION }}
@@ -124,6 +124,12 @@ jobs:
         # canary ici prouve que le garde-fou mord aussi sur un runner frais,
         # et attrape le cas où quelqu'un aurait dégradé ses motifs (REQ-SEC-001).
         run: bash scripts/verify-secret-guard.sh
+      - name: Épinglage des actions (vérification active)
+        # Rejoue le refus d'un tag mobile sur un runner frais (REQ-SEC-006).
+        # Un tag déplacé en amont ne produit aucun diff ici : sans ce contrôle,
+        # la CI pourrait exécuter un autre code d'un run à l'autre sans que rien
+        # ne le signale.
+        run: bash scripts/verify-action-pinning.sh
       - name: Câblage CodeQL (vérification active)
         # Sabote le workflow CodeQL propriété par propriété et exige un refus à
         # chaque fois (REQ-SEC-005). L'analyse elle-même tourne dans son propre
@@ -231,7 +237,7 @@ jobs:
     if: needs.detect-changes.outputs.requirements == 'true'
     steps:
       - uses: actions/checkout@v5
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1  # v4
       - uses: actions/setup-node@v5
         with:
           node-version: ${{ env.NODE_VERSION }}
@@ -268,7 +274,7 @@ jobs:
     if: needs.detect-changes.outputs.code == 'true'
     steps:
       - uses: actions/checkout@v5
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1  # v4
       - uses: actions/setup-node@v5
         with:
           node-version: ${{ env.NODE_VERSION }}
@@ -302,7 +308,7 @@ jobs:
     if: needs.detect-changes.outputs.code == 'true'
     steps:
       - uses: actions/checkout@v5
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1  # v4
       - uses: actions/setup-node@v5
         with:
           node-version: ${{ env.NODE_VERSION }}
@@ -363,7 +369,7 @@ jobs:
           --health-retries 20
     steps:
       - uses: actions/checkout@v5
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1  # v4
       - uses: actions/setup-node@v5
         with:
           node-version: ${{ env.NODE_VERSION }}
@@ -413,7 +419,7 @@ jobs:
           --health-retries 20
     steps:
       - uses: actions/checkout@v5
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1  # v4
       - uses: actions/setup-node@v5
         with:
           node-version: ${{ env.NODE_VERSION }}
@@ -502,7 +508,7 @@ jobs:
           --health-retries 20
     steps:
       - uses: actions/checkout@v5
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1  # v4
       - uses: actions/setup-node@v5
         with:
           node-version: ${{ env.NODE_VERSION }}
@@ -654,7 +660,7 @@ jobs:
     if: needs.detect-changes.outputs.code == 'true'
     steps:
       - uses: actions/checkout@v5
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1  # v4
       - uses: actions/setup-node@v5
         with:
           node-version: ${{ env.NODE_VERSION }}
@@ -668,7 +674,7 @@ jobs:
       - run: pnpm build
 
   audit:
-    name: Audit vulnérabilités
+    name: Chaîne d'approvisionnement (SBOM, audit, OSV)
     runs-on: ubuntu-latest
     needs: detect-changes
     # Sur le cron hebdomadaire, ou dès qu'un manifeste/lockfile change. always()
@@ -676,17 +682,77 @@ jobs:
     if: always() && (github.event_name == 'schedule' || needs.detect-changes.outputs.deps == 'true')
     steps:
       - uses: actions/checkout@v5
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1  # v4
       - uses: actions/setup-node@v5
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+
+      # L'inventaire est produit **avant** les deux évaluations, et pas après :
+      # une étape qui échoue interrompt les suivantes, donc placer le SBOM en
+      # dernier reviendrait à le perdre précisément les jours où une
+      # vulnérabilité est trouvée — le seul moment où savoir ce qu'on embarque
+      # a de la valeur.
+      - name: SBOM CycloneDX
+        uses: anchore/sbom-action@e22c389904149dbc22b58101806040fa8d37a610  # v0.24.0
+        with:
+          path: .
+          format: cyclonedx-json
+          output-file: sbom.cyclonedx.json
+          artifact-name: sbom.cyclonedx.json
+          # Ce job tourne aussi sur le cron hebdomadaire ; rien ici ne doit
+          # toucher aux publications, que release-please pilote seul (ADR 028).
+          upload-release-assets: false
+
       # Vulnérabilités de sévérité 'high' et plus, sur les deps de production.
       # Hors ci-success à dessein : filet de sécurité, pas un gate bloquant sur
       # une CVE transitive apparue en dehors du périmètre de la PR.
       - name: pnpm audit (prod, high+)
         run: pnpm audit --prod --audit-level=high
+
+      # Second avis, sur une **autre base de données**. `pnpm audit` interroge
+      # l'avis registry npm ; OSV agrège aussi GitHub Security Advisories, les
+      # bases distributions et les rapports amont. Les deux se recouvrent
+      # largement mais pas complètement, et c'est tout l'intérêt d'en avoir deux
+      # là où le coût est une étape de CI.
+      #
+      # Action épinglée par SHA, et pas seulement par tag : ses auteurs
+      # avertissent que le comportement peut changer sur une mise à jour
+      # mineure. Un tag mobile ferait dériver un contrôle de sécurité sans
+      # qu'aucun diff ne le montre.
+      #
+      # `continue-on-error` est **délibéré et temporaire** : c'est l'étape 3 de
+      # la rule 21, on mesure le bruit avant de gater. Le dépôt a déjà joué cette
+      # échelle sur le job E2E, resté non bloquant jusqu'à trois runs verts
+      # consécutifs avant d'être bumpé en gate. Le verdict est publié au résumé
+      # de run ci-dessous pour que « non bloquant » ne veuille pas dire
+      # « invisible ».
+      - name: OSV-Scanner (base OSV)
+        id: osv
+        continue-on-error: true
+        uses: google/osv-scanner-action/osv-scanner-action@8deb546fdb875b9996d27d4950be7312dac076a1  # v2.5.0
+        with:
+          scan-args: |-
+            --recursive
+            ./
+
+      - name: Verdict chaîne d'approvisionnement (résumé de run)
+        if: always()
+        env:
+          OSV_OUTCOME: ${{ steps.osv.outcome }}
+        run: |
+          {
+            echo "## Chaîne d'approvisionnement"
+            echo ""
+            echo "- SBOM CycloneDX : publié en artefact de run (\`sbom.cyclonedx.json\`)"
+            if [ "$OSV_OUTCOME" = "success" ]; then
+              echo "- OSV-Scanner : aucune vulnérabilité connue"
+            else
+              echo "- OSV-Scanner : **des vulnérabilités sont remontées** (statut \`$OSV_OUTCOME\`) — voir le journal du job."
+              echo "  Contrôle en phase de calibration : il rapporte, il ne bloque pas encore."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
 
   ci-success:
     name: CI success
