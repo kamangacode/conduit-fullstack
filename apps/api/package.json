@@ -25,6 +25,7 @@
     "@nestjs/common": "^11.0.11",
     "@nestjs/core": "^11.0.11",
     "@nestjs/platform-express": "^11.0.11",
+    "@nestjs/terminus": "^11.1.1",
     "@node-rs/argon2": "^2.0.2",
     "@prisma/client": "^6.14.0",
     "@repo/shared": "workspace:*",
