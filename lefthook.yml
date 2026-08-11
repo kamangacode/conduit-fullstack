@@ -1,12 +1,28 @@
 # Git hooks via Lefthook.
 #
-# Deux niveaux de garde-fou, du plus rapide au plus complet :
+# Trois niveaux de garde-fou, du plus rapide au plus complet :
+#   - commit-msg : forme du sujet (Conventional Commits). Quasi instantané.
 #   - pre-commit : vérifs rapides sur les fichiers staged (auto-format Biome +
 #     garde secrets/.env). Doit rester quasi instantané.
 #   - pre-push   : lint + typecheck + tests + validation des migrations sur un
 #     Postgres jetable + vérif du verrou Biome. Dernier rempart avant le remote.
-#
-# Les conventional commits (commitlint) et le CHANGELOG sont traités en Phase 6.
+
+commit-msg:
+  commands:
+    conventional-subject:
+      # Refuse un sujet qui n'entrerait pas dans le CHANGELOG (REQ-RELEASE-001,
+      # ADR 029). La version et le CHANGELOG sont dérivés par release-please
+      # (ADR 028) de l'historique conventionnel de `main` : un sujet mal formé
+      # n'est pas une faute de style, il est **invisible** de l'outil de release.
+      #
+      # La règle vit dans un script et non ici, pour la même raison que le
+      # garde-fou de secrets : un garde-fou qu'on ne peut pas exécuter hors de
+      # son hook ne peut pas être mis en échec, donc pas prouvé. Le workflow
+      # `.github/workflows/pr-title.yml` appelle ce même script sur le titre de
+      # PR — jamais une copie de sa regex, qui ne prouverait que la copie.
+      #
+      # `{1}` est le chemin du fichier de message que git passe au hook.
+      run: bash scripts/check-conventional-subject.sh --file {1}
 
 pre-commit:
   parallel: true
@@ -44,6 +60,16 @@ pre-commit:
       # fichier), le glob ne sert qu'à ne pas le déclencher sur chaque commit.
       glob: "docs/adr/*.md"
       run: bash scripts/check-adr-index.sh
+
+    doc-links:
+      # Dès qu'un markdown bouge : tout lien relatif doit mener à un fichier
+      # **versionné** (REQ-DOC-001). Le contrôle porte sur l'ensemble des
+      # markdown suivis et pas sur les seuls fichiers staged — un lien meurt
+      # aussi quand on renomme sa cible, geste où le fichier modifié n'est pas
+      # celui qui porte le lien. Le glob ne sert qu'à ne pas le déclencher sur
+      # un commit qui ne touche aucune documentation.
+      glob: "*.md"
+      run: bash scripts/check-doc-links.sh
 
     requirements-validate:
       # Dès qu'une exigence bouge : forme du frontmatter (Zod) et intégrité
@@ -127,6 +153,89 @@ pre-push:
       # ordinaire, suppression d'un secret — parce qu'un garde-fou qui refuse
       # tout se fait contourner par `--no-verify` avant la fin de la semaine.
       run: bash scripts/verify-secret-guard.sh
+
+    verify-action-pinning:
+      # Soumet au contrôle d'épinglage les formes qu'il doit refuser et celles
+      # qu'il doit laisser passer (REQ-SEC-006).
+      #
+      # `uses: foo/bar@v4` désigne un **pointeur**, pas un contenu : son
+      # propriétaire peut le déplacer, et la CI exécutera un autre code au run
+      # suivant — sans PR, sans diff, sans notification. Compromettre le
+      # mainteneur amont suffit, le dépôt n'a pas besoin d'être touché.
+      #
+      # Le cas décisif du harnais est la frontière de propriétaire : la dispense
+      # porte sur `actions/` et `github/` **avec le `/`**, sans quoi un dépôt
+      # nommé `actionsxyz/…` serait dispensé par simple préfixe.
+      glob:
+        - '.github/workflows/*.yml'
+        - 'scripts/check-action-pinning.sh'
+        - 'scripts/verify-action-pinning.sh'
+      run: bash scripts/verify-action-pinning.sh
+
+    verify-codeql-wiring:
+      # Sabote le workflow CodeQL, une propriété à la fois, et exige que le
+      # contrôle de câblage la voie manquer (REQ-SEC-005).
+      #
+      # Un workflow CodeQL mal câblé **réussit** : job vert, durée plausible, et
+      # rien ne distingue une analyse publiée d'une analyse perdue. Retirer
+      # `security-events: write` suffit à ne plus rien publier sans qu'un seul
+      # job ne rougisse.
+      #
+      # `glob` restreint la tâche à ce qu'elle peut prouver : un push qui ne
+      # touche ni le workflow ni son contrôle n'a rien à re-vérifier ici.
+      glob:
+        - '.github/workflows/codeql.yml'
+        - 'scripts/check-codeql-wiring.mjs'
+        - 'scripts/verify-codeql-wiring.sh'
+      run: bash scripts/verify-codeql-wiring.sh
+
+    verify-auto-merge-eligibility:
+      # Soumet à la règle d'auto-merge la promotion qu'elle doit refuser
+      # (REQ-RELEASE-002, ADR 030).
+      #
+      # Ce garde-fou a le pire profil du dépôt : **il ne se manifeste jamais
+      # quand il fonctionne**. Un auto-merge correctement refusé ne produit aucun
+      # signal — la PR reste ouverte, ce qui ressemble à la normale. Et quand il
+      # échoue, la sanction est différée : une promotion squashée ne casse rien
+      # sur le moment, elle fait sauter une release que personne ne voit manquer
+      # avant le changelog suivant.
+      #
+      # La vérification porte aussi sur le **câblage** : que le workflow appelle
+      # la règle partagée et passe bien par `--auto`. Sans ce contrôle, la
+      # remplacer par une condition YAML passerait inaperçu, et la règle
+      # cesserait d'être éprouvable sans qu'aucun test ne rougisse.
+      run: bash scripts/verify-auto-merge-eligibility.sh
+
+    verify-doc-links:
+      # Soumet au contrôle des liens ce qu'il prétend refuser et ce qu'il doit
+      # laisser passer (REQ-DOC-001), dans un dépôt git jetable.
+      #
+      # Un vérificateur de liens est vert quand tout va bien ET vert quand il ne
+      # regarde rien : un pathspec fautif, un `git ls-files` qui ne rend aucun
+      # fichier, et le rapport dit « ok » pendant que le dépôt publie ses 404.
+      #
+      # La fixture décisive est celle d'un fichier **présent sur le disque mais
+      # non versionné** : c'est la forme qu'avait le défaut réel, et celle qu'un
+      # contrôle écrit avec `test -f` déclarerait bonne.
+      run: bash scripts/verify-doc-links.sh
+
+    verify-conventional-subject:
+      # Soumet au verrou de sujet ce qu'il prétend refuser et ce qu'il doit
+      # laisser passer, puis lui confronte les 147 sujets de l'historique réel
+      # (REQ-RELEASE-001, ADR 029).
+      #
+      # Le hook `commit-msg` ci-dessus est silencieux quand il marche ET quand il
+      # est cassé, et sa sanction n'arrive pas au moment du commit : elle arrive
+      # des semaines plus tard, sous la forme d'un CHANGELOG incomplet que
+      # personne ne relit ligne à ligne. La seule preuve est de lui soumettre un
+      # sujet fautif et de constater le refus.
+      #
+      # La phase d'historique est le contrôle qui a réellement changé le verrou :
+      # elle a écarté une limite de longueur et l'obligation de minuscule
+      # initiale, deux contraintes qui semblaient évidentes et qui auraient
+      # produit une quinzaine de faux positifs sur des sujets légitimes. Un
+      # verrou qui refuse un geste normal se fait contourner par `--no-verify`.
+      run: bash scripts/verify-conventional-subject.sh
 
     verify-sql-raw-guard:
       # Soumet au verrou SQL les trois formes d'appel qu'il prétend refuser, et

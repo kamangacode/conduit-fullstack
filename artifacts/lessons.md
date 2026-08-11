@@ -807,3 +807,39 @@ pas fait, et il vient avec une supposition d'environnement que rien ne déclare.
 Corollaire : quand un drapeau ferait passer des tests au vert, vérifier d'abord
 combien il en **retire** — un drapeau qui réduit l'ensemble exécuté n'est pas un
 correctif, c'est un filtre.
+
+---
+
+## 2026-08-11 — Un contrôle qui ne vit que dans une lane ne peut pas rougir dans l'autre
+
+**Le fait.** L'item C5 ajoute deux routes (`/health/live`, `/health/ready`).
+`pnpm test` local : 693 tests verts, dont la spec unit du harnais de contrat qui
+porte pourtant le critère « le registre couvre exactement les routes montées »
+(REQ-ARCH-002 AC-4). Poussé, la CI rougit sur la **seule** lane d'intégration :
+`Registre de contrat désynchronisé`.
+
+**Pourquoi le local ne pouvait pas le voir.** Le contrôle compare le registre aux
+routes réellement montées par `AppModule`. La lane unit **ne monte pas
+`AppModule`** — elle ne le peut pas, `PrismaService.onModuleInit` ouvre une
+connexion et cette lane est DB-free par construction. Elle compare donc le
+registre à un graphe partiel, où les deux nouvelles routes n'apparaissent pas.
+Le même critère existe des deux côtés ; il n'a de prise que d'un seul.
+
+**Ce que ce cas ajoute aux précédents.** Les trois « local vert, CI rouge » déjà
+consignés venaient d'un **artefact** que le poste portait et que le runner n'a
+pas (`dist/`, client Prisma, `@repo/shared` compilé) ; le remède était de réparer
+le graphe turbo. Celui-ci est d'une autre famille : aucun artefact en cause, et
+rien à réparer — la lane unit *ne peut pas* monter le graphe réel sans cesser
+d'être DB-free. L'asymétrie est **voulue**, et c'est la CI qui exécute la seule
+lane capable de voir le défaut. Ce n'est donc pas un trou à combler mais une
+propriété à connaître.
+
+**Règle à appliquer.** Quand un critère d'acceptation porte sur le **graphe
+complet** (routes montées, câblage DI, providers résolus), se demander *quelle
+lane monte ce graphe* avant de conclure d'un `pnpm test` vert. Ici, trois lanes
+le font et la lane unit n'en fait pas partie : le boot-smoke DI (graphe compilé,
+DB-free), l'intégration (application réelle + PostgreSQL) et l'e2e. Corollaire
+pratique : **toute route ajoutée se déclare au registre de contrat dans le même
+commit**, sans attendre que la CI le rappelle — l'exemption existe
+(`OUT_OF_CONTRACT`), mais elle doit être écrite, une omission volontaire étant
+indiscernable d'un oubli.

@@ -64,7 +64,7 @@ related:
 
 Un double envoi de `POST /api/articles` ne produit aucune erreur. La résolution
 de slug repart du slug de base et suffixe sur refus de la contrainte
-([ADR 010](../../../adr/010-unicite-du-slug-par-la-contrainte.md)) : deux
+([ADR 010](../../../adr/010-unicite-du-slug-article.md)) : deux
 requêtes identiques créent deux articles, le second sur `mon-titre-2`. Pour un
 commentaire, l'identifiant est un `autoincrement` sans unicité — deux
 commentaires identiques, pas même un conflit. Les deux fois, un 201, et rien qui

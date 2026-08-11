@@ -7,7 +7,8 @@ Accepted — 2026-08-07. Écart assumé au plan d'outillage, qui prescrivait
 
 ## Context
 
-La [rule 19](../../.claude/rules/19-securite.md) interdit `$queryRawUnsafe` et
+La `rule 19` (cadre local, non publié — voir la note en fin d'[index](README.md))
+interdit `$queryRawUnsafe` et
 `$executeRawUnsafe`, et demande de le faire respecter « par une règle de lint
 (`no-restricted-syntax` ou équivalent) plutôt que par la seule revue humaine ».
 Cette formulation date d'un moment où le dépôt n'avait pas encore choisi son

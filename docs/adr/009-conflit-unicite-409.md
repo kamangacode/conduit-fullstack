@@ -15,7 +15,7 @@ de compte — heurte cette contrainte.
 
 Les sources du dépôt se contredisent :
 
-- [`openapi.yml`](../../../coaching-craft/03-produits/produits-conduit/github/prd/specifications/backend/openapi.yml)
+- [`openapi.yml`](../prd/specifications/backend/openapi.yml)
   déclare explicitement `409 → ConflictError` sur `POST /users` (et sur
   `POST /articles` pour le slug).
 - `error-handling.md` et le tableau du **PRD §10** ne listent que 401, 403, 404 et

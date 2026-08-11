@@ -14,12 +14,24 @@ const API_PREFIX = 'api'
 /**
  * Chemins servis **hors** préfixe.
  *
- * La sonde de santé est consommée par la plateforme d'hébergement, pas par un
- * client de l'API : la ranger sous `/api` la ferait dépendre d'une convention
- * qui appartient au contrat métier, et obligerait à reconfigurer la sonde le jour
- * où ce contrat changerait de version (`/api/v2`).
+ * Les sondes sont consommées par la plateforme d'hébergement, pas par un client
+ * de l'API : les ranger sous `/api` les ferait dépendre d'une convention qui
+ * appartient au contrat métier, et obligerait à les reconfigurer le jour où ce
+ * contrat changerait de version (`/api/v2`).
+ *
+ * **Chaque sous-route est listée explicitement, et ce n'est pas de la verbosité.**
+ * L'exclusion de préfixe de NestJS est un **match exact** : `'health'` seul
+ * n'exclut pas `health/live` ni `health/ready`, qui repartaient donc sous `/api`
+ * — l'inverse exact de ce que ce commentaire promet. Le défaut a été trouvé par
+ * AC-5 de REQ-SRE-001 en ajoutant les sondes de l'item C5 ; sans ce critère, les
+ * deux nouvelles routes auraient été servies sous le préfixe du contrat, et la
+ * configuration de la plateforme aurait pointé sur des 404.
+ *
+ * Une liste explicite plutôt qu'un motif générique (`health/*`) : la syntaxe des
+ * jokers a changé entre les versions de `path-to-regexp` embarquées par NestJS,
+ * et une liste fermée de trois chemins ne peut pas se tromper silencieusement.
  */
-const UNPREFIXED_PATHS = ['health']
+const UNPREFIXED_PATHS = ['health', 'health/live', 'health/ready']
 
 /**
  * Applique les conventions HTTP communes à une application NestJS.

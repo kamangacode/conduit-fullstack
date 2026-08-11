@@ -18,7 +18,7 @@
 <!--
   Un statut parmi : Proposed | Accepted | Superseded | Deprecated
   suivi de la date, puis, si applicable, du lien d'amendement :
-  « Accepted — 2026-08-05. Amende [002 — …](002-….md) sur tel point. »
+  « Accepted — 2026-08-05. Amende [002 — Modèle de données Prisma](002-modele-donnees-prisma.md) sur tel point. »
   Un ADR n'est jamais réécrit après coup : il est amendé ou remplacé, et la
   trace du changement d'avis reste lisible.
 -->

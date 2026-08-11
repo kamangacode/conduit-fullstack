@@ -10,7 +10,7 @@ rejeu »).
 
 Un double envoi de `POST /api/articles` ne produit aujourd'hui **aucune erreur**.
 La résolution de slug repart du slug de base et suffixe sur refus de la
-contrainte d'unicité ([ADR 010](010-unicite-du-slug-par-la-contrainte.md),
+contrainte d'unicité ([ADR 010](010-unicite-du-slug-article.md),
 `prisma-article.repository.ts`) : deux requêtes identiques créent donc deux
 articles, le second sur `mon-titre-2`. Côté commentaires, l'identifiant est un
 `autoincrement` sans aucune unicité — deux commentaires identiques, sans même un
@@ -40,7 +40,7 @@ externe cesserait d'être celui de la spec.
 | Option | Trade-off |
 |---|---|
 | **A — Intercepteur `interface/` + port (retenue)** | Un intercepteur NestJS activé par un décorateur sur les seules routes visées, adossé à un port implémenté en Prisma. Le use-case ignore qu'un client a rejoué, comme il ignore déjà l'authentification, portée par un guard. L'idempotence est une préoccupation de **transport** : elle parle de requêtes répétées, pas d'articles. |
-| B — Paramètre d'entrée du use-case | Explicite, testable à doublure en lane unit. Écartée : le use-case apprendrait une notion d'en-tête HTTP, ce que la [rule 12](../../.claude/rules/12-backend-hexagonal.md) interdit à `application/`, et chaque use-case futur devrait y penser. |
+| B — Paramètre d'entrée du use-case | Explicite, testable à doublure en lane unit. Écartée : le use-case apprendrait une notion d'en-tête HTTP, ce que la `rule 12` (cadre local) interdit à `application/`, et chaque use-case futur devrait y penser. |
 | C — Service appelé par le contrôleur | Lisible d'un coup d'œil. Écartée : la même séquence recopiée à chaque endpoint protégé, et un oubli qui ne se voit nulle part — le défaut que le registre de contrat de l'[ADR 026](026-tests-de-contrat-assertion-symetrique-et-intercepteur.md) vient précisément de fermer ailleurs. |
 
 ### Axe 2 — ce que l'on rejoue
@@ -80,7 +80,7 @@ Présent, un intercepteur `interface/idempotency/` :
    `(userId, endpoint, key)`, jamais sur la clé seule. Sans le `userId`, la clé
    `abc` d'un compte donnerait accès à la réponse d'un autre — une fuite de
    données par collision de chaîne, et le contraire de l'autorité serveur exigée
-   par la [rule 19](../../.claude/rules/19-securite.md). Les deux endpoints étant
+   par la `rule 19` (cadre local). Les deux endpoints étant
    authentifiés, l'identité est toujours disponible.
 3. **Compare une empreinte du corps.** Corps différent sous la même clé → 422 au
    format §10.

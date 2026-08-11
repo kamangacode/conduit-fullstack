@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted — 2026-08-06. Amende [012 — Rendu hybride et session cliente](012-rendu-hybride-et-session-client.md) et [015 — Préchargement serveur et hydratation du cache](015-prechargement-serveur-et-hydratation-du-cache.md) : la frontière qu'ils tracent recule pour trois routes, et **seulement** pour ces trois-là.
+Accepted — 2026-08-06. Amende [012 — Rendu hybride et session cliente](012-rendu-hybride-et-session-client.md) et [015 — Préchargement serveur et hydratation du cache](015-prefetch-serveur-et-hydratation-des-listes.md) : la frontière qu'ils tracent recule pour trois routes, et **seulement** pour ces trois-là.
 
 ## Context
 
@@ -70,7 +70,7 @@ Ce qui **ne bouge pas**, et l'énumérer est le seul moyen de garder l'ADR 012
 lisible :
 
 - L'accueil et les listes d'articles gardent leur préchargement serveur +
-  hydratation ([ADR 015](015-prechargement-serveur-et-hydratation-du-cache.md)).
+  hydratation ([ADR 015](015-prefetch-serveur-et-hydratation-des-listes.md)).
   C'est le chemin le plus visité du site, et aucun test ne dépend d'un mock sur
   ce trajet.
 - La session reste hors du serveur, le jeton ne quitte pas le navigateur
@@ -113,7 +113,7 @@ lisible :
   serveur, chaque navigation vers elles écrasait le cache client avec ce que le
   serveur venait de lire, et une entrée périmée ne survivait pas à une
   navigation. L'accueil et les listes gardent cette réparation
-  ([ADR 015](015-prechargement-serveur-et-hydratation-du-cache.md)) ; ces trois
+  ([ADR 015](015-prefetch-serveur-et-hydratation-des-listes.md)) ; ces trois
   routes ne l'ont plus, et **le cache client y fait désormais autorité**. La
   règle qui en découle : **toute mutation qui touche une ressource affichée par
   ces routes doit écrire sa réponse dans le cache** — sans quoi

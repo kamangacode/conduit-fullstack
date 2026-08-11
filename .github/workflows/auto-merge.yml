@@ -1,0 +1,98 @@
+name: auto-merge
+
+# Arme l'auto-merge natif de GitHub sur une PR labellisée `reviewed`
+# (REQ-RELEASE-002, ADR 030).
+#
+# ## Ce workflow arme, il ne décide pas
+#
+# Il ne fusionne rien et ne juge pas si la CI est verte. Il pose un drapeau —
+# « quand les checks requis seront verts, fusionne » — et c'est **la protection
+# de branche** qui tranche, avec sa propre liste de checks requis.
+#
+# La tentation inverse était de faire fusionner le workflow lui-même une fois
+# `ci-success` vert. Elle aurait recréé dans ce fichier une liste de checks à
+# tenir à jour, et cette liste se serait trompée le jour où un check requis est
+# ajouté sans que personne ne pense à l'y recopier — le workflow aurait alors
+# fusionné une PR dont un contrôle n'avait pas encore parlé. Le dépôt a déjà payé
+# une variante de cette erreur : `ci-success` a annoncé vert un run où cinq jobs
+# requis n'avaient jamais démarré (voir son commentaire dans `ci.yml`).
+#
+# ## Ce qu'il refuse, et pourquoi c'est le cœur du fichier
+#
+# Toute PR visant `main` est refusée, quel que soit son label. `main` n'est
+# alimenté que par la promotion `staging → main`, qui doit être un **merge
+# commit, jamais un squash** (rule 15) : un squash aplatirait les commits
+# conventionnels et release-please (ADR 028) sauterait la release — pas de bump,
+# pas de changelog, `main` qui diverge en silence.
+#
+# La rule 15 énonçait cela comme une consigne (« ne pas poser le label sur la PR
+# de promotion »). Une consigne tient jusqu'au jour où quelqu'un labellise par
+# habitude, et le symptôme — une release manquante — n'arrive pas au moment du
+# geste. La règle vit donc dans un script éprouvé
+# (`scripts/check-auto-merge-eligibility.sh`), pas dans une condition YAML que
+# rien ne peut mettre en échec.
+#
+# ## Prérequis, côté réglages du dépôt (gestes humains)
+#
+#   - `allow_auto_merge` doit être activé sur le dépôt — il est à `false` au
+#     moment où ce fichier est écrit, donc le workflow est **inerte** : il
+#     échouera en le disant, plutôt que de fusionner par surprise ;
+#   - la protection de branche de `staging` doit exiger le check `ci-success`,
+#     sans quoi « auto-merge » signifierait « merge immédiat ».
+
+on:
+  pull_request_target:
+    types: [labeled]
+
+# Le token doit pouvoir armer l'auto-merge ; il n'a besoin de rien d'autre.
+# `pull_request_target` s'exécute avec les droits du dépôt de base : ce workflow
+# ne fait donc **aucun checkout du code de la PR**, et ne lit que des champs de
+# l'événement. C'est ce qui rend ce déclencheur sûr ici.
+permissions:
+  pull-requests: write
+  contents: read
+
+concurrency:
+  group: auto-merge-${{ github.event.pull_request.number }}
+  cancel-in-progress: false
+
+jobs:
+  arm:
+    name: Armer l'auto-merge
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          # Seul le script d'éligibilité est nécessaire, et il vient de la base
+          # — jamais de la branche de la PR, qui pourrait le réécrire.
+          ref: ${{ github.event.pull_request.base.sha }}
+
+      - name: Éligibilité (label, base, brouillon)
+        id: eligibility
+        # Le nom de label transite par l'environnement, jamais par une
+        # interpolation `${{ }}` dans le corps du `run` : c'est une chaîne que
+        # l'auteur de la PR contrôle, et l'interpoler l'exécuterait sur le
+        # runner. Même raison que dans `pr-title.yml`.
+        env:
+          PR_BASE: ${{ github.event.pull_request.base.ref }}
+          PR_DRAFT: ${{ github.event.pull_request.draft }}
+          ADDED_LABEL: ${{ github.event.label.name }}
+        run: |
+          if bash scripts/check-auto-merge-eligibility.sh \
+               --base "$PR_BASE" --draft "$PR_DRAFT" --label "$ADDED_LABEL"; then
+            echo "eligible=true" >> "$GITHUB_OUTPUT"
+          else
+            # Non éligible n'est pas une panne : la plupart des labels ne
+            # demandent rien. Le job reste vert et dit pourquoi il n'a rien fait.
+            echo "eligible=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Armer l'auto-merge (squash)
+        if: steps.eligibility.outputs.eligible == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_URL: ${{ github.event.pull_request.html_url }}
+        # `--auto` est le mot important : GitHub attend les checks requis et la
+        # protection de branche. Sans lui, ce serait un merge immédiat.
+        run: gh pr merge --auto --squash "$PR_URL"

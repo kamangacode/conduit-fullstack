@@ -1,0 +1,11 @@
+{
+  "release-type": "node",
+  "target-branch": "main",
+  "packages": {
+    ".": {
+      "component": "conduit-fullstack",
+      "package-name": "conduit-fullstack",
+      "include-component-in-tag": false
+    }
+  }
+}

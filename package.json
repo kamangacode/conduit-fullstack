@@ -1,6 +1,6 @@
 {
   "name": "conduit-fullstack",
-  "version": "0.0.0",
+  "version": "0.7.0",
   "private": true,
   "description": "Implémentation full-stack TypeScript de l'app Conduit (spec RealWorld) : monorepo api + web + shared.",
   "license": "MIT",

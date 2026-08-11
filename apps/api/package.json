@@ -1,6 +1,6 @@
 {
   "name": "@repo/api",
-  "version": "0.0.0",
+  "version": "0.7.0",
   "private": true,
   "description": "API Conduit — NestJS, architecture hexagonale (domain/application/infrastructure/interface).",
   "license": "MIT",
@@ -12,6 +12,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
+    "mutation": "stryker run",
     "test:integration": "bash ../../scripts/test-integration.sh",
     "verify:env-fail-fast": "bash ../../scripts/verify-env-fail-fast.sh",
     "verify:contract-types": "bash ../../scripts/verify-contract-types.sh",
@@ -25,6 +26,7 @@
     "@nestjs/common": "^11.0.11",
     "@nestjs/core": "^11.0.11",
     "@nestjs/platform-express": "^11.0.11",
+    "@nestjs/terminus": "^11.1.1",
     "@node-rs/argon2": "^2.0.2",
     "@prisma/client": "^6.14.0",
     "@repo/shared": "workspace:*",
@@ -35,6 +37,8 @@
   },
   "devDependencies": {
     "@nestjs/testing": "^11.1.28",
+    "@stryker-mutator/core": "^9.6.1",
+    "@stryker-mutator/vitest-runner": "^9.6.1",
     "@types/express": "^5.0.6",
     "@types/node": "^22.13.0",
     "@types/supertest": "^6.0.3",

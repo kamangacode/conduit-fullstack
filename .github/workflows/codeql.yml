@@ -1,0 +1,86 @@
+name: codeql
+
+# Analyse statique (SAST) du code applicatif **et des workflows eux-mêmes**
+# (REQ-SEC-005). Item B7 du plan d'outillage.
+#
+# ## Pourquoi deux langages, et pourquoi `actions` n'est pas un bonus
+#
+# `javascript-typescript` couvre `apps/` et `packages/` — l'attendu d'un SAST.
+#
+# `actions` couvre `.github/workflows/`, et c'est le langage qui a motivé
+# l'activation. Ce dépôt vient d'ajouter trois workflows en deux jours, dont un
+# sur `pull_request_target` — le déclencheur qui s'exécute avec les droits du
+# dépôt de base et dont la mauvaise utilisation (checkout du code de la PR,
+# interpolation d'une entrée contrôlée par son auteur dans un `run`) est la
+# faille la plus répandue de l'écosystème Actions. Ces deux pièges ont été évités
+# à la main dans `auto-merge.yml` et `pr-title.yml` ; les requêtes `actions` de
+# CodeQL sont ce qui le vérifie sans dépendre de la vigilance du prochain.
+#
+# ## Non bloquant, à dessein et pour l'instant
+#
+# Le workflow publie dans l'onglet Security ; il n'entre pas dans `ci-success` et
+# ne ferme aucune PR. C'est l'étape 3 de la rule 21 : un contrôle neuf commence
+# en rapport, le temps de mesurer son bruit sur des cas réels. Le passer en gate
+# est un second geste, avec un seuil qui aura fait ses preuves — pas un seuil
+# posé au jour 1 et désactivé six mois plus tard.
+#
+# ## Précondition, côté réglages du dépôt
+#
+# Le « default setup » de code scanning doit rester **désactivé** : il est
+# exclusif de ce workflow (« advanced setup »), et l'activer ferait échouer
+# l'analyse. Il était à `not-configured` quand ce fichier a été écrit.
+
+on:
+  push:
+    branches: [main, staging]
+  pull_request:
+    branches: [main, staging]
+  schedule:
+    # Lundi 04:00 UTC, une heure après l'audit de dépendances de `ci.yml` : les
+    # requêtes CodeQL évoluent sans que le code change, donc une base inchangée
+    # peut révéler une faille qu'aucun push ne déclencherait.
+    - cron: "0 4 * * 1"
+  workflow_dispatch:
+
+concurrency:
+  group: codeql-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  analyze:
+    name: Analyse ${{ matrix.language }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    permissions:
+      # Sans cette permission, l'analyse **tourne et réussit** mais n'uploade
+      # rien : le job est vert, l'onglet Security reste vide, et il n'y a aucun
+      # signal pour le dire. C'est la panne silencieuse propre à ce workflow,
+      # et la raison pour laquelle `verify-codeql-wiring.sh` l'exige.
+      security-events: write
+      # Lecture des métadonnées de workflow, nécessaire à l'analyse `actions`.
+      actions: read
+      contents: read
+
+    strategy:
+      # Un langage en échec ne doit pas masquer le résultat de l'autre.
+      fail-fast: false
+      matrix:
+        language: [javascript-typescript, actions]
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Initialiser CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: ${{ matrix.language }}
+          # Ni l'un ni l'autre de ces langages n'exige de compilation : CodeQL
+          # analyse les sources. Inutile d'installer les dépendances, ce qui
+          # garde le job court et sans réseau vers un registre.
+          build-mode: none
+
+      - name: Analyser
+        uses: github/codeql-action/analyze@v3
+        with:
+          category: /language:${{ matrix.language }}

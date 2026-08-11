@@ -1,0 +1,28 @@
+name: release-please
+
+# Dérive la version (semver), le CHANGELOG et le tag depuis les commits
+# conventionnels de `main`. `main` n'est alimenté que par la promotion
+# `staging → main` (merge commit, jamais squash — voir .claude/rules/15).
+# À chaque push sur `main`, l'action ouvre/actualise une « release PR » ;
+# quand un humain la merge, elle publie le tag et la GitHub Release.
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  release-please:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7  # v5.0.0
+        with:
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json
+          target-branch: main
+          token: ${{ secrets.GITHUB_TOKEN }}
