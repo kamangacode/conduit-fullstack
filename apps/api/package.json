@@ -1,6 +1,6 @@
 {
   "name": "@repo/api",
-  "version": "0.0.0",
+  "version": "0.7.0",
   "private": true,
   "description": "API Conduit — NestJS, architecture hexagonale (domain/application/infrastructure/interface).",
   "license": "MIT",

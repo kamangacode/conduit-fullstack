@@ -1,6 +1,6 @@
 {
   "name": "@repo/web",
-  "version": "0.0.0",
+  "version": "0.7.0",
   "private": true,
   "description": "Front Conduit — Next.js App Router, consomme l'API via un client typé par @repo/shared.",
   "license": "MIT",
