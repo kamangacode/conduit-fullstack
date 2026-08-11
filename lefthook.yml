@@ -154,6 +154,23 @@ pre-push:
       # tout se fait contourner par `--no-verify` avant la fin de la semaine.
       run: bash scripts/verify-secret-guard.sh
 
+    verify-auto-merge-eligibility:
+      # Soumet à la règle d'auto-merge la promotion qu'elle doit refuser
+      # (REQ-RELEASE-002, ADR 030).
+      #
+      # Ce garde-fou a le pire profil du dépôt : **il ne se manifeste jamais
+      # quand il fonctionne**. Un auto-merge correctement refusé ne produit aucun
+      # signal — la PR reste ouverte, ce qui ressemble à la normale. Et quand il
+      # échoue, la sanction est différée : une promotion squashée ne casse rien
+      # sur le moment, elle fait sauter une release que personne ne voit manquer
+      # avant le changelog suivant.
+      #
+      # La vérification porte aussi sur le **câblage** : que le workflow appelle
+      # la règle partagée et passe bien par `--auto`. Sans ce contrôle, la
+      # remplacer par une condition YAML passerait inaperçu, et la règle
+      # cesserait d'être éprouvable sans qu'aucun test ne rougisse.
+      run: bash scripts/verify-auto-merge-eligibility.sh
+
     verify-doc-links:
       # Soumet au contrôle des liens ce qu'il prétend refuser et ce qu'il doit
       # laisser passer (REQ-DOC-001), dans un dépôt git jetable.

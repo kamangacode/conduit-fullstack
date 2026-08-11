@@ -118,6 +118,13 @@ jobs:
         # canary ici prouve que le garde-fou mord aussi sur un runner frais,
         # et attrape le cas où quelqu'un aurait dégradé ses motifs (REQ-SEC-001).
         run: bash scripts/verify-secret-guard.sh
+      - name: Éligibilité auto-merge (vérification active)
+        # Rejoue le refus de la promotion `staging → main` sur un runner frais
+        # (REQ-RELEASE-002, ADR 030). La propriété gardée ici — un squash de
+        # promotion ferait sauter la release — a un symptôme différé de plusieurs
+        # jours ; c'est exactement le genre de garde-fou dont l'absence ne se
+        # remarque qu'une fois le dégât fait.
+        run: bash scripts/verify-auto-merge-eligibility.sh
       - name: Sujet conventionnel (vérification active)
         # Le hook `commit-msg` qui refuse un sujet non conventionnel ne tourne
         # que sur le poste, et `--no-verify` suffit à le contourner. Rejouer ici
