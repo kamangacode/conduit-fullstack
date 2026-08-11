@@ -126,8 +126,8 @@ de ces pages en erreur de certificat, la coquille « indisponible » rendue à l
 place du contenu, et des assertions de non-visibilité qui passaient **parce que**
 la page n'avait rien chargé.
 
-C'est exactement ce que la [rule 02](../../../../.claude/rules/02-workflow-dev.md)
-nomme : un vert obtenu sur un artefact qui n'est pas celui qu'on croit tester. Le
+C'est exactement ce que la `rule 02` (cadre local, non publié) nomme : un vert
+obtenu sur un artefact qui n'est pas celui qu'on croit tester. Le
 correctif vit dans **notre** configuration et jamais dans la suite — un argument
 de lancement, porté par le navigateur, donc hérité par tout contexte. Il épingle
 l'empreinte SPKI du certificat de ce run plutôt que d'accepter n'importe quel

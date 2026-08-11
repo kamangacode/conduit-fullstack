@@ -61,6 +61,16 @@ pre-commit:
       glob: "docs/adr/*.md"
       run: bash scripts/check-adr-index.sh
 
+    doc-links:
+      # Dès qu'un markdown bouge : tout lien relatif doit mener à un fichier
+      # **versionné** (REQ-DOC-001). Le contrôle porte sur l'ensemble des
+      # markdown suivis et pas sur les seuls fichiers staged — un lien meurt
+      # aussi quand on renomme sa cible, geste où le fichier modifié n'est pas
+      # celui qui porte le lien. Le glob ne sert qu'à ne pas le déclencher sur
+      # un commit qui ne touche aucune documentation.
+      glob: "*.md"
+      run: bash scripts/check-doc-links.sh
+
     requirements-validate:
       # Dès qu'une exigence bouge : forme du frontmatter (Zod) et intégrité
       # (emplacement, unicité des ids, fichiers et ADR référencés). Bloquant :
@@ -143,6 +153,19 @@ pre-push:
       # ordinaire, suppression d'un secret — parce qu'un garde-fou qui refuse
       # tout se fait contourner par `--no-verify` avant la fin de la semaine.
       run: bash scripts/verify-secret-guard.sh
+
+    verify-doc-links:
+      # Soumet au contrôle des liens ce qu'il prétend refuser et ce qu'il doit
+      # laisser passer (REQ-DOC-001), dans un dépôt git jetable.
+      #
+      # Un vérificateur de liens est vert quand tout va bien ET vert quand il ne
+      # regarde rien : un pathspec fautif, un `git ls-files` qui ne rend aucun
+      # fichier, et le rapport dit « ok » pendant que le dépôt publie ses 404.
+      #
+      # La fixture décisive est celle d'un fichier **présent sur le disque mais
+      # non versionné** : c'est la forme qu'avait le défaut réel, et celle qu'un
+      # contrôle écrit avec `test -f` déclarerait bonne.
+      run: bash scripts/verify-doc-links.sh
 
     verify-conventional-subject:
       # Soumet au verrou de sujet ce qu'il prétend refuser et ce qu'il doit

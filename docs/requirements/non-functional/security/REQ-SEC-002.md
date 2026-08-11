@@ -50,9 +50,8 @@ chaîne. Toute interpolation de valeur utilisateur y devient une injection SQL.
 
 Quatre caractères séparent donc la forme sûre de la faille, dans deux
 identifiants qui se ressemblent à s'y méprendre en revue. C'est précisément le
-genre d'écart qu'un outil voit mieux qu'un lecteur, et la
-[rule 19](../../../../.claude/rules/19-securite.md) le demandait déjà — sans que
-rien ne l'applique.
+genre d'écart qu'un outil voit mieux qu'un lecteur, et la `rule 19` (cadre
+local, non publié) le demandait déjà — sans que rien ne l'applique.
 
 Cette exigence est le **pendant syntaxique** de
 [REQ-SEC-001](REQ-SEC-001.md) : celle-ci refuse un secret qui entre dans

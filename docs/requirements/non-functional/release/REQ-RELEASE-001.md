@@ -63,10 +63,10 @@ effet sur le semver, et rien ne le signale. Le seul symptôme est un CHANGELOG
 incomplet, c'est-à-dire un artefact que personne ne relit ligne à ligne — donc un
 défaut qui ne se découvre pas.
 
-La [rule 03](../../../../.claude/rules/03-commits-review.md) exigeait déjà des
-Conventional Commits et la [rule 15](../../../../.claude/rules/15-deploiement-cicd.md)
-listait `pr-title.yml` par avance. Ce qui manquait n'était pas la convention :
-c'était ce qui la fait respecter.
+La `rule 03` exigeait déjà des Conventional Commits et la `rule 15` listait
+`pr-title.yml` par avance (cadre de développement local, non publié — voir la
+note de [`docs/adr/README.md`](../../../adr/README.md)). Ce qui manquait n'était
+pas la convention : c'était ce qui la fait respecter.
 
 ## Règles
 
@@ -117,8 +117,8 @@ le sujet à 72 caractères, et exiger une description en minuscule. Confrontées
 refus, tous sur des sujets légitimes — une dizaine de sujets longs qui portent
 leur raison d'être, et cinq descriptions ouvertes par un acronyme (« AC-4
 assertait… », « PRD Conduit… », « README — … »). Les deux ont donc été écartées.
-C'est l'étape 4 de la [rule 21](../../../../.claude/rules/21-cadre-reproductible.md)
-appliquée à la lettre : calibrer sur des cas réels avant de gater, plutôt que
+C'est l'étape 4 de la `rule 21` (cadre local) appliquée à la lettre : calibrer
+sur des cas réels avant de gater, plutôt que
 poser un seuil au jour 1 et le désactiver six mois plus tard parce qu'il est trop
 bruyant.
 
