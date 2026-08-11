@@ -46,15 +46,21 @@ Installer **release-please** en mode manifest, calqué sur `crmcoaching`, en
 - `release-please-config.json` — `release-type: node`, un seul paquet `.`,
   `component`/`package-name` = `conduit-fullstack`, `include-component-in-tag:
   false` (tags de la forme `vX.Y.Z`, sans préfixe de composant).
-- `.release-please-manifest.json` — `{ ".": "0.0.0" }`, aligné sur la version
-  actuelle de `package.json`.
+- `.release-please-manifest.json` — `{ ".": "0.7.0" }`. **Baseline reconstruite
+  le 2026-08-11** : l'app n'ayant pas suivi ses versions, on la reconstitue par
+  **jalon de phase** — sept gates franchis (phases 0, 1, 2, R, F, 3, 4), tous
+  porteurs de features, **zéro breaking change** (0 commit `!`/`BREAKING CHANGE`
+  sur 145) — soit sept bumps mineurs depuis `0.0.0`. `package.json` est aligné
+  sur la même valeur.
 
 Seul l'artefact **racine** est versionné : les workspaces `@repo/api`,
-`@repo/web`, `@repo/shared` sont `private` et hors périmètre. La release
-`0.x` est assumée tant que l'app n'a pas atteint son premier jalon stable ; la
-**version du premier tag reste une décision humaine**, prise en relisant la
-première release PR (via `Release-As:` dans un commit, ou en mergeant la PR
-proposée). L'action ne publie jamais seule : elle prépare, l'humain merge.
+`@repo/web`, `@repo/shared` sont `private` et hors périmètre. La release `0.x`
+est assumée : l'app reste **pré-1.0** tant qu'on ne déclare pas son contrat
+public stable (ce serait un `Release-As: 1.0.0` délibéré, malgré la conformité
+RealWorld déjà à 100 %). Depuis la baseline `0.7.0`, release-please bumpe
+normalement — `fix` → `0.7.1`, `feat` → `0.8.0` — et **la première release
+automatisée reste sous porte humaine** : proposée en PR sur `main` après
+promotion, jamais publiée seule. L'action prépare, l'humain merge.
 
 La contrainte de la rule 15 est reconduite : la PR de promotion `staging → main`
 se merge en **merge commit, jamais en squash** — un squash aplatirait les commits
