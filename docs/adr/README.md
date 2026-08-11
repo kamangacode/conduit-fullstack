@@ -41,6 +41,7 @@ elle porte la mécanique : gabarit, numérotation, statuts, vérification.
 | [026](026-tests-de-contrat-assertion-symetrique-et-intercepteur.md) | Tests de contrat : assertion symétrique et intercepteur de harnais | Accepted | 2026-08-08 |
 | [027](027-idempotence-des-creations-intercepteur-opt-in.md) | Idempotence des créations : intercepteur opt-in, réponse rejouée verbatim | Accepted | 2026-08-08 |
 | [028](028-changelog-et-release-via-release-please.md) | CHANGELOG et release dérivés de `main` par release-please | Accepted | 2026-08-11 |
+| [029](029-sujet-conventionnel-verrou-partage.md) | Sujet conventionnel : un verrou partagé entre le hook et la CI | Accepted | 2026-08-11 |
 
 ## Écrire un ADR
 

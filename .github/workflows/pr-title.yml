@@ -1,0 +1,53 @@
+name: pr-title
+
+# Refuse une PR dont le titre n'est pas un Conventional Commit
+# (REQ-RELEASE-001, ADR 029).
+#
+# Pourquoi le **titre** et pas seulement les commits : `auto-merge.yml` squashe
+# les PR portant le label `reviewed`, et un squash prend le **titre de la PR**
+# comme sujet du commit qui atterrit sur `staging`. Le titre devient donc une
+# ligne de l'historique conventionnel dont release-please (ADR 028) dérive la
+# version et le CHANGELOG — un titre non conventionnel efface silencieusement le
+# changement du changelog, même si tous les commits de la branche étaient, eux,
+# irréprochables.
+#
+# Le hook `commit-msg` (lefthook) garde les commits ; ce workflow garde le titre.
+# Les deux appellent le **même** script : la règle est écrite une fois
+# (`scripts/check-conventional-subject.sh`), et `verify-conventional-subject.sh`
+# vérifie que ce câblage tient (AC-5).
+
+on:
+  pull_request:
+    branches: [main, staging]
+    # `edited` est indispensable : sans lui, corriger un titre refusé laisserait
+    # le check rouge jusqu'à un push sans rapport, et la seule issue serait de
+    # pousser un commit vide pour re-déclencher la CI.
+    types: [opened, edited, reopened, synchronize]
+
+# La validation d'un titre ne lit rien du dépôt et n'écrit nulle part.
+permissions:
+  contents: read
+
+concurrency:
+  # Renommer un titre trois fois de suite ne doit pas laisser trois runs en vol :
+  # seul le dernier titre compte.
+  group: pr-title-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  conventional-title:
+    name: Titre en Conventional Commits
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Valider le titre de la PR
+        # Le titre transite par l'environnement, **jamais** par une interpolation
+        # `${{ … }}` dans le corps du `run`. Un titre est une chaîne contrôlée par
+        # l'auteur de la PR : interpolée, elle serait recollée dans le script
+        # avant exécution du shell, et un titre contenant `"; curl …` exécuterait
+        # sa charge sur le runner. Passée en variable, elle reste une donnée.
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+        run: bash scripts/check-conventional-subject.sh --subject "$PR_TITLE"

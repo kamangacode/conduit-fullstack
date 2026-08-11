@@ -1,12 +1,28 @@
 # Git hooks via Lefthook.
 #
-# Deux niveaux de garde-fou, du plus rapide au plus complet :
+# Trois niveaux de garde-fou, du plus rapide au plus complet :
+#   - commit-msg : forme du sujet (Conventional Commits). Quasi instantané.
 #   - pre-commit : vérifs rapides sur les fichiers staged (auto-format Biome +
 #     garde secrets/.env). Doit rester quasi instantané.
 #   - pre-push   : lint + typecheck + tests + validation des migrations sur un
 #     Postgres jetable + vérif du verrou Biome. Dernier rempart avant le remote.
-#
-# Les conventional commits (commitlint) et le CHANGELOG sont traités en Phase 6.
+
+commit-msg:
+  commands:
+    conventional-subject:
+      # Refuse un sujet qui n'entrerait pas dans le CHANGELOG (REQ-RELEASE-001,
+      # ADR 029). La version et le CHANGELOG sont dérivés par release-please
+      # (ADR 028) de l'historique conventionnel de `main` : un sujet mal formé
+      # n'est pas une faute de style, il est **invisible** de l'outil de release.
+      #
+      # La règle vit dans un script et non ici, pour la même raison que le
+      # garde-fou de secrets : un garde-fou qu'on ne peut pas exécuter hors de
+      # son hook ne peut pas être mis en échec, donc pas prouvé. Le workflow
+      # `.github/workflows/pr-title.yml` appelle ce même script sur le titre de
+      # PR — jamais une copie de sa regex, qui ne prouverait que la copie.
+      #
+      # `{1}` est le chemin du fichier de message que git passe au hook.
+      run: bash scripts/check-conventional-subject.sh --file {1}
 
 pre-commit:
   parallel: true
@@ -127,6 +143,24 @@ pre-push:
       # ordinaire, suppression d'un secret — parce qu'un garde-fou qui refuse
       # tout se fait contourner par `--no-verify` avant la fin de la semaine.
       run: bash scripts/verify-secret-guard.sh
+
+    verify-conventional-subject:
+      # Soumet au verrou de sujet ce qu'il prétend refuser et ce qu'il doit
+      # laisser passer, puis lui confronte les 147 sujets de l'historique réel
+      # (REQ-RELEASE-001, ADR 029).
+      #
+      # Le hook `commit-msg` ci-dessus est silencieux quand il marche ET quand il
+      # est cassé, et sa sanction n'arrive pas au moment du commit : elle arrive
+      # des semaines plus tard, sous la forme d'un CHANGELOG incomplet que
+      # personne ne relit ligne à ligne. La seule preuve est de lui soumettre un
+      # sujet fautif et de constater le refus.
+      #
+      # La phase d'historique est le contrôle qui a réellement changé le verrou :
+      # elle a écarté une limite de longueur et l'obligation de minuscule
+      # initiale, deux contraintes qui semblaient évidentes et qui auraient
+      # produit une quinzaine de faux positifs sur des sujets légitimes. Un
+      # verrou qui refuse un geste normal se fait contourner par `--no-verify`.
+      run: bash scripts/verify-conventional-subject.sh
 
     verify-sql-raw-guard:
       # Soumet au verrou SQL les trois formes d'appel qu'il prétend refuser, et

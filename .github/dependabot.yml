@@ -62,6 +62,19 @@ updates:
         update-types: ["version-update:semver-major"]
     labels:
       - dependencies
+    # Sans ce bloc, Dependabot titre ses PR « Bump x from 1.0 to 1.1 » — forme
+    # que le verrou de sujet conventionnel refuse (REQ-RELEASE-001, ADR 029).
+    # Le gate aurait donc rougi sur chacune des dix PR hebdomadaires dès le
+    # premier lundi, et un gate bruyant se désactive : c'est exactement l'étape
+    # de calibration que la rule 21 demande avant de gater.
+    #
+    # `chore` plutôt que `fix` : une montée de dépendance ne doit pas déclencher
+    # de bump de version applicative chez release-please (ADR 028), sauf à
+    # publier un patch par mise à jour de `@types/*`.
+    commit-message:
+      prefix: chore
+      prefix-development: chore
+      include: scope
 
   # ─── Actions GitHub des workflows ───────────────────────────────────────
   - package-ecosystem: github-actions
@@ -78,3 +91,9 @@ updates:
     labels:
       - dependencies
       - ci
+    # `ci` plutôt que `chore` : une montée d'Action ne touche que la chaîne
+    # d'intégration. C'est le type déjà employé par l'historique du dépôt pour
+    # ce geste (`ci(deps): Dependabot + job audit CI`).
+    commit-message:
+      prefix: ci
+      include: scope

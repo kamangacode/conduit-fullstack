@@ -109,6 +109,14 @@ jobs:
         # canary ici prouve que le garde-fou mord aussi sur un runner frais,
         # et attrape le cas où quelqu'un aurait dégradé ses motifs (REQ-SEC-001).
         run: bash scripts/verify-secret-guard.sh
+      - name: Sujet conventionnel (vérification active)
+        # Le hook `commit-msg` qui refuse un sujet non conventionnel ne tourne
+        # que sur le poste, et `--no-verify` suffit à le contourner. Rejouer ici
+        # ses refus prouve que la règle mord encore, et surtout qu'elle est la
+        # **même** des deux côtés : la vérification échoue si le hook ou
+        # `pr-title.yml` cessait d'appeler le script partagé (REQ-RELEASE-001,
+        # ADR 029).
+        run: bash scripts/verify-conventional-subject.sh
       - name: Verrou SQL brut (vérification active)
         # Le plugin GritQL qui interdit `$queryRawUnsafe` se dégrade en silence :
         # s'il ne compile pas, Biome le rapporte en `info` et sort en 0. Rejouer
