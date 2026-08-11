@@ -62,6 +62,12 @@ jobs:
               - 'turbo.json'
               - 'scripts/**'
               - '.github/workflows/ci.yml'
+              # Le contrôle de câblage CodeQL vit dans le job `quality` : sans
+              # ce chemin, modifier `codeql.yml` seul ne le rejouerait pas en
+              # CI, alors que le pre-push le rejoue par glob. L'en-tête de ce
+              # fichier revendique l'inverse — ce qui bloque un push doit
+              # bloquer une PR, et inversement.
+              - '.github/workflows/codeql.yml'
             deps:
               - 'package.json'
               - 'pnpm-lock.yaml'
@@ -118,6 +124,12 @@ jobs:
         # canary ici prouve que le garde-fou mord aussi sur un runner frais,
         # et attrape le cas où quelqu'un aurait dégradé ses motifs (REQ-SEC-001).
         run: bash scripts/verify-secret-guard.sh
+      - name: Câblage CodeQL (vérification active)
+        # Sabote le workflow CodeQL propriété par propriété et exige un refus à
+        # chaque fois (REQ-SEC-005). L'analyse elle-même tourne dans son propre
+        # workflow ; ce qu'on vérifie ici est qu'elle **publie** — un CodeQL
+        # amputé de `security-events: write` reste vert en n'uploadant rien.
+        run: bash scripts/verify-codeql-wiring.sh
       - name: Éligibilité auto-merge (vérification active)
         # Rejoue le refus de la promotion `staging → main` sur un runner frais
         # (REQ-RELEASE-002, ADR 030). La propriété gardée ici — un squash de

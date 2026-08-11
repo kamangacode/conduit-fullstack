@@ -154,6 +154,23 @@ pre-push:
       # tout se fait contourner par `--no-verify` avant la fin de la semaine.
       run: bash scripts/verify-secret-guard.sh
 
+    verify-codeql-wiring:
+      # Sabote le workflow CodeQL, une propriété à la fois, et exige que le
+      # contrôle de câblage la voie manquer (REQ-SEC-005).
+      #
+      # Un workflow CodeQL mal câblé **réussit** : job vert, durée plausible, et
+      # rien ne distingue une analyse publiée d'une analyse perdue. Retirer
+      # `security-events: write` suffit à ne plus rien publier sans qu'un seul
+      # job ne rougisse.
+      #
+      # `glob` restreint la tâche à ce qu'elle peut prouver : un push qui ne
+      # touche ni le workflow ni son contrôle n'a rien à re-vérifier ici.
+      glob:
+        - '.github/workflows/codeql.yml'
+        - 'scripts/check-codeql-wiring.mjs'
+        - 'scripts/verify-codeql-wiring.sh'
+      run: bash scripts/verify-codeql-wiring.sh
+
     verify-auto-merge-eligibility:
       # Soumet à la règle d'auto-merge la promotion qu'elle doit refuser
       # (REQ-RELEASE-002, ADR 030).
