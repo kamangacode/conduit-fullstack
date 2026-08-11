@@ -40,6 +40,7 @@ elle porte la mécanique : gabarit, numérotation, statuts, vérification.
 | [025](025-validation-env-avant-chargement-du-graphe.md) | Valider l'environnement avant de charger le graphe applicatif | Accepted | 2026-08-08 |
 | [026](026-tests-de-contrat-assertion-symetrique-et-intercepteur.md) | Tests de contrat : assertion symétrique et intercepteur de harnais | Accepted | 2026-08-08 |
 | [027](027-idempotence-des-creations-intercepteur-opt-in.md) | Idempotence des créations : intercepteur opt-in, réponse rejouée verbatim | Accepted | 2026-08-08 |
+| [028](028-changelog-et-release-via-release-please.md) | CHANGELOG et release dérivés de `main` par release-please | Accepted | 2026-08-11 |
 
 ## Écrire un ADR
 
