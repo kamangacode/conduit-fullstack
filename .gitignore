@@ -54,3 +54,10 @@ artifacts/forge/**/*-shadow.json
 /CLAUDE.md
 /.claude/
 .gstack/
+
+# Test de mutation (item C8) — artefacts dérivés, régénérés par `pnpm mutation`.
+# Même principe que la matrice de traçabilité (ADR 005) : ce qui se recalcule ne
+# se versionne pas. Le score, lui, est consigné dans REQ-TEST-001, parce qu'un
+# chiffre qu'aucun fichier ne porte se perd au premier `rm -rf`.
+.stryker-tmp/
+apps/api/reports/
