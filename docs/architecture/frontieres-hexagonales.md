@@ -91,6 +91,14 @@ Deux leçons qui valent au-delà de ce dépôt :
 2. Un garde-fou vert n'est une preuve que si l'on a vérifié qu'il peut rougir. La bascule
    `warn` vers `error` de la règle de frontière s'accompagne d'un test actif : on ajoute un import
    interdit, on constate l'échec, on annule.
+3. **Vérifier qu'il rougit ne suffit pas : il faut vérifier dans quelles conditions il aveugle.**
+   La règle de frontière compare des chemins **résolus**. Sans `packages/shared/dist`,
+   `@repo/shared` ne se résout pas, la règle ne voit plus rien, et `depcruise` sort vert avec un
+   import interdit dans `domain/`. Un clone frais est exactement dans cet état, et le pre-push
+   lance `depcruise` avant `typecheck`. La règle `no-unresolvable` ferme ce trou : un import que le
+   resolver ne sait pas suivre est une erreur, précisément parce qu'il rend les autres règles
+   aveugles sur lui. Ce défaut a été relevé en revue de code, pas par l'outillage — la deuxième
+   fois dans cette histoire.
 
 ## Vérifier
 

@@ -46,6 +46,20 @@ module.exports = {
       to: { path: '^src/interface/' },
     },
     {
+      name: 'no-unresolvable',
+      severity: 'error',
+      comment:
+        "Un import que le resolver ne sait pas suivre n'est pas seulement un import cassé : il " +
+        'rend les autres règles AVEUGLES sur lui. Le cas mesuré le 2026-08-21 : sans ' +
+        '`packages/shared/dist`, `@repo/shared` ne se résout pas, donc ' +
+        '`shared-stays-at-the-http-boundary` ne voit plus rien et depcruise sort vert avec un ' +
+        'import interdit dans domain/. Un clone frais est exactement dans cet état, et le ' +
+        'pre-push lance depcruise AVANT typecheck. Sans cette règle, le garde-fou de frontière ' +
+        "est vert pour la mauvaise raison — la panne même que l'ADR 031 corrige ailleurs.",
+      from: {},
+      to: { couldNotResolve: true },
+    },
+    {
       name: 'shared-stays-at-the-http-boundary',
       severity: 'error',
       comment:
