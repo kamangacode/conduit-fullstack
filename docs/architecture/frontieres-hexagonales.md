@@ -100,16 +100,37 @@ pnpm typecheck      # les trois workspaces
 bash scripts/verify-type-boundary.sh   # la frontière est-elle une dépendance de compilation
 ```
 
-## État de la migration
+## État de la migration : terminée
 
-La règle de frontière est posée en `warn` le temps que la dette existante soit résorbée, sur le
-modèle de ce qui se fait ailleurs dans l'écosystème : nommer la dette, la compter, la faire
-descendre. Elle passe en `error` quand les deux compteurs sont à zéro.
+La règle a été posée en `warn` le temps que la dette existante soit résorbée, sur le modèle de ce
+qui se fait ailleurs dans l'écosystème : nommer la dette, la compter, la faire descendre. Elle est
+passée en `error` le 2026-08-21, les deux compteurs étant à zéro.
 
-| Règle | Sévérité | Modules en violation au 2026-08-21 |
+| Compteur (règle de migration) | Au départ | À l'arrivée |
 |---|---|---|
-| `domain-owns-its-model` | `warn` | 8 |
-| `application-owns-its-io` | `warn` | 18 (dont 1 spec) |
+| `domain-owns-its-model` | 8 modules | 0 |
+| `application-owns-its-io` | 18 modules (dont 1 spec) | 0 |
 
-Le plan de résorption vit dans `artifacts/forge/frontiere-contrat/`. Ces violations ne sont **pas
-un précédent** : tout nouveau code doit respecter la règle dès maintenant.
+Les deux règles ont fusionné en **`shared-stays-at-the-http-boundary`**, en `error`, qui couvre en
+plus `infrastructure/`. Le plan de résorption et ses huit lots restent lisibles dans
+`artifacts/forge/frontiere-contrat/`.
+
+L'analyse couvre désormais les **trois** workspaces (`pnpm depcruise`), soit environ 266 modules
+contre 136 auparavant : `apps/web` et `packages/shared` n'avaient jamais été cruisés. Aucune règle
+de couche ne s'y applique (le front n'a pas d'architecture hexagonale à garder) ; ce qu'on y attend
+d'eux est l'absence de cycles et d'orphelins.
+
+## Ce que la frontière donne, mesuré
+
+Renommer un champ du contrat dans `packages/shared` :
+
+| Couche | Avant l'ADR 031 | Après |
+|---|---|---|
+| `apps/web` | casse | casse |
+| `apps/api/src/interface/` | casse | casse |
+| `apps/api/src/application/` | **cassait** | ne bouge pas |
+| `apps/api/src/domain/` | cassait | ne bouge pas |
+
+`scripts/verify-type-boundary.sh` vérifie les quatre lignes de ce tableau à chaque pre-push, en
+provoquant réellement le renommage. C'est la forme exécutable de l'ADR 031, et une propriété plus
+forte que celle d'origine : une thèse qui casse partout ne prouve rien.

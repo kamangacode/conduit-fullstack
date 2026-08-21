@@ -14,17 +14,17 @@
 #
 # PORTÉE, depuis l'ADR 031 (2026-08-21). `packages/shared` porte le contrat HTTP,
 # pas le modèle métier : seuls `apps/web` et `apps/api/src/interface/` ont le
-# droit de le connaître. La propriété intéressante devient donc bidirectionnelle,
-# et ce script n'en couvre pour l'instant qu'une moitié :
+# droit de le connaître. La propriété vérifiée est donc **bidirectionnelle**, et
+# c'est ce qui la rend démonstrative :
 #
-#   - moitié POSITIVE (ici) : casser un champ du contrat casse ses consommateurs ;
-#   - moitié NÉGATIVE (à venir) : ça ne doit toucher NI `src/domain/` NI
-#     `src/application/`.
+#   - moitié POSITIVE : casser un champ du contrat casse ses consommateurs, et
+#     côté API l'erreur cite `src/interface/` ;
+#   - moitié NÉGATIVE : ça ne touche NI `src/domain/` NI `src/application/`.
 #
-# La moitié négative n'est pas encore vraie : à cette date, huit fichiers de
-# `domain/` importent encore le contrat. Elle est ajoutée par le lot T8, quand
-# les quatre contextes auront été migrés. L'écrire avant reviendrait à faire
-# échouer volontairement le pre-push de tout le monde pendant six lots.
+# Une thèse qui casse partout ne prouve rien. Avant l'ADR 031, ce script
+# constatait que `apps/api` **dans son ensemble** cessait de compiler — un dépôt
+# qui aurait correctement isolé son domaine aurait donc échoué à sa propre
+# vérification.
 #
 # Le champ saboté est `favoritesCount` : il est réellement consommé des deux
 # côtés (chemin de lecture d'article côté API, aperçu d'article côté web).
@@ -33,7 +33,8 @@
 #
 # 3 phases :
 #   1. État sain      : le typecheck passe sur les trois workspaces
-#   2. Contrat cassé  : api ET web échouent, et leurs erreurs citent leurs fichiers
+#   2. Contrat cassé  : api ET web échouent ; côté api l'erreur cite interface/
+#                       et JAMAIS domain/ ni application/
 #   3. Restauration   : le typecheck repasse, aucun résidu
 #
 # La restauration passe par un `trap EXIT` : une vérification qui laisse le dépôt
@@ -250,10 +251,43 @@ assert_fails() {
   echo "  ok $label — $first_error"
 }
 
+# it AC-5: la rupture s'arrête à la frontière HTTP de l'API
+#
+# Les deux assertions ci-dessous lisent le log de `assert_fails "@repo/api"`,
+# qui est écrasé au prochain appel. Elles doivent donc rester **entre** les deux
+# `assert_fails`, et pas être regroupées plus bas par souci de lisibilité.
+assert_cites() {
+  local layer="$1"
+  if ! grep -qE "^${layer}" "$TYPECHECK_LOG"; then
+    echo "ERROR: aucune erreur de apps/api ne cite ${layer}." >&2
+    echo "       Le contrat n'est donc plus consommé là où il devrait l'être," >&2
+    echo "       ou la vérification a cessé de mesurer ce qu'elle croit mesurer." >&2
+    tail -30 "$TYPECHECK_LOG" >&2
+    exit 1
+  fi
+  echo "  ok apps/api casse bien dans ${layer}"
+}
+
+assert_untouched() {
+  local layer="$1"
+  if grep -qE "^${layer}" "$TYPECHECK_LOG"; then
+    echo "ERROR: le contrat a fui dans ${layer} (ADR 031)." >&2
+    echo "       Renommer un champ du contrat ne doit rien casser sous interface/ :" >&2
+    echo "       une couche qui tombe ici en dépend, donc elle le connaît." >&2
+    grep -E "^${layer}" "$TYPECHECK_LOG" | head -10 >&2
+    exit 1
+  fi
+  echo "  ok ${layer} ne bouge pas"
+}
+
 assert_fails "@repo/api" "apps/api"
+assert_cites "src/interface/"
+assert_untouched "src/domain/"
+assert_untouched "src/application/"
+
 assert_fails "@repo/web" "apps/web"
 
-echo "ok phase 2 : les deux applications échouent, chacune en citant ses propres fichiers."
+echo "ok phase 2 : les deux applications échouent, et côté api la rupture s'arrête à interface/."
 
 echo "phase 3 — restauration : le typecheck doit repasser"
 cp "$BACKUP" "$MODEL_ABS"

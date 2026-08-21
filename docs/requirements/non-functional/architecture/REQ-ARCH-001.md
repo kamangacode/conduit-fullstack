@@ -23,6 +23,10 @@ acceptance_criteria:
     given: "la vérification elle-même"
     when: "elle est exécutée"
     then: "elle restaure le dépôt dans son état d'origine, y compris si elle échoue en cours de route"
+  - id: AC-5
+    given: "un champ du contrat partagé renommé de façon incompatible"
+    when: "on examine les erreurs de `apps/api`"
+    then: "elles citent `src/interface/` et **aucune** ne cite `src/domain/` ni `src/application/` — la rupture s'arrête à la frontière HTTP (ADR 031)"
 implementation:
   files:
     - packages/shared/src/model/article.ts
@@ -37,6 +41,7 @@ related:
     - REQ-ERROR-001
   adrs:
     - "001"
+    - "031"
 ---
 
 # REQ-ARCH-001 — Faire de la cohérence front/back une dépendance de compilation
@@ -80,14 +85,20 @@ La propriété visée devient bidirectionnelle :
 
 - moitié **positive**, déjà couverte par AC-1 et AC-2 : casser un champ du
   contrat casse ses consommateurs légitimes ;
-- moitié **négative**, pas encore couverte : ça ne doit toucher ni `src/domain/`
-  ni `src/application/`.
+- moitié **négative**, portée par AC-5 : ça ne doit toucher ni `src/domain/` ni
+  `src/application/`.
 
-La moitié négative n'est pas ajoutée ici parce qu'elle est **fausse à cette
-date** : huit fichiers de `domain/` importent encore le contrat. Elle arrivera
-avec un AC-5 et son marqueur `# it AC-5`, une fois les quatre contextes migrés
-(lot T8). Écrire une exigence connue pour être violée, en la marquant
-`implemented`, est exactement le mode d'échec que l'ADR 031 corrige.
+La moitié négative est portée par **AC-5**, ajouté une fois les quatre contextes
+migrés. Elle n'a pas été écrite d'emblée parce qu'elle était alors fausse : huit
+fichiers de `domain/` importaient encore le contrat, et déclarer `implemented`
+une exigence connue pour être violée est exactement le mode d'échec que l'ADR
+031 corrige.
+
+Mesure du 2026-08-21, avant et après. Avant, le renommage de `favoritesCount`
+faisait tomber `apps/api` dans `src/application/article/favorite-article.use-case.spec.ts` :
+la couche applicative connaissait le fil. Après, il le fait tomber dans
+`src/interface/article/article.mapper.ts`, et ni `domain/` ni `application/` ne
+bougent.
 
 ## Règles
 
@@ -102,10 +113,9 @@ avec un AC-5 et son marqueur `# it AC-5`, une fois les quatre contextes migrés
 
 - Le choix de la frontière lui-même, tranché par l'[ADR 001](../../../adr/001-topologie-monorepo-modele-partage.md)
   et borné par l'[ADR 031](../../../adr/031-le-contrat-partage-s-arrete-a-la-frontiere-http.md).
-- La moitié négative de la propriété (« le domaine ne bouge pas »), qui demande
-  d'abord que ce soit vrai. Voir l'amendement ci-dessus.
+- La preuve qu'aucun type du contrat n'a été **recopié** à la main dans une
+  couche interne : ce contrôle prouve qu'un changement se propage là où il doit
+  et pas ailleurs, pas qu'aucune copie n'existe. `dependency-cruiser`
+  (`shared-stays-at-the-http-boundary`) couvre l'import, pas la copie.
 - La conformité du contrat externe à la spec RealWorld, qui relève de la suite
   Hurl et de la suite Playwright (item F7).
-- La détection d'un type recopié à la main : ce contrôle prouve qu'un changement
-  se propage, pas qu'aucune copie n'existe. `knip` et `dependency-cruiser`
-  couvrent d'autres angles ; un contrôle dédié reste à imaginer.

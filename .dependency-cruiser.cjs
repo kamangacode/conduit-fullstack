@@ -46,31 +46,18 @@ module.exports = {
       to: { path: '^src/interface/' },
     },
     {
-      name: 'domain-owns-its-model',
-      severity: 'warn',
+      name: 'shared-stays-at-the-http-boundary',
+      severity: 'error',
       comment:
-        'domain/ possède son modèle. `@repo/shared` est le contrat HTTP (enveloppes de réponse, ' +
-        "DTOs d'entrée, CONDUIT_ERROR_STATUS) : il s'arrête à interface/. Un type du domaine n'a " +
-        'pas à ressembler au fil — `createdAt` y est une Date, pas une chaîne ISO. ' +
-        'Voir docs/adr/031 et docs/architecture/frontieres-hexagonales.md. ' +
-        'EN warn LE TEMPS DE LA MIGRATION : 8 modules legacy la violent au 2026-08-21 (les 4 ' +
-        "fichiers d'erreurs, les 3 ports de lecture, user.ts). Ce ne sont pas un précédent, et " +
-        'le compteur doit descendre à 0. Bascule en error prévue une fois les 4 contextes migrés.',
-      from: { path: '^src/domain/' },
-      to: { path: '(^|/)packages/shared/' },
-    },
-    {
-      name: 'application-owns-its-io',
-      severity: 'warn',
-      comment:
-        "L'entrée et la sortie d'un use case lui appartiennent. L'enveloppe du contrat " +
-        '(ArticlesResponse, articlesCount) est fabriquée par un mapper de interface/, pas par le ' +
-        'use case : `articlesCount` est un nom de la spec RealWorld, pas un concept métier. ' +
-        'Voir docs/adr/031 et docs/architecture/frontieres-hexagonales.md. ' +
-        'EN warn LE TEMPS DE LA MIGRATION : 18 modules legacy la violent au 2026-08-21 (les 17 ' +
-        "use cases plus une spec ; les specs ne sont pas exclues de l'analyse, une spec qui " +
-        'importe le contrat porte le même couplage que sa source).',
-      from: { path: '^src/application/' },
+        "`@repo/shared` est le contrat HTTP : enveloppes de réponse, DTOs d'entrée, messages, " +
+        'CONDUIT_ERROR_STATUS. Seul interface/ le consomme. domain/ possède son modèle (un type ' +
+        "du domaine n'a pas à ressembler au fil : `createdAt` y est une Date, pas une chaîne " +
+        "ISO), application/ possède l'entrée et la sortie de ses use cases (`articlesCount` est " +
+        'un nom de la spec RealWorld, pas un concept métier), et infrastructure/ ne connaît pas ' +
+        'la forme du fil. Voir docs/adr/031 et docs/architecture/frontieres-hexagonales.md. ' +
+        'Cette règle a remplacé le 2026-08-21 les deux compteurs de migration ' +
+        'domain-owns-its-model (8 modules) et application-owns-its-io (18), tous deux tombés à 0.',
+      from: { path: '^src/(domain|application|infrastructure)/' },
       to: { path: '(^|/)packages/shared/' },
     },
     {
