@@ -1,6 +1,6 @@
 import { Module } from '@nestjs/common'
 import { ListTagsUseCase } from '../../application/tag/list-tags.use-case'
-import { TAG_QUERY } from '../../domain/tag/ports/tag-query.port'
+import { TAG_QUERY } from '../../application/tag/ports/tag-query.port'
 import { PrismaTagQuery } from '../../infrastructure/persistence/prisma-tag.query'
 import { UserModule } from '../user/user.module'
 import { TagController } from './tag.controller'

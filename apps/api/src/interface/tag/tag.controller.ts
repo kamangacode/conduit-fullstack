@@ -17,6 +17,11 @@ export class TagController {
 
   @Get()
   async list(): Promise<TagsResponse> {
-    return this.listTags.execute()
+    // L'enveloppe est fabriquée ici, et sans mapper dédié : il n'y a rien à
+    // convertir, seulement une clé et un tableau. Écrire un `tag.mapper.ts`
+    // pour ça serait de la cérémonie — les mappers des autres contextes
+    // existent parce qu'ils portent une conversion réelle (dates, projections).
+    const tags = await this.listTags.execute()
+    return { tags: [...tags] }
   }
 }

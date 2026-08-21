@@ -1,11 +1,10 @@
-import type { Tag } from '@repo/shared'
 import type { CommentQueryPort } from '@/application/comment/ports/comment-query.port'
 import type { CommentView } from '@/application/comment/ports/comment-view'
 import type { ViewerId } from '@/application/shared/viewer-id'
+import type { TagName, TagQueryPort } from '@/application/tag/ports/tag-query.port'
 import { CommentEntity, type CommentProps } from '@/domain/comment/comment'
 import { CommentNotFoundError } from '@/domain/comment/comment.errors'
 import type { CommentRepository, NewComment } from '@/domain/comment/ports/comment-repository.port'
-import type { TagQueryPort } from '@/domain/tag/ports/tag-query.port'
 
 /**
  * Doublures des ports des contextes `comment` et `tag`, pour la lane **unit**
@@ -132,9 +131,9 @@ export class RecordingCommentQuery implements CommentQueryPort {
 export class StubTagQuery implements TagQueryPort {
   calls = 0
 
-  constructor(private readonly tags: readonly Tag[] = ['reactjs', 'angularjs']) {}
+  constructor(private readonly tags: readonly TagName[] = ['reactjs', 'angularjs']) {}
 
-  async listUsed(): Promise<readonly Tag[]> {
+  async listUsed(): Promise<readonly TagName[]> {
     this.calls += 1
     return this.tags
   }
