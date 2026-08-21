@@ -1,14 +1,17 @@
 import { Injectable } from '@nestjs/common'
 import type { Prisma } from '@prisma/client'
-import type { Article, ArticleSummary } from '@repo/shared'
 import type {
   ArticleFilters,
-  ArticlePage,
   ArticleQueryPort,
   FeedPagination,
-  ViewerId,
 } from '../../domain/article/ports/article-query.port'
+import type {
+  ArticleListPage,
+  ArticleSummaryView,
+  ArticleView,
+} from '../../domain/article/ports/article-view'
 import type { Slug } from '../../domain/article/slug'
+import type { ViewerId } from '../../domain/shared/viewer-id'
 import { PrismaService } from '../prisma/prisma.service'
 
 /**
@@ -63,14 +66,16 @@ type ArticleRow = Prisma.ArticleGetPayload<{ include: ReturnType<typeof articleI
  * Adapter Prisma du port de lecture des articles
  * (`docs/adr/011-lecture-des-listes-port-dedie.md`).
  *
- * Il produit directement les projections du contrat partagé. Aucune requête
- * brute : tout passe par le query builder, donc paramétré (rule 19).
+ * Il remplit les read models de `domain/article/ports/article-view.ts`, et
+ * non les projections du contrat : la forme du fil est produite plus haut, par
+ * le mapper de `interface/` (ADR 031). Aucune requête brute : tout passe par le
+ * query builder, donc paramétré (rule 19).
  */
 @Injectable()
 export class PrismaArticleQuery implements ArticleQueryPort {
   constructor(private readonly prisma: PrismaService) {}
 
-  async findBySlug(slug: Slug, viewer: ViewerId): Promise<Article | null> {
+  async findBySlug(slug: Slug, viewer: ViewerId): Promise<ArticleView | null> {
     const row = await this.prisma.article.findUnique({
       where: { slug: slug.value },
       include: articleInclude(viewer),
@@ -78,12 +83,12 @@ export class PrismaArticleQuery implements ArticleQueryPort {
     return row ? toArticle(row) : null
   }
 
-  async list(filters: ArticleFilters, viewer: ViewerId): Promise<ArticlePage> {
+  async list(filters: ArticleFilters, viewer: ViewerId): Promise<ArticleListPage> {
     const where = buildFilters(filters)
     return this.page(where, { limit: filters.limit, offset: filters.offset }, viewer)
   }
 
-  async feed(pagination: FeedPagination, viewer: string): Promise<ArticlePage> {
+  async feed(pagination: FeedPagination, viewer: string): Promise<ArticleListPage> {
     // Le flux est **calculé** à la lecture, jamais matérialisé à l'abonnement :
     // un désabonnement retire donc immédiatement les articles concernés, sans
     // qu'aucune donnée n'ait été recopiée (REQ-ARTICLE-008 AC-6).
@@ -109,7 +114,7 @@ export class PrismaArticleQuery implements ArticleQueryPort {
     where: Prisma.ArticleWhereInput,
     pagination: FeedPagination,
     viewer: ViewerId
-  ): Promise<ArticlePage> {
+  ): Promise<ArticleListPage> {
     const [rows, total] = await this.prisma.$transaction([
       this.prisma.article.findMany({
         where,
@@ -152,9 +157,10 @@ function buildFilters(filters: ArticleFilters): Prisma.ArticleWhereInput {
  *
  * Écrite champ par champ, comme toutes les projections de sortie du dépôt : un
  * étalement de la ligne Prisma emporterait `id` et `authorId` — des
- * identifiants internes qui ne sortent jamais de l'API.
+ * identifiants internes qui ne sortent jamais de l'API. Le read model ne les
+ * déclare pas, donc un étalement ne compilerait même plus.
  */
-function toArticle(row: ArticleRow): Article {
+function toArticle(row: ArticleRow): ArticleView {
   return { ...toSummary(row), body: row.body }
 }
 
@@ -163,10 +169,10 @@ function toArticle(row: ArticleRow): Article {
  * `body`** (R-7).
  *
  * Les deux formes dérivent l'une de l'autre plutôt que d'être écrites deux fois,
- * pour que l'écart entre elles reste exactement la règle R-7 — comme le modèle
- * partagé le fait déjà par `.omit()`.
+ * pour que l'écart entre elles reste exactement la règle R-7 — comme
+ * `ArticleSummaryView` le fait par `Omit`.
  */
-function toSummary(row: ArticleRow): ArticleSummary {
+function toSummary(row: ArticleRow): ArticleSummaryView {
   return {
     slug: row.slug,
     title: row.title,
@@ -174,8 +180,10 @@ function toSummary(row: ArticleRow): ArticleSummary {
     // Trié par nom : la table de jointure ne conserve pas l'ordre de saisie, et
     // un ordre non déterministe rendrait la suite de conformité instable.
     tagList: row.tags.map((tag) => tag.name).sort(),
-    createdAt: row.createdAt.toISOString(),
-    updatedAt: row.updatedAt.toISOString(),
+    // `Date` et non chaîne ISO : la sérialisation est le travail du mapper, pas
+    // celui de la persistance (ADR 031).
+    createdAt: row.createdAt,
+    updatedAt: row.updatedAt,
     // Relations filtrées sur le lecteur : non vides = vrai (R-5).
     favorited: row.favorites.length > 0,
     favoritesCount: row._count.favorites,

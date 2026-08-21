@@ -6,6 +6,15 @@ Accepted — 2026-08-05. Amende [004 — Persistance alignée sur le contrat](00
 sur un point : la normalisation d'un champ nullable vide est décidée par le
 contrat partagé, pas par la couche de persistance.
 
+Amendé le 2026-08-21 par [031 — Le contrat partagé s'arrête à la frontière HTTP](031-le-contrat-partage-s-arrete-a-la-frontiere-http.md)
+sur le **lecteur** de la table, pas sur la table. `CONTRACT_MESSAGES` reste la
+source unique des libellés du contrat et l'endroit où leur provenance est citée.
+Ce qui change : les classes d'erreur de `domain/` cessent de la lire. Elles
+portent désormais un code métier et une raison, et c'est
+`interface/filters/domain-error.mapper.ts` qui traduit la raison en corps §10 en
+lisant la table. Le domaine ne connaît plus ni la clé du champ ni le libellé,
+qui sont des choix de la spec RealWorld et non des règles de Conduit.
+
 ## Context
 
 La première exécution de la suite de conformité officielle (ADR 016) contre
@@ -65,8 +74,9 @@ Elle est consommée par :
 
 - les schémas Zod de `packages/shared` — un champ requis produit `"can't be
   blank"`, et jamais le message par défaut de Zod ;
-- les classes d'erreur de `apps/api/src/domain/**` — le corps §10 vient de la
-  table, la classe ne décide plus du texte ;
+- ~~les classes d'erreur de `apps/api/src/domain/**`~~ **le mapper d'erreurs de
+  `apps/api/src/interface/filters/`** (voir l'amendement ci-dessous) : le corps
+  §10 vient de la table, personne ne décide du texte ailleurs ;
 - `apps/web`, qui affiche déjà ces messages sous les champs de formulaire sans
   les réécrire.
 

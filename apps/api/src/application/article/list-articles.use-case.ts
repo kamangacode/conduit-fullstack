@@ -1,11 +1,11 @@
 import { Inject, Injectable } from '@nestjs/common'
-import type { ArticlesResponse } from '@repo/shared'
 import {
   ARTICLE_QUERY,
   type ArticleFilters,
   type ArticleQueryPort,
-  type ViewerId,
 } from '../../domain/article/ports/article-query.port'
+import type { ArticleListPage } from '../../domain/article/ports/article-view'
+import type { ViewerId } from '../../domain/shared/viewer-id'
 
 export interface ListArticlesInput {
   readonly filters: ArticleFilters
@@ -22,23 +22,26 @@ export interface ListArticlesInput {
  * la coordination. Les remonter ici les ferait exécuter en mémoire sur un jeu
  * déjà paginé — c'est-à-dire faussement.
  *
- * Ce qu'il fait, et que personne d'autre ne peut faire : transmettre le lecteur,
- * et transformer la page du port en **enveloppe du contrat**. La séparation
- * `total` / `items.length` est préservée telle quelle : `articlesCount` est le
- * total avant pagination, dont le front déduit son nombre de pages
- * (AC-3). Les deux coïncident tant qu'on teste avec moins d'articles qu'une
- * page, ce qui rend l'erreur invisible en développement.
+ * Ce qu'il fait, et que personne d'autre ne peut faire : **transmettre le
+ * lecteur**. C'est peu, et c'est exactement ce que le contrat d'authentification
+ * facultative exige (R-5).
+ *
+ * Il fabriquait autrefois aussi l'enveloppe `{ articles, articlesCount }`. Ce
+ * n'était pas de la coordination mais du transport : `articlesCount` est un nom
+ * de la spec RealWorld, pas un concept métier. L'enveloppe est produite depuis
+ * l'ADR 031 par `interface/article/article.mapper.ts`, et le use-case renvoie la
+ * page telle que le port la produit.
+ *
+ * La séparation `total` / `items.length` est préservée par `ArticleListPage` :
+ * `total` est le total **avant** pagination, dont le front déduit son nombre de
+ * pages (AC-3). Les deux coïncident tant qu'on teste avec moins d'articles
+ * qu'une page, ce qui rend l'erreur invisible en développement.
  */
 @Injectable()
 export class ListArticlesUseCase {
   constructor(@Inject(ARTICLE_QUERY) private readonly query: ArticleQueryPort) {}
 
-  async execute(input: ListArticlesInput): Promise<ArticlesResponse> {
-    const page = await this.query.list(input.filters, input.viewer)
-
-    return {
-      articles: [...page.items],
-      articlesCount: page.total,
-    }
+  execute(input: ListArticlesInput): Promise<ArticleListPage> {
+    return this.query.list(input.filters, input.viewer)
   }
 }

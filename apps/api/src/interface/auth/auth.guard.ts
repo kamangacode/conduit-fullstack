@@ -5,10 +5,10 @@ import {
   Injectable,
   UnauthorizedException,
 } from '@nestjs/common'
-import { CONTRACT_MESSAGES, fieldErrors } from '@repo/shared'
 import type { Request } from 'express'
 import { TOKEN_SERVICE, type TokenService } from '../../domain/user/ports/token-service.port'
 import { USER_REPOSITORY, type UserRepository } from '../../domain/user/ports/user-repository.port'
+import { AUTH_ERROR_BODY, type AuthFailure } from './auth-error'
 
 /**
  * Préfixe imposé par le contrat RealWorld (PRD §9) : `Token`, **pas** `Bearer`.
@@ -20,21 +20,6 @@ const AUTH_SCHEME = 'Token'
 
 /** Clé sous laquelle l'identité vérifiée est posée sur la requête. */
 export const CURRENT_USER_ID_KEY = 'conduitUserId'
-
-/**
- * Pourquoi une requête n'a pas d'identité.
- *
- * `missing` = aucun jeton à examiner (en-tête absent, ou d'un schéma que le
- * contrat n'emploie pas). `invalid` = un jeton nous a été présenté et nous le
- * refusons.
- *
- * Cette distinction-là est sûre, et le contrat l'exige (REQ-ERROR-002 AC-3 et
- * AC-4) : l'appelant sait déjà s'il a envoyé un jeton, on ne lui apprend rien.
- * Ce qui reste fermé, c'est le degré en dessous — les trois causes d'invalidité
- * ne sont pas distinguées entre elles, sans quoi le porteur d'un jeton périmé
- * apprendrait qu'il a déjà été valide.
- */
-type AuthFailure = 'missing' | 'invalid'
 
 /**
  * Résout l'identité portée par l'en-tête `Authorization`, ou dit pourquoi elle
@@ -86,19 +71,15 @@ const isFailure = (resolved: string | AuthFailure): resolved is AuthFailure =>
   resolved === 'missing' || resolved === 'invalid'
 
 /**
- * Corps du 401, conforme au contrat (`errors.token`, REQ-ERROR-002 AC-3/AC-4).
+ * 401 du contrat, dont le corps vient de `auth-error.ts`.
  *
- * Le message dit s'il y avait un jeton, jamais ce qui cloche avec lui :
- * distinguer « expiré » de « mal signé » renseignerait un attaquant sur l'état
- * du jeton qu'il détient.
+ * Le corps n'est pas construit ici : il est partagé avec le mapper d'erreurs de
+ * domaine, qui doit rendre **exactement** le même pour un jeton dont le sujet ne
+ * résout plus vers un compte. Voir `auth-error.ts` pour la propriété de sécurité
+ * que cette égalité porte.
  */
 const unauthorized = (failure: AuthFailure): UnauthorizedException =>
-  new UnauthorizedException(
-    fieldErrors(
-      'token',
-      failure === 'missing' ? CONTRACT_MESSAGES.tokenMissing : CONTRACT_MESSAGES.tokenInvalid
-    )
-  )
+  new UnauthorizedException(AUTH_ERROR_BODY[failure])
 
 /**
  * Guard des routes **protégées** : sans identité valide, la requête est refusée

@@ -2,7 +2,15 @@
 
 ## Status
 
-Accepted — 2026-08-05.
+Accepted — 2026-08-05. Amendé le 2026-08-21 par
+[031 — Le contrat partagé s'arrête à la frontière HTTP](031-le-contrat-partage-s-arrete-a-la-frontiere-http.md)
+sur **un seul point** : le type que le port de lecture renvoie, qui devient un read model possédé
+par le dépôt (`ArticleView`) au lieu de la projection du contrat partagé.
+
+Tout le reste tient : la séparation de la lecture et de l'écriture en deux ports distincts, leur
+emplacement dans `domain/*/ports/`, et la justification de la séparation (une page résolue en une
+requête, le N+1 structurellement absent, les règles de domaine non diluées dans des champs relatifs
+au lecteur).
 
 ## Context
 
@@ -67,10 +75,24 @@ aucun. Les faire passer par la même abstraction oblige l'une des deux à mentir
 soit l'entité gagne des champs (`favorited`) qui ne sont pas les siens, soit le
 use case reconstitue à la main ce que la base sait faire en une jointure.
 
-Le domaine reste pur : `ArticleQueryPort` est une interface TypeScript, et les
-types qu'elle renvoie viennent de `@repo/shared`, qui ne dépend d'aucun
-framework. `dependency-cruiser` (règle `domain-stays-pure`) continue de le
-vérifier mécaniquement.
+> **Correction du 2026-08-21 (ADR 031).** Ce paragraphe portait ici l'affirmation suivante, et
+> elle était fausse : *« Le domaine reste pur : `ArticleQueryPort` est une interface TypeScript, et
+> les types qu'elle renvoie viennent de `@repo/shared`, qui ne dépend d'aucun framework.
+> `dependency-cruiser` (règle `domain-stays-pure`) continue de le vérifier mécaniquement. »*
+>
+> La règle `domain-stays-pure` n'a jamais examiné `@repo/shared` : elle interdisait les couches
+> externes et les frameworks, rien d'autre. `pnpm depcruise` sortait donc vert pendant que huit
+> fichiers de `domain/` importaient le contrat HTTP.
+>
+> L'erreur de raisonnement est en amont de l'erreur de configuration : « ne dépend d'aucun
+> framework » a été pris pour « appartient au domaine ». `@repo/shared` est effectivement du
+> TypeScript sans dépendance technique, et c'est pourtant du transport : il porte les enveloppes de
+> réponse, les DTOs d'entrée et la table `CONDUIT_ERROR_STATUS`. La pureté technique n'est pas
+> l'appartenance au domaine.
+>
+> Le texte est conservé plutôt que supprimé : c'est la phrase qui a rendu la dérive invisible
+> pendant vingt ADR, et elle vaut d'être lisible. Voir
+> [ADR 031](031-le-contrat-partage-s-arrete-a-la-frontiere-http.md).
 
 ## Consequences
 

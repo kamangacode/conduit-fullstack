@@ -1,11 +1,13 @@
 import type { INestApplication } from '@nestjs/common'
 import { Test } from '@nestjs/testing'
 import request from 'supertest'
-import { afterAll, beforeAll, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
 import { AppModule } from '@/app.module'
-import type { ArticleQueryPort, ViewerId } from '@/domain/article/ports/article-query.port'
+import type { ArticleQueryPort } from '@/domain/article/ports/article-query.port'
 import { ARTICLE_QUERY } from '@/domain/article/ports/article-query.port'
+import type { ArticleView } from '@/domain/article/ports/article-view'
 import type { Slug } from '@/domain/article/slug'
+import type { ViewerId } from '@/domain/shared/viewer-id'
 import { PrismaArticleQuery } from '@/infrastructure/persistence/prisma-article.query'
 import { PrismaService } from '@/infrastructure/prisma/prisma.service'
 import { applyHttpConventions } from '@/interface/http-conventions'
@@ -21,18 +23,23 @@ import { drainViolations, initWithContractHarness } from '../contract/contract-h
  * ne va vérifier qu'un garde-fou refuse (leçon du 2026-08-08 sur le fail-fast
  * d'environnement).
  *
- * La fuite est donc injectée **là où elle se produirait vraiment** : dans le
- * port de lecture, sous la forme exacte qu'un adapter écrit quand il va vite —
- * un spread de la ligne de persistance. Rappel de la mesure qui fonde l'ADR
- * 026 : `tsc` refuse un champ nommé en trop dans un littéral, mais accepte
- * `{ ...row }` où `row` est plus large que le contrat. Le compilateur ne voit
- * donc pas cette fuite, et aucun des 151 tests de la lane ne la verrait non
- * plus sans le harnais.
+ * Le défaut est donc injecté **dans l'application réelle**, en décorant le port
+ * de lecture, et ce test n'écrit aucune assertion de contrat sur la réponse. Il
+ * interroge l'endpoint comme n'importe quel test métier, puis constate que le
+ * harnais a relevé l'écart tout seul. C'est exactement la propriété visée : la
+ * couverture ne dépend plus de ce que le rédacteur a pensé à vérifier.
  *
- * **Ce test n'écrit aucune assertion de contrat sur la réponse.** Il interroge
- * l'endpoint comme n'importe quel test métier, puis constate que le harnais a
- * relevé l'écart tout seul. C'est exactement la propriété visée : la couverture
- * ne dépend plus de ce que le rédacteur a pensé à vérifier.
+ * **Ce que l'ADR 031 a changé ici.** Le défaut injecté était un `{ ...row }` qui
+ * laissait passer deux colonnes internes, et il affleurait jusqu'au fil parce
+ * que le port renvoyait directement la projection du contrat. Ce chemin n'existe
+ * plus : `interface/article/article.mapper.ts` énumère les champs, donc une
+ * colonne en trop dans le read model ne peut plus sortir. C'est un gain, et le
+ * premier test ci-dessous le verrouille au lieu de le laisser tacite.
+ *
+ * Le harnais garde alors sa raison d'être sur l'autre moitié du risque, celle
+ * que le mapper ne ferme pas : un champ **manquant**. Le mapper recopie
+ * `undefined`, `JSON.stringify` supprime la clé, et le contrat est violé sans
+ * qu'aucun `as` ni aucun `any` n'apparaisse dans le code de production.
  */
 
 /**
@@ -50,11 +57,37 @@ const leakingArticleQuery = (prisma: PrismaService): ArticleQueryPort => {
       const article = await real.findBySlug(slug, viewer)
       if (article === null) return null
 
-      // La forme fautive : on recopie l'article et on laisse passer deux
-      // colonnes internes. Aucun `as`, aucun `any` — et le typecheck la
-      // valide, ce qui est tout le problème.
+      // La forme fautive d'avant l'ADR 031 : on recopie l'article de lecture et
+      // on laisse passer deux colonnes internes. Aucun `as`, aucun `any`, et le
+      // typecheck la valide — c'était tout le problème.
       const internals = { authorId: 'uuid-interne', deletedAt: null }
       return { ...article, ...internals }
+    },
+  })
+}
+
+/**
+ * Décore le vrai port pour lui faire **omettre** un champ du contrat.
+ *
+ * C'est la moitié du risque que le mapper ne ferme pas. Il énumère les champs,
+ * donc il ne peut pas en ajouter ; il recopie en revanche ce qu'on lui donne, et
+ * `undefined` disparaît à la sérialisation JSON. La réponse part alors sans
+ * `title`, avec un 200.
+ *
+ * Le `as` est ici assumé et circonscrit au test : il simule ce qu'une régression
+ * produirait dans une couche que le compilateur ne surveille pas de bout en bout
+ * (une projection Prisma dont un `select` perd une colonne, par exemple).
+ */
+const truncatingArticleQuery = (prisma: PrismaService): ArticleQueryPort => {
+  const real = new PrismaArticleQuery(prisma)
+
+  return Object.assign(Object.create(Object.getPrototypeOf(real)) as ArticleQueryPort, real, {
+    async findBySlug(slug: Slug, viewer: ViewerId) {
+      const article = await real.findBySlug(slug, viewer)
+      if (article === null) return null
+
+      const { title: _title, ...withoutTitle } = article
+      return withoutTitle as ArticleView
     },
   })
 }
@@ -62,82 +95,120 @@ const leakingArticleQuery = (prisma: PrismaService): ArticleQueryPort => {
 let app: INestApplication
 let http: () => ReturnType<typeof request>
 
-beforeAll(async () => {
+/**
+ * Monte l'application réelle avec un port de lecture décoré.
+ *
+ * Une application par défaut injecté : monter les deux dans la même instance
+ * rendrait indissociable ce que chaque défaut a provoqué, et le harnais
+ * accumule ses écarts sans les attribuer.
+ */
+const bootWith = async (
+  factory: (prisma: PrismaService) => ArticleQueryPort
+): Promise<INestApplication> => {
   process.env.JWT_SECRET ??= 'secret-de-lane-integration-32-car'
 
   const moduleRef = await Test.createTestingModule({ imports: [AppModule] })
     .overrideProvider(ARTICLE_QUERY)
-    .useFactory({ factory: leakingArticleQuery, inject: [PrismaService] })
+    .useFactory({ factory, inject: [PrismaService] })
     .compile()
 
-  app = moduleRef.createNestApplication()
-  applyHttpConventions(app)
-  await initWithContractHarness(app)
+  const booted = moduleRef.createNestApplication()
+  applyHttpConventions(booted)
+  await initWithContractHarness(booted)
+  return booted
+}
 
-  http = () => request(app.getHttpServer())
-})
+/** Publie un article et renvoie son slug, en passant par les routes réelles. */
+const publishArticle = async (username: string): Promise<string> => {
+  const registered = await http()
+    .post('/api/users')
+    .send({ user: { username, email: `${username}@jake.jake`, password: 'jakejake' } })
+    .expect(201)
 
-afterAll(async () => {
-  await app.close()
+  const token = registered.body.user.token as string
+
+  const published = await http()
+    .post('/api/articles')
+    .set('Authorization', `Token ${token}`)
+    .send({
+      article: {
+        title: 'How to train your dragon',
+        description: 'Ever wonder how?',
+        body: 'You have to believe',
+        tagList: ['dragons'],
+      },
+    })
+    .expect(201)
+
+  return published.body.article.slug as string
+}
+
+afterEach(async () => {
+  await app?.close()
 })
 
 describe('REQ-ARCH-002 — le harnais mord sur l’application réelle', () => {
-  it('AC-1: relève une fuite introduite par le port de lecture, sans qu’aucune assertion de contrat ne soit écrite ici', async () => {
-    const registered = await http()
-      .post('/api/users')
-      .send({ user: { username: 'jake', email: 'jake@jake.jake', password: 'jakejake' } })
-      .expect(201)
+  it('AC-1: relève un champ manquant, sans qu’aucune assertion de contrat ne soit écrite ici', async () => {
+    app = await bootWith(truncatingArticleQuery)
+    http = () => request(app.getHttpServer())
 
-    const token = registered.body.user.token as string
+    const slug = await publishArticle('jake')
 
-    const published = await http()
-      .post('/api/articles')
-      .set('Authorization', `Token ${token}`)
-      .send({
-        article: {
-          title: 'How to train your dragon',
-          description: 'Ever wonder how?',
-          body: 'You have to believe',
-          tagList: ['dragons'],
-        },
-      })
-      .expect(201)
-
-    const slug = published.body.article.slug as string
-
-    // Requête ordinaire : le statut est bon, le corps porte tous les champs
-    // attendus, et rien dans ce test ne regarde le contrat.
+    // Requête ordinaire : le statut est bon, et rien dans ce test ne regarde le
+    // contrat.
     await http().get(`/api/articles/${slug}`).expect(200)
 
     // On draine ici plutôt que de laisser le `afterEach` du setup le faire :
-    // la fuite est délibérée, donc c'est ce test qui doit la constater, pas la
+    // le défaut est délibéré, donc c'est ce test qui doit le constater, pas la
     // lane qui doit rougir.
     const violations = drainViolations()
 
-    // **Deux** écarts pour une seule fuite, et c'est le harnais qui l'a appris :
+    // **Deux** écarts pour un seul défaut, et c'est le harnais qui l'a appris :
     // la publication ne fabrique pas sa réponse, elle **relit** par le même port
-    // (parti pris de F3, pour ne pas dupliquer la projection). Un défaut posé
-    // dans la lecture affleure donc aussi sur l'écriture — relation qu'aucune
-    // assertion posée à la main sur `GET` n'aurait montrée.
+    // (ADR 011). Un défaut posé dans la lecture affleure donc aussi sur
+    // l'écriture — relation qu'aucune assertion posée à la main sur `GET`
+    // n'aurait montrée.
     expect(violations).toHaveLength(2)
     expect(violations.join('\n')).toContain('POST /api/articles')
     expect(violations.join('\n')).toContain('GET /api/articles/:slug')
 
     for (const violation of violations) {
-      expect(violation).toContain('article.authorId')
-      expect(violation).toContain('article.deletedAt')
+      expect(violation).toContain('title')
     }
   })
 
-  it('AC-1: laisse passer les réponses conformes de la même application, fuite comprise en amont', async () => {
+  it('AC-1: un champ en trop dans le read model ne franchit plus le mapper (ADR 031)', async () => {
+    // Avant l'ADR 031, ce même défaut produisait deux violations : le port
+    // renvoyait la projection du contrat, et un `{ ...row }` la faisait sortir
+    // telle quelle. Le mapper énumère désormais les champs, donc `authorId` et
+    // `deletedAt` n'atteignent plus le fil.
+    //
+    // Ce test ne remplace pas le harnais, il documente ce que le harnais n'a
+    // plus à attraper. Le faire échouer demanderait de remettre un spread dans
+    // `article.mapper.ts`, ce qui est exactement ce qu'on veut interdire.
+    app = await bootWith(leakingArticleQuery)
+    http = () => request(app.getHttpServer())
+
+    const slug = await publishArticle('jane')
+    const response = await http().get(`/api/articles/${slug}`).expect(200)
+
+    expect(response.body.article).not.toHaveProperty('authorId')
+    expect(response.body.article).not.toHaveProperty('deletedAt')
+    expect(drainViolations()).toEqual([])
+  })
+
+  it('AC-1: laisse passer les réponses conformes de la même application, défaut compris en amont', async () => {
+    app = await bootWith(truncatingArticleQuery)
+    http = () => request(app.getHttpServer())
+
     await http()
       .post('/api/users')
       .send({ user: { username: 'jill', email: 'jill@jill.jill', password: 'jilljill' } })
       .expect(201)
 
     // `GET /api/tags` emprunte un port intact : le harnais ne doit rien relever.
-    // Sans ce contrôle, un harnais qui refuserait tout satisferait le test
-    // précédent.
+    // Sans ce contrôle, un harnais qui refuserait tout satisferait les tests
+    // précédents.
     await http().get('/api/tags').expect(200)
 
     expect(drainViolations()).toEqual([])

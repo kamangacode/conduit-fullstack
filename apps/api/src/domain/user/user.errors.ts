@@ -1,19 +1,20 @@
-import { CONTRACT_MESSAGES, type ErrorResponse, fieldErrors } from '@repo/shared'
 import { DomainError } from '../shared/errors/domain.error'
 
 /**
  * Erreurs métier du contexte `user`.
  *
- * Chaque classe fixe **deux** choses : le code métier (donc le statut, via la
- * table partagée) et le corps §10 renvoyé au client.
+ * Chaque classe fixe **deux** choses, toutes deux métier : le code
+ * (`DomainErrorCode`) et la raison (`DomainErrorReason`). Ni statut HTTP, ni
+ * clé de champ, ni libellé : le corps §10 est produit par
+ * `interface/filters/domain-error.mapper.ts` (ADR 031).
  *
- * Les messages viennent de `CONTRACT_MESSAGES` et non de littéraux écrits ici.
- * Ce fichier affirmait auparavant les tenir « verbatim de l'implémentation de
- * référence » ; la première exécution de la suite de conformité a montré que
- * non, sur trois de ses cinq classes. Les exemples d'un fichier OpenAPI
- * illustrent une forme, la suite officielle *est* le contrat — et la table
- * partagée est le seul endroit où cette provenance peut être citée une fois
- * pour toutes (ADR 017).
+ * Les libellés eux-mêmes restent tenus par `CONTRACT_MESSAGES` dans
+ * `packages/shared`, lu désormais par le mapper. Ce fichier affirmait autrefois
+ * les tenir « verbatim de l'implémentation de référence » ; la première
+ * exécution de la suite de conformité a montré que non, sur trois de ses cinq
+ * classes. Les exemples d'un fichier OpenAPI illustrent une forme, la suite
+ * officielle *est* le contrat, et la table partagée reste le seul endroit où
+ * cette provenance est citée une fois pour toutes (ADR 017).
  */
 
 /**
@@ -25,7 +26,7 @@ import { DomainError } from '../shared/errors/domain.error'
  */
 export class EmailAlreadyTakenError extends DomainError {
   readonly errorCode = 'conflict' as const
-  readonly response: ErrorResponse = fieldErrors('email', CONTRACT_MESSAGES.alreadyTaken)
+  readonly reason = 'email_already_taken' as const
 
   constructor() {
     super('email has already been taken')
@@ -35,7 +36,7 @@ export class EmailAlreadyTakenError extends DomainError {
 /** Username déjà porté par un autre compte (règle R-8). Même raisonnement. */
 export class UsernameAlreadyTakenError extends DomainError {
   readonly errorCode = 'conflict' as const
-  readonly response: ErrorResponse = fieldErrors('username', CONTRACT_MESSAGES.alreadyTaken)
+  readonly reason = 'username_already_taken' as const
 
   constructor() {
     super('username has already been taken')
@@ -49,10 +50,10 @@ export class UsernameAlreadyTakenError extends DomainError {
  * erroné — et c'est délibéré (REQ-USER-003 AC-3). Distinguer les deux ferait de
  * l'API un oracle répondant à « ce compte existe-t-il ? » sans authentification.
  *
- * La clé est `credentials` et le message `invalid` (`errors_auth.hurl`). Nous
- * employions `email or password` / `is invalid` : plus explicite, et hors
- * contrat — un front de l'écosystème qui cherche `errors.credentials` n'aurait
- * rien affiché.
+ * Le corps rendu (clé `credentials`, message `invalid`, `errors_auth.hurl`) est
+ * l'affaire du mapper. Ce qui se décide ici est plus fort et ne dépend d'aucun
+ * transport : **une seule raison** pour les deux causes, donc aucun aval ne peut
+ * les distinguer même s'il le voulait.
  *
  * Le corollaire vaut d'être dit : le use-case de connexion ne doit **jamais**
  * lever `UserNotFoundError` quand l'email est inconnu. C'est l'erreur la plus
@@ -60,10 +61,7 @@ export class UsernameAlreadyTakenError extends DomainError {
  */
 export class InvalidCredentialsError extends DomainError {
   readonly errorCode = 'unauthorized' as const
-  readonly response: ErrorResponse = fieldErrors(
-    'credentials',
-    CONTRACT_MESSAGES.credentialsInvalid
-  )
+  readonly reason = 'invalid_credentials' as const
 
   constructor() {
     super('email or password is invalid')
@@ -82,7 +80,7 @@ export class InvalidCredentialsError extends DomainError {
  */
 export class UserNotFoundError extends DomainError {
   readonly errorCode = 'not_found' as const
-  readonly response: ErrorResponse = fieldErrors('profile', CONTRACT_MESSAGES.notFound)
+  readonly reason = 'user_not_found' as const
 
   constructor() {
     super('user not found')
@@ -97,21 +95,23 @@ export class UserNotFoundError extends DomainError {
  * courent encore — y compris dans la fenêtre entre la résolution du guard et
  * l'écriture d'un use-case.
  *
- * **401 et non 404**, avec le corps exact du refus d'un jeton présenté par le
- * guard. C'est le point entier de cette classe : un 404 porteur d'un
- * `errors.profile` distinguerait « ce compte n'existe plus » de « ton jeton ne
- * vaut rien », et rendrait donc l'API capable de confirmer qu'un compte a existé
- * à qui présente un jeton périmé. Le porteur d'un jeton qui ne résout plus
- * obtient exactement ce qu'obtient le porteur d'un jeton forgé.
+ * **401 et non 404**, et le corps rendu doit être exactement celui du refus d'un
+ * jeton présenté par le guard. C'est le point entier de cette classe : un 404
+ * porteur d'un `errors.profile` distinguerait « ce compte n'existe plus » de
+ * « ton jeton ne vaut rien », et rendrait donc l'API capable de confirmer qu'un
+ * compte a existé à qui présente un jeton périmé. Le porteur d'un jeton qui ne
+ * résout plus obtient exactement ce qu'obtient le porteur d'un jeton forgé.
  *
- * L'égalité doit donc être maintenue avec `unauthorized('invalid')` du guard, et
- * elle l'est parce que les deux lisent la même entrée de `CONTRACT_MESSAGES`.
- * C'est précisément le genre de couple qui divergeait quand chacun portait son
- * propre littéral.
+ * L'égalité avec `unauthorized('invalid')` du guard est une propriété de
+ * **sécurité**, et elle est désormais garantie côté `interface/` : le mapper et
+ * le guard produisent le même corps, et une assertion dédiée de
+ * `domain-error.mapper.spec.ts` le vérifie plutôt que de l'espérer. Elle
+ * reposait auparavant sur le fait que les deux lisaient la même entrée de
+ * `CONTRACT_MESSAGES`, ce qui était vrai mais que rien ne testait.
  */
 export class AuthenticatedUserNotFoundError extends DomainError {
   readonly errorCode = 'unauthorized' as const
-  readonly response: ErrorResponse = fieldErrors('token', CONTRACT_MESSAGES.tokenInvalid)
+  readonly reason = 'authenticated_user_not_found' as const
 
   constructor() {
     super('authenticated user no longer exists')

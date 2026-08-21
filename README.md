@@ -198,7 +198,7 @@ découpage en bounded contexts.
 
 Dans ce repo :
 
-- **Bounded contexts** : un sous-dossier de domaine par concept RealWorld ([`user`](apps/api/src/domain/user), [`article`](apps/api/src/domain/article), [`comment`](apps/api/src/domain/comment), [`profile`](apps/api/src/domain/profile), [`tag`](apps/api/src/domain/tag)).
+- **Bounded contexts** : un sous-dossier de domaine par concept RealWorld ([`user`](apps/api/src/domain/user), [`article`](apps/api/src/domain/article), [`comment`](apps/api/src/domain/comment), [`profile`](apps/api/src/domain/profile), [`tag`](apps/api/src/domain/tag)). `tag` est volontairement pauvre — un seul port de lecture, ni agrégat ni invariant — parce que la spec RealWorld ne demande rien de plus qu'une liste de noms.
 - **Aggregate Root** immuable : [`domain/article/article.ts`](apps/api/src/domain/article/article.ts), dont les méthodes métier (`favorite`, `addTag`) retournent un nouvel `Article` ou lèvent une erreur de domaine.
 - **Value Object** validé au constructeur : [`domain/article/slug.ts`](apps/api/src/domain/article/slug.ts).
 - **Domain Error** pure, code d'erreur porté par le domaine : [`domain/shared/errors/domain.error.ts`](apps/api/src/domain/shared/errors/domain.error.ts).
@@ -215,10 +215,12 @@ de la base.
 
 Dans ce repo, quatre couches :
 
-1. [`domain/`](apps/api/src/domain) : entités, value objects, ports, erreurs. TypeScript pur.
-2. [`application/`](apps/api/src/application) : un use case par action, dépendant seulement de ports ([`create-article.use-case.ts`](apps/api/src/application/article/create-article.use-case.ts), [`favorite-article.use-case.ts`](apps/api/src/application/article/favorite-article.use-case.ts)).
-3. [`infrastructure/`](apps/api/src/infrastructure) : adapters, et la traduction erreur de domaine vers code HTTP dans [`domain-exception.filter.ts`](apps/api/src/infrastructure/filters/domain-exception.filter.ts). L'infra traduit, le domaine reste pur.
-4. [`interface/`](apps/api/src/interface) : controllers NestJS qui valident (Zod), mappent et délèguent, sans logique métier.
+1. [`domain/`](apps/api/src/domain) : entités, value objects, **tous les ports** (écriture et lecture), read models, erreurs. TypeScript pur, et **il ne connaît pas non plus le contrat HTTP** ([ADR 031](docs/adr/031-le-contrat-partage-s-arrete-a-la-frontiere-http.md)).
+2. [`application/`](apps/api/src/application) : un use case par action, dépendant seulement de ports ([`create-article.use-case.ts`](apps/api/src/application/article/create-article.use-case.ts), [`favorite-article.use-case.ts`](apps/api/src/application/article/favorite-article.use-case.ts)), plus les vues qu'il compose lui-même à partir de plusieurs sources.
+3. [`infrastructure/`](apps/api/src/infrastructure) : adapters. Elle implémente les ports, elle ne connaît ni NestJS-HTTP ni la forme du fil.
+4. [`interface/`](apps/api/src/interface) : controllers NestJS qui valident (Zod), mappent et délèguent, sans logique métier. C'est la **seule** couche qui consomme `@repo/shared`, et c'est là que vit la traduction d'une erreur de domaine en réponse HTTP ([`domain-exception.filter.ts`](apps/api/src/interface/filters/domain-exception.filter.ts) et [`domain-error.mapper.ts`](apps/api/src/interface/filters/domain-error.mapper.ts)).
+
+La règle de placement complète, et le critère qui décide où vit un port, sont dans [`docs/architecture/frontieres-hexagonales.md`](docs/architecture/frontieres-hexagonales.md).
 
 À lire : [Clean Architecture, les 3 règles qui comptent](https://www.kamanga.fr/fr/architecture-craft/clean-architecture-3-regles).
 
@@ -232,7 +234,7 @@ l'hexagonal et la règle de dépendance. Où les voir concrètement :
 | **S**RP, responsabilité unique | Un use case = une action. Le dossier [`application/article/`](apps/api/src/application/article) sépare create, update, delete, get, list, favorite, chacun dans son fichier. | [SRP](https://www.kamanga.fr/fr/architecture-craft/principe-srp-software-craftsmanship-exemples-java) |
 | **O**CP, ouvert/fermé | Ajouter un adapter (autre store, autre hasher) n'oblige à modifier ni le domaine ni les use cases : le port est le point d'extension. | [OCP](https://www.kamanga.fr/fr/architecture-craft/principe-ocp-software-craftsmanship-exemples-java) |
 | **L**SP, substitution de Liskov | L'adapter réel et un faux de test satisfont le même port et restent interchangeables ([`argon2-password-hasher.ts`](apps/api/src/infrastructure/security/argon2-password-hasher.ts) derrière [`password-hasher.port.ts`](apps/api/src/domain/user/ports/password-hasher.port.ts)). | [LSP](https://www.kamanga.fr/fr/architecture-craft/principe-substitution-liskov-lsp-java) |
-| **I**SP, ségrégation des interfaces | Lecture et écriture d'un article sont deux ports distincts : [`article-repository.port.ts`](apps/api/src/domain/article/ports/article-repository.port.ts) (écriture) et [`article-query.port.ts`](apps/api/src/domain/article/ports/article-query.port.ts) (lecture). | [ISP](https://www.kamanga.fr/fr/architecture-craft/principe-isp-software-craftsmanship-exemples-java) |
+| **I**SP, ségrégation des interfaces | Lecture et écriture d'un article sont deux ports distincts : [`article-repository.port.ts`](apps/api/src/domain/article/ports/article-repository.port.ts) (écriture, il manipule l'agrégat) et [`article-query.port.ts`](apps/api/src/domain/article/ports/article-query.port.ts) (lecture, il produit une vue dépendante du lecteur). | [ISP](https://www.kamanga.fr/fr/architecture-craft/principe-isp-software-craftsmanship-exemples-java) |
 | **D**IP, inversion des dépendances | Le domaine définit l'abstraction (le port), l'infrastructure en dépend. Use case de haut niveau et adapter Prisma de bas niveau dépendent tous deux du même port. | [DIP](https://www.kamanga.fr/fr/architecture-craft/principe-inversion-dependances-dip-java-guide-complet) |
 
 Vue d'ensemble : [Les principes SOLID expliqués](https://www.kamanga.fr/fr/architecture-craft/principes-solid-java-exemples).

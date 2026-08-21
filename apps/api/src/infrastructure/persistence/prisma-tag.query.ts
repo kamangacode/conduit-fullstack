@@ -1,6 +1,5 @@
 import { Injectable } from '@nestjs/common'
-import type { Tag } from '@repo/shared'
-import type { TagQueryPort } from '../../domain/tag/ports/tag-query.port'
+import type { TagName, TagQueryPort } from '../../domain/tag/ports/tag-query.port'
 import { PrismaService } from '../prisma/prisma.service'
 
 /**
@@ -25,7 +24,7 @@ import { PrismaService } from '../prisma/prisma.service'
 export class PrismaTagQuery implements TagQueryPort {
   constructor(private readonly prisma: PrismaService) {}
 
-  async listUsed(): Promise<readonly Tag[]> {
+  async listUsed(): Promise<readonly TagName[]> {
     const rows = await this.prisma.tag.findMany({
       where: { articles: { some: {} } },
       select: { name: true },

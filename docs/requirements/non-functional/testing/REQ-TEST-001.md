@@ -82,6 +82,17 @@ les timeouts, pas sur la répartition par fichier.
 | `comment/comment.errors.ts` | 0.00 % | 4 |
 | `article/article.errors.ts` | 0.00 % | 4 |
 
+> **Mesure périmée depuis le 2026-08-21 (ADR 031).** Ce tableau date d'avant le
+> recentrage de `@repo/shared` sur le contrat HTTP, qui a modifié cinq des huit
+> fichiers listés. `user.ts` a perdu ses deux méthodes de projection (une bonne
+> part de ses seize survivants portait dessus), et les quatre fichiers d'erreurs
+> ont perdu leur corps §10 : leurs scores de 0 % et 20 % portaient sur du code
+> qui vit désormais dans `interface/filters/domain-error.mapper.ts`, couvert par
+> une spec dédiée. Les chiffres ci-dessus ne sont donc plus le portrait du code
+> actuel. Ils sont conservés parce qu'ils datent une décision et que l'analyse
+> qui suit reste juste sur le fond ; une nouvelle campagne Stryker est à lancer
+> avant d'en tirer une conclusion sur l'état présent.
+
 ## Ce que les survivants disent
 
 Deux familles, et la seconde est la plus instructive.

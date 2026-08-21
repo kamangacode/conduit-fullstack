@@ -23,9 +23,12 @@ dans cet esprit — la lisibilité et la traçabilité priment sur la vitesse.
    `main` ne reçoit que des promotions depuis `staging`, jamais de développement direct.
 
 2. **Écrire le code ET ses tests dans la même unité.** Les tests vivent à côté des
-   sources (`*.spec.ts`). Le backend suit l'[architecture hexagonale](docs/adr/) : le
-   `domain` reste pur (aucun import de framework), frontière vérifiée par
-   `dependency-cruiser`.
+   sources (`*.spec.ts`). Le backend suit l'architecture hexagonale : la règle de
+   placement, les quatre couches et le critère qui décide où vit un port sont dans
+   [`docs/architecture/frontieres-hexagonales.md`](docs/architecture/frontieres-hexagonales.md).
+   À retenir avant d'écrire une ligne de backend : le `domain` reste pur (aucun import
+   de framework) **et ne connaît pas le contrat HTTP** — `@repo/shared` s'arrête à
+   `interface/`. Frontières vérifiées par `dependency-cruiser`.
 
 3. **Tracer les décisions.** Une décision technique non triviale (choix de lib, pattern,
    modèle de données) se documente dans un [ADR](docs/adr/) — voir

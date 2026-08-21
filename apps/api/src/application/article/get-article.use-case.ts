@@ -1,12 +1,9 @@
 import { Inject, Injectable } from '@nestjs/common'
-import type { Article } from '@repo/shared'
 import { ArticleNotFoundError } from '../../domain/article/article.errors'
-import {
-  ARTICLE_QUERY,
-  type ArticleQueryPort,
-  type ViewerId,
-} from '../../domain/article/ports/article-query.port'
+import { ARTICLE_QUERY, type ArticleQueryPort } from '../../domain/article/ports/article-query.port'
+import type { ArticleView } from '../../domain/article/ports/article-view'
 import { Slug } from '../../domain/article/slug'
+import type { ViewerId } from '../../domain/shared/viewer-id'
 
 export interface GetArticleInput {
   readonly slug: string
@@ -37,7 +34,7 @@ export interface GetArticleInput {
 export class GetArticleUseCase {
   constructor(@Inject(ARTICLE_QUERY) private readonly query: ArticleQueryPort) {}
 
-  async execute(input: GetArticleInput): Promise<Article> {
+  async execute(input: GetArticleInput): Promise<ArticleView> {
     const article = await this.query.findBySlug(Slug.fromPersisted(input.slug), input.viewer)
     if (!article) {
       throw new ArticleNotFoundError()

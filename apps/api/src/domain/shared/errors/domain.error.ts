@@ -1,30 +1,72 @@
-import type { ConduitErrorCode, ErrorResponse } from '@repo/shared'
+/**
+ * Codes métier des erreurs de domaine.
+ *
+ * Volontairement **distinct** de `ConduitErrorCode` de `@repo/shared`, dont il
+ * duplique aujourd'hui les valeurs. Les deux vocabulaires coïncident, ils n'ont
+ * aucune raison de rester liés : le domaine dit « conflit », le contrat dit
+ * « 409 ». Importer le type du contrat pour nommer un état métier remettrait le
+ * transport dans le domaine par la porte du typage (ADR 031).
+ *
+ * La correspondance vers `ConduitErrorCode`, et donc vers un statut HTTP, vit
+ * dans `interface/filters/domain-error.mapper.ts`.
+ */
+export type DomainErrorCode =
+  | 'validation_failed'
+  | 'unauthorized'
+  | 'forbidden'
+  | 'not_found'
+  | 'conflict'
 
 /**
- * Racine des erreurs métier (rule 12).
+ * Ce qui s'est passé, du point de vue du métier.
  *
- * Une erreur de domaine dit **ce qui est faux dans le métier**, jamais comment le
- * transport doit le rapporter. C'est pourquoi elle porte un `ConduitErrorCode` et
- * non un statut HTTP : la traduction en 401/403/404/409/422 est owned par
- * l'infrastructure (`CONDUIT_ERROR_STATUS`, `domain-exception.filter.ts`). Un
- * `404` écrit ici serait du transport qui a fui dans le métier — et rendrait le
- * domaine inutilisable depuis un autre adaptateur (CLI, worker, test).
+ * Une raison n'est ni un message ni une clé de champ : c'est l'identité de la
+ * situation métier. `email_already_taken` dit que l'unicité de l'email est
+ * violée ; que cela se rapporte au champ `email` du contrat et se lise
+ * « has already been taken » est une décision de transport, prise par le mapper.
  *
- * `response` porte le corps §10 parce que le message d'erreur destiné au client
- * est une décision **métier** : c'est le domaine qui sait que l'unicité de
- * l'email se rapporte au champ `email`, pas le filtre HTTP. Le filtre n'a plus
- * qu'à choisir le statut et sérialiser — il ne contient aucune connaissance
- * métier, donc aucune branche à maintenir quand une erreur s'ajoute.
+ * Cette liste fermée est ce qui remplace l'ancien `response: ErrorResponse`
+ * porté par chaque classe. La garantie d'exhaustivité ne disparaît pas, elle se
+ * déplace : la table du mapper est déclarée
+ * `satisfies Record<DomainErrorReason, ErrorResponse>`, donc ajouter une raison
+ * sans son corps ne compile pas.
+ */
+export type DomainErrorReason =
+  | 'article_not_found'
+  | 'article_not_owned'
+  | 'comment_not_found'
+  | 'comment_not_owned'
+  | 'email_already_taken'
+  | 'username_already_taken'
+  | 'invalid_credentials'
+  | 'user_not_found'
+  | 'authenticated_user_not_found'
+
+/**
+ * Racine des erreurs métier.
  *
- * Le type `ErrorResponse` vient de `packages/shared` : le contrat d'erreur est un
- * shared kernel, pas une redéfinition côté API (rule 12, Context Mapping).
+ * Une erreur de domaine dit **ce qui est faux dans le métier**, jamais comment
+ * le transport doit le rapporter. Elle porte donc un `DomainErrorCode` et une
+ * `DomainErrorReason`, et rien d'autre : ni statut HTTP, ni corps de réponse.
+ * La traduction en 401/403/404/409/422 et en corps §10 est owned par
+ * `interface/filters/` (`domain-error.mapper.ts` et `domain-exception.filter.ts`).
+ *
+ * Une version antérieure de ce fichier portait `response: ErrorResponse`, le
+ * corps §10 verbatim, au motif que « le message d'erreur destiné au client est
+ * une décision métier ». Ce raisonnement contredisait le paragraphe qui le
+ * précédait, lequel refusait le statut HTTP dans le domaine au motif inverse.
+ * Refuser le code et accepter le corps, c'est arbitrer deux fois en sens opposé
+ * sur la même frontière (ADR 031). Le libellé « has already been taken » et la
+ * clé `credentials` sont des choix du contrat RealWorld, pas des règles de
+ * Conduit : le domaine n'a pas à changer si un second client les rapporte
+ * autrement.
  */
 export abstract class DomainError extends Error {
-  /** Code métier, traduit en statut HTTP par l'infrastructure uniquement. */
-  abstract readonly errorCode: ConduitErrorCode
+  /** Code métier, traduit en statut HTTP par la couche interface uniquement. */
+  abstract readonly errorCode: DomainErrorCode
 
-  /** Corps de réponse §10, verbatim : `{ errors: { champ: [messages] } }`. */
-  abstract readonly response: ErrorResponse
+  /** Situation métier, traduite en corps §10 par la couche interface uniquement. */
+  abstract readonly reason: DomainErrorReason
 
   protected constructor(message: string) {
     super(message)

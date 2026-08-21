@@ -1,16 +1,19 @@
-import type { Article, ArticleSummary } from '@repo/shared'
 import { ArticleEntity, type ArticleProps } from '@/domain/article/article'
 import { ArticleNotFoundError } from '@/domain/article/article.errors'
 import type {
   ArticleFilters,
-  ArticlePage,
   ArticleQueryPort,
   FeedPagination,
-  ViewerId,
 } from '@/domain/article/ports/article-query.port'
 import type { ArticleRepository, NewArticle } from '@/domain/article/ports/article-repository.port'
+import type {
+  ArticleListPage,
+  ArticleSummaryView,
+  ArticleView,
+} from '@/domain/article/ports/article-view'
 import type { FavoriteRepository } from '@/domain/article/ports/favorite-repository.port'
 import { Slug } from '@/domain/article/slug'
+import type { ViewerId } from '@/domain/shared/viewer-id'
 
 /**
  * Doublures des ports du contexte `article`, pour la lane **unit** (rule 16).
@@ -189,43 +192,51 @@ export class RecordingArticleQuery implements ArticleQueryPort {
   readonly feedCalls: Array<{ pagination: FeedPagination; viewer: string }> = []
 
   constructor(
-    private readonly article: Article | null = null,
-    private readonly page: ArticlePage = { items: [], total: 0 }
+    private readonly article: ArticleView | null = null,
+    private readonly page: ArticleListPage = { items: [], total: 0 }
   ) {}
 
-  async findBySlug(slug: Slug, viewer: ViewerId): Promise<Article | null> {
+  async findBySlug(slug: Slug, viewer: ViewerId): Promise<ArticleView | null> {
     this.calls.push({ slug: slug.value, viewer })
     return this.article ? { ...this.article, slug: slug.value } : null
   }
 
-  async list(filters: ArticleFilters, viewer: ViewerId): Promise<ArticlePage> {
+  async list(filters: ArticleFilters, viewer: ViewerId): Promise<ArticleListPage> {
     this.listCalls.push({ filters, viewer })
     return this.page
   }
 
-  async feed(pagination: FeedPagination, viewer: string): Promise<ArticlePage> {
+  async feed(pagination: FeedPagination, viewer: string): Promise<ArticleListPage> {
     this.feedCalls.push({ pagination, viewer })
     return this.page
   }
 }
 
-/** Article de contrat minimal, pour poser une réponse dans `RecordingArticleQuery`. */
-export const anArticleResponse = (overrides: Partial<Article> = {}): Article => ({
+/**
+ * Article de lecture minimal, pour poser une réponse dans `RecordingArticleQuery`.
+ *
+ * Les horodatages sont des `Date` et non des chaînes ISO : c'est ce que le read
+ * model déclare depuis l'ADR 031, et c'est la différence qui prouve que la
+ * doublure n'imite plus la forme du fil.
+ */
+export const anArticleResponse = (overrides: Partial<ArticleView> = {}): ArticleView => ({
   slug: 'how-to-train-your-dragon',
   title: 'How to train your dragon',
   description: 'Ever wonder how?',
   body: 'It takes a Jacobian',
   tagList: ['dragons', 'training'],
-  createdAt: '2016-02-18T03:22:56.637Z',
-  updatedAt: '2016-02-18T03:48:35.824Z',
+  createdAt: new Date('2016-02-18T03:22:56.637Z'),
+  updatedAt: new Date('2016-02-18T03:48:35.824Z'),
   favorited: false,
   favoritesCount: 0,
   author: { username: 'jake', bio: null, image: null, following: false },
   ...overrides,
 })
 
-/** Résumé d'article de contrat, pour poser une page dans `RecordingArticleQuery`. */
-export const anArticleSummary = (overrides: Partial<ArticleSummary> = {}): ArticleSummary => {
+/** Résumé de lecture, pour poser une page dans `RecordingArticleQuery`. */
+export const anArticleSummary = (
+  overrides: Partial<ArticleSummaryView> = {}
+): ArticleSummaryView => {
   const { body: _body, ...summary } = anArticleResponse()
   return { ...summary, ...overrides }
 }

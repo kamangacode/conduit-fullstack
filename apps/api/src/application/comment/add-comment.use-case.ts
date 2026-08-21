@@ -1,5 +1,4 @@
 import { Inject, Injectable } from '@nestjs/common'
-import type { Comment } from '@repo/shared'
 import { ArticleNotFoundError } from '../../domain/article/article.errors'
 import {
   ARTICLE_REPOSITORY,
@@ -7,12 +6,12 @@ import {
 } from '../../domain/article/ports/article-repository.port'
 import { Slug } from '../../domain/article/slug'
 import { CommentNotFoundError } from '../../domain/comment/comment.errors'
+import { COMMENT_QUERY, type CommentQueryPort } from '../../domain/comment/ports/comment-query.port'
 import {
-  COMMENT_QUERY,
   COMMENT_REPOSITORY,
-  type CommentQueryPort,
   type CommentRepository,
 } from '../../domain/comment/ports/comment-repository.port'
+import type { CommentView } from '../../domain/comment/ports/comment-view'
 
 export interface AddCommentInput {
   /** Slug de l'article commenté, tel qu'il apparaît dans l'URL. */
@@ -44,7 +43,7 @@ export class AddCommentUseCase {
     @Inject(COMMENT_QUERY) private readonly query: CommentQueryPort
   ) {}
 
-  async execute(input: AddCommentInput): Promise<Comment> {
+  async execute(input: AddCommentInput): Promise<CommentView> {
     const article = await this.articles.findBySlug(Slug.fromPersisted(input.slug))
     if (!article) {
       throw new ArticleNotFoundError()

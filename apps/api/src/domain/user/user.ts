@@ -1,5 +1,3 @@
-import type { Profile, User } from '@repo/shared'
-
 /**
  * État persisté d'un compte, tel que le domaine le manipule.
  *
@@ -44,9 +42,17 @@ export interface UserChanges {
  * valeur qui change sous les pieds d'un appelant qui ne l'a pas demandé.
  *
  * L'entité ne valide **pas** le format de l'email ni la longueur du mot de passe :
- * ces règles sont portées par les schémas Zod de `packages/shared`, appliqués à la
+ * ces règles sont portées par les schémas Zod du contrat, appliqués à la
  * frontière. Les dupliquer ici créerait deux sources de vérité qui divergeraient
  * au premier changement (rule 21).
+ *
+ * Elle ne **projette** pas non plus. Elle portait jusqu'au 2026-08-21 deux
+ * méthodes `toProfile(following)` et `toUser(token)` qui fabriquaient les corps
+ * de réponse du contrat ; la seconde prenait un JWT en paramètre, c'est-à-dire
+ * une valeur sans existence métier. Les projections vivent désormais dans
+ * `application/user/account-view.ts`, et leur forme HTTP dans les mappers
+ * de `interface/` (ADR 031). L'entité expose ses champs, elle ne décide plus de
+ * ce qu'un client en voit.
  */
 export class UserEntity {
   private constructor(private readonly props: UserProps) {}
@@ -108,49 +114,5 @@ export class UserEntity {
       bio: 'bio' in changes && changes.bio !== undefined ? changes.bio : this.props.bio,
       image: 'image' in changes && changes.image !== undefined ? changes.image : this.props.image,
     })
-  }
-
-  /**
-   * Projection publique du compte (PRD §8, REQ-PROFILE-002).
-   *
-   * Écrite champ par champ, jamais par étalement de `props` : un `...this.props`
-   * emporterait `email` et `passwordHash` dans une réponse publique. L'énumération
-   * explicite fait qu'un champ ajouté à `UserProps` demain ne fuite pas par
-   * défaut — il faudra une décision consciente pour l'exposer.
-   *
-   * `following` est un paramètre et non un attribut : la relation appartient au
-   * couple (appelant, cible), pas au compte consulté (règle R-5).
-   */
-  toProfile(following: boolean): Profile {
-    return {
-      username: this.props.username,
-      bio: this.props.bio,
-      image: this.props.image,
-      following,
-    }
-  }
-
-  /**
-   * Projection **privée** du compte, renvoyée par les seuls endpoints
-   * d'authentification (PRD §8, §9).
-   *
-   * Contrairement à `toProfile`, elle porte l'email — c'est sa raison d'être. Elle
-   * ne porte en revanche **jamais** `passwordHash` (règle R-9), et l'énumération
-   * champ par champ est ici encore ce qui le garantit : c'est la projection la
-   * plus proche de l'état complet, donc celle où un étalement serait le plus
-   * tentant et le plus coûteux.
-   *
-   * Le jeton est un paramètre parce qu'il n'appartient pas au compte : il est
-   * émis par un service d'infrastructure, a une durée de vie propre, et deux
-   * réponses successives pour le même compte en portent deux différents.
-   */
-  toUser(token: string): User {
-    return {
-      email: this.props.email,
-      token,
-      username: this.props.username,
-      bio: this.props.bio,
-      image: this.props.image,
-    }
   }
 }

@@ -1,13 +1,10 @@
-import type { Comment, Tag } from '@repo/shared'
-import type { ViewerId } from '@/domain/article/ports/article-query.port'
 import { CommentEntity, type CommentProps } from '@/domain/comment/comment'
 import { CommentNotFoundError } from '@/domain/comment/comment.errors'
-import type {
-  CommentQueryPort,
-  CommentRepository,
-  NewComment,
-} from '@/domain/comment/ports/comment-repository.port'
-import type { TagQueryPort } from '@/domain/tag/ports/tag-query.port'
+import type { CommentQueryPort } from '@/domain/comment/ports/comment-query.port'
+import type { CommentRepository, NewComment } from '@/domain/comment/ports/comment-repository.port'
+import type { CommentView } from '@/domain/comment/ports/comment-view'
+import type { ViewerId } from '@/domain/shared/viewer-id'
+import type { TagName, TagQueryPort } from '@/domain/tag/ports/tag-query.port'
 
 /**
  * Doublures des ports des contextes `comment` et `tag`, pour la lane **unit**
@@ -91,10 +88,10 @@ export class InMemoryCommentRepository implements CommentRepository {
 }
 
 /** Commentaire de contrat minimal, pour poser une réponse de lecture. */
-export const aCommentResponse = (overrides: Partial<Comment> = {}): Comment => ({
+export const aCommentResponse = (overrides: Partial<CommentView> = {}): CommentView => ({
   id: 1,
-  createdAt: '2016-02-18T03:22:56.637Z',
-  updatedAt: '2016-02-18T03:22:56.637Z',
+  createdAt: new Date('2016-02-18T03:22:56.637Z'),
+  updatedAt: new Date('2016-02-18T03:22:56.637Z'),
   body: 'His name was my name too.',
   author: { username: 'jake', bio: null, image: null, following: false },
   ...overrides,
@@ -109,16 +106,16 @@ export class RecordingCommentQuery implements CommentQueryPort {
   readonly findCalls: Array<{ id: number; viewer: ViewerId }> = []
 
   constructor(
-    private readonly comments: readonly Comment[] = [],
-    private readonly single: Comment | null = aCommentResponse()
+    private readonly comments: readonly CommentView[] = [],
+    private readonly single: CommentView | null = aCommentResponse()
   ) {}
 
-  async listByArticle(articleId: string, viewer: ViewerId): Promise<readonly Comment[]> {
+  async listByArticle(articleId: string, viewer: ViewerId): Promise<readonly CommentView[]> {
     this.listCalls.push({ articleId, viewer })
     return this.comments
   }
 
-  async findById(id: number, viewer: ViewerId): Promise<Comment | null> {
+  async findById(id: number, viewer: ViewerId): Promise<CommentView | null> {
     this.findCalls.push({ id, viewer })
     return this.single ? { ...this.single, id } : null
   }
@@ -134,9 +131,9 @@ export class RecordingCommentQuery implements CommentQueryPort {
 export class StubTagQuery implements TagQueryPort {
   calls = 0
 
-  constructor(private readonly tags: readonly Tag[] = ['reactjs', 'angularjs']) {}
+  constructor(private readonly tags: readonly TagName[] = ['reactjs', 'angularjs']) {}
 
-  async listUsed(): Promise<readonly Tag[]> {
+  async listUsed(): Promise<readonly TagName[]> {
     this.calls += 1
     return this.tags
   }

@@ -13,10 +13,8 @@ import { ListCommentsUseCase } from '../../application/comment/list-comments.use
 import { ARTICLE_QUERY } from '../../domain/article/ports/article-query.port'
 import { ARTICLE_REPOSITORY } from '../../domain/article/ports/article-repository.port'
 import { FAVORITE_REPOSITORY } from '../../domain/article/ports/favorite-repository.port'
-import {
-  COMMENT_QUERY,
-  COMMENT_REPOSITORY,
-} from '../../domain/comment/ports/comment-repository.port'
+import { COMMENT_QUERY } from '../../domain/comment/ports/comment-query.port'
+import { COMMENT_REPOSITORY } from '../../domain/comment/ports/comment-repository.port'
 import { PrismaArticleQuery } from '../../infrastructure/persistence/prisma-article.query'
 import { PrismaArticleRepository } from '../../infrastructure/persistence/prisma-article.repository'
 import {

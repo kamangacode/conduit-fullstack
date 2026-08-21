@@ -15,6 +15,7 @@ import { UpdateUserUseCase } from '../../application/user/update-user.use-case'
 import { AuthGuard } from '../auth/auth.guard'
 import { CurrentUserId } from '../auth/current-user.decorator'
 import { zodEnvelope } from '../pipes/zod-validation.pipe'
+import { toUserResponse } from './user.mapper'
 
 /**
  * Endpoints d'authentification et de compte (PRD §7.1).
@@ -51,7 +52,7 @@ export class UsersController {
       email: dto.email,
       password: dto.password,
     })
-    return { user }
+    return { user: toUserResponse(user) }
   }
 
   /**
@@ -62,7 +63,7 @@ export class UsersController {
   @HttpCode(200)
   async login(@Body(zodEnvelope('user', loginDtoSchema)) dto: LoginDto): Promise<UserResponse> {
     const user = await this.loginUser.execute({ email: dto.email, password: dto.password })
-    return { user }
+    return { user: toUserResponse(user) }
   }
 }
 
@@ -80,7 +81,7 @@ export class UserController {
   @Get()
   async current(@CurrentUserId() userId: string): Promise<UserResponse> {
     const user = await this.getCurrentUser.execute({ userId })
-    return { user }
+    return { user: toUserResponse(user) }
   }
 
   /**
@@ -109,6 +110,6 @@ export class UserController {
       bio: dto.bio,
       image: dto.image,
     })
-    return { user }
+    return { user: toUserResponse(user) }
   }
 }

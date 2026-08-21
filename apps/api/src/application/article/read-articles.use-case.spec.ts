@@ -83,17 +83,19 @@ describe('REQ-ARTICLE-007 — lister et filtrer les articles publiés', () => {
 
     const response = await useCase.execute({ filters: pagination, viewer: null })
 
-    expect(response.articles).toHaveLength(2)
-    expect(response.articlesCount).toBe(47)
+    expect(response.items).toHaveLength(2)
+    expect(response.total).toBe(47)
   })
 
-  it('AC-1: renvoie une enveloppe conforme même sur un résultat vide', async () => {
+  it('AC-1: renvoie une page vide plutôt que rien sur un résultat vide', async () => {
     const query = new RecordingArticleQuery(null, { items: [], total: 0 })
     const useCase = new ListArticlesUseCase(query)
 
     const response = await useCase.execute({ filters: pagination, viewer: null })
 
-    expect(response).toEqual({ articles: [], articlesCount: 0 })
+    // L'enveloppe `{ articles: [], articlesCount: 0 }` est vérifiée là où elle
+    // est désormais produite : `interface/article/article.mapper.spec.ts`.
+    expect(response).toEqual({ items: [], total: 0 })
   })
 
   it('AC-4: transmet les filtres au port sans les réinterpréter', async () => {
@@ -144,8 +146,8 @@ describe('REQ-ARTICLE-008 — consulter le flux personnel', () => {
 
     const response = await useCase.execute({ pagination, viewer: AUTHOR_ID })
 
-    expect(response.articlesCount).toBe(1)
-    expect(response.articles).toHaveLength(1)
+    expect(response.total).toBe(1)
+    expect(response.items).toHaveLength(1)
   })
 
   it('AC-1: interroge le port du flux, jamais celui du listing global', async () => {

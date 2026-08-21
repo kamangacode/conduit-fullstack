@@ -1,4 +1,3 @@
-import { CONTRACT_MESSAGES } from '@repo/shared'
 import { describe, expect, it } from 'vitest'
 import {
   aUserProps,
@@ -57,7 +56,7 @@ describe('REQ-USER-004 — lecture du compte courant', () => {
     ).rejects.toBeInstanceOf(AuthenticatedUserNotFoundError)
   })
 
-  it('AC-2: porte le code 401 et le corps du refus d’authentification', async () => {
+  it('AC-2: porte le code et la raison du refus d’authentification', async () => {
     // L'assertion de type seule ne suffisait pas : c'est le `errorCode` qui
     // décide du statut HTTP, et une erreur `not_found` produirait un 404 doublé
     // d'un `errors.profile` — donc un oracle d'existence de compte. Ce test rend
@@ -68,9 +67,12 @@ describe('REQ-USER-004 — lecture du compte courant', () => {
       useCase.execute({ userId: '00000000-0000-4000-8000-999999999999' })
     ).rejects.toMatchObject({
       errorCode: 'unauthorized',
-      // Corps identique à celui qu'un jeton forgé reçoit du guard
-      // (REQ-ERROR-002 AC-4) : c'est cette égalité qui ferme l'oracle.
-      response: { errors: { token: [CONTRACT_MESSAGES.tokenInvalid] } },
+      // Le corps §10 n'est plus assertable ici depuis l'ADR 031 : il est produit
+      // par `interface/filters/domain-error.mapper.ts`, et c'est
+      // `domain-error.mapper.spec.ts` qui vérifie son égalité avec le refus de
+      // jeton du guard. Ce qui se teste ici est ce que le use case contrôle
+      // réellement : la raison qu'il lève.
+      reason: 'authenticated_user_not_found',
     })
   })
 })

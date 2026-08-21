@@ -6,7 +6,9 @@
  * vers l'intérieur ; le domaine ne connaît rien de l'extérieur) en contrôle
  * exécutable, lancé en pre-push et en CI plutôt qu'en revue humaine seule.
  *
- * Voir .claude/rules/12-backend-hexagonal.md et docs/adr/001.
+ * Règle de placement, quatre couches et critère de placement d'un port :
+ * docs/architecture/frontieres-hexagonales.md. Décisions : docs/adr/001 (topologie)
+ * et docs/adr/031 (portée du contrat partagé).
  *
  * Lancement : `pnpm depcruise`. Le script se place dans apps/api avant de
  * cruiser `src`, pour que la résolution du tsconfig (extends, include) parte du
@@ -42,6 +44,35 @@ module.exports = {
         "application/ (use cases) définit son propre input et ne dépend jamais de interface/ (controllers). L'input du use case est owned par le use case, pas par le controller.",
       from: { path: '^src/application/' },
       to: { path: '^src/interface/' },
+    },
+    {
+      name: 'no-unresolvable',
+      severity: 'error',
+      comment:
+        "Un import que le resolver ne sait pas suivre n'est pas seulement un import cassé : il " +
+        'rend les autres règles AVEUGLES sur lui. Le cas mesuré le 2026-08-21 : sans ' +
+        '`packages/shared/dist`, `@repo/shared` ne se résout pas, donc ' +
+        '`shared-stays-at-the-http-boundary` ne voit plus rien et depcruise sort vert avec un ' +
+        'import interdit dans domain/. Un clone frais est exactement dans cet état, et le ' +
+        'pre-push lance depcruise AVANT typecheck. Sans cette règle, le garde-fou de frontière ' +
+        "est vert pour la mauvaise raison — la panne même que l'ADR 031 corrige ailleurs.",
+      from: {},
+      to: { couldNotResolve: true },
+    },
+    {
+      name: 'shared-stays-at-the-http-boundary',
+      severity: 'error',
+      comment:
+        "`@repo/shared` est le contrat HTTP : enveloppes de réponse, DTOs d'entrée, messages, " +
+        'CONDUIT_ERROR_STATUS. Seul interface/ le consomme. domain/ possède son modèle (un type ' +
+        "du domaine n'a pas à ressembler au fil : `createdAt` y est une Date, pas une chaîne " +
+        "ISO), application/ possède l'entrée et la sortie de ses use cases (`articlesCount` est " +
+        'un nom de la spec RealWorld, pas un concept métier), et infrastructure/ ne connaît pas ' +
+        'la forme du fil. Voir docs/adr/031 et docs/architecture/frontieres-hexagonales.md. ' +
+        'Cette règle a remplacé le 2026-08-21 les deux compteurs de migration ' +
+        'domain-owns-its-model (8 modules) et application-owns-its-io (18), tous deux tombés à 0.',
+      from: { path: '^src/(domain|application|infrastructure)/' },
+      to: { path: '(^|/)packages/shared/' },
     },
     {
       name: 'no-orphans',

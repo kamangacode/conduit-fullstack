@@ -5,10 +5,10 @@ type: non-functional
 domain: architecture
 status: implemented
 priority: must
-source: "architecture §6 (frontière typée bout-en-bout) ; ADR 001 (package partagé comme source de vérité unique)"
+source: "architecture §6 (frontière typée bout-en-bout) ; ADR 001 (package partagé comme source de vérité unique), amendé par ADR 031 (le contrat s'arrête à la frontière HTTP)"
 acceptance_criteria:
   - id: AC-1
-    given: "un champ du modèle partagé renommé de façon incompatible"
+    given: "un champ du contrat partagé renommé de façon incompatible"
     when: "le typecheck du dépôt s'exécute"
     then: "`apps/api` **et** `apps/web` échouent tous les deux — pas l'un ou l'autre"
   - id: AC-2
@@ -16,13 +16,17 @@ acceptance_criteria:
     when: "on examine les erreurs remontées"
     then: "elles désignent des fichiers de chaque application, ce qui prouve que la rupture traverse réellement la frontière"
   - id: AC-3
-    given: "le modèle partagé intact"
+    given: "le contrat partagé intact"
     when: "le typecheck s'exécute"
     then: "les trois workspaces compilent — la vérification ne laisse aucun résidu"
   - id: AC-4
     given: "la vérification elle-même"
     when: "elle est exécutée"
     then: "elle restaure le dépôt dans son état d'origine, y compris si elle échoue en cours de route"
+  - id: AC-5
+    given: "un champ du contrat partagé renommé de façon incompatible"
+    when: "on examine les erreurs de `apps/api`"
+    then: "elles citent `src/interface/` et **aucune** ne cite `src/domain/` ni `src/application/` — la rupture s'arrête à la frontière HTTP (ADR 031)"
 implementation:
   files:
     - packages/shared/src/model/article.ts
@@ -37,6 +41,7 @@ related:
     - REQ-ERROR-001
   adrs:
     - "001"
+    - "031"
 ---
 
 # REQ-ARCH-001 — Faire de la cohérence front/back une dépendance de compilation
@@ -63,6 +68,38 @@ AC-4 n'est pas une précaution de confort : une vérification qui laisse le dép
 modifié après un échec transforme un diagnostic en incident, et sera désactivée à
 la première occurrence.
 
+## Amendement du 2026-08-21 (ADR 031)
+
+Cette exigence parlait du « modèle partagé ». `packages/shared` n'a jamais porté
+un modèle métier : ce sont les enveloppes de réponse, les DTOs d'entrée et la
+table `CONDUIT_ERROR_STATUS`, c'est-à-dire le **contrat HTTP**. La formulation a
+été alignée sur ce que le package est réellement.
+
+La conséquence sur le fond est plus lourde que le vocabulaire. Telle qu'écrite,
+l'exigence demandait que `apps/api` **dans son ensemble** cesse de compiler quand
+le contrat change. C'était une exigence de couplage : elle garantissait que le
+contrat traverse toutes les couches de l'API, `domain/` compris. Un dépôt qui
+aurait correctement isolé son domaine aurait donc **échoué** à cette exigence.
+
+La propriété visée devient bidirectionnelle :
+
+- moitié **positive**, déjà couverte par AC-1 et AC-2 : casser un champ du
+  contrat casse ses consommateurs légitimes ;
+- moitié **négative**, portée par AC-5 : ça ne doit toucher ni `src/domain/` ni
+  `src/application/`.
+
+La moitié négative est portée par **AC-5**, ajouté une fois les quatre contextes
+migrés. Elle n'a pas été écrite d'emblée parce qu'elle était alors fausse : huit
+fichiers de `domain/` importaient encore le contrat, et déclarer `implemented`
+une exigence connue pour être violée est exactement le mode d'échec que l'ADR
+031 corrige.
+
+Mesure du 2026-08-21, avant et après. Avant, le renommage de `favoritesCount`
+faisait tomber `apps/api` dans `src/application/article/favorite-article.use-case.spec.ts` :
+la couche applicative connaissait le fil. Après, il le fait tomber dans
+`src/interface/article/article.mapper.ts`, et ni `domain/` ni `application/` ne
+bougent.
+
 ## Règles
 
 - La vérification est **active** : elle produit la rupture et observe le
@@ -74,9 +111,11 @@ la première occurrence.
 
 ## Hors périmètre
 
-- Le choix de la frontière lui-même, tranché par l'[ADR 001](../../../adr/001-topologie-monorepo-modele-partage.md).
+- Le choix de la frontière lui-même, tranché par l'[ADR 001](../../../adr/001-topologie-monorepo-modele-partage.md)
+  et borné par l'[ADR 031](../../../adr/031-le-contrat-partage-s-arrete-a-la-frontiere-http.md).
+- La preuve qu'aucun type du contrat n'a été **recopié** à la main dans une
+  couche interne : ce contrôle prouve qu'un changement se propage là où il doit
+  et pas ailleurs, pas qu'aucune copie n'existe. `dependency-cruiser`
+  (`shared-stays-at-the-http-boundary`) couvre l'import, pas la copie.
 - La conformité du contrat externe à la spec RealWorld, qui relève de la suite
   Hurl et de la suite Playwright (item F7).
-- La détection d'un type recopié à la main : ce contrôle prouve qu'un changement
-  se propage, pas qu'aucune copie n'existe. `knip` et `dependency-cruiser`
-  couvrent d'autres angles ; un contrôle dédié reste à imaginer.

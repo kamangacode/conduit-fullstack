@@ -5,6 +5,7 @@ import { GetProfileUseCase } from '../../application/profile/get-profile.use-cas
 import { UnfollowUserUseCase } from '../../application/profile/unfollow-user.use-case'
 import { AuthGuard, OptionalAuthGuard } from '../auth/auth.guard'
 import { CurrentUserId, OptionalCurrentUserId } from '../auth/current-user.decorator'
+import { toProfileResponse } from './profile.mapper'
 
 /**
  * Endpoints de profil (PRD §7.2).
@@ -34,7 +35,7 @@ export class ProfileController {
     @OptionalCurrentUserId() viewerId: string | null
   ): Promise<ProfileResponse> {
     const profile = await this.getProfile.execute({ username, viewerId })
-    return { profile }
+    return { profile: toProfileResponse(profile) }
   }
 
   /** Suivre. `@HttpCode(200)` : le contrat attend 200, pas le 201 par défaut du POST. */
@@ -46,7 +47,7 @@ export class ProfileController {
     @CurrentUserId() followerId: string
   ): Promise<ProfileResponse> {
     const profile = await this.followUser.execute({ username, followerId })
-    return { profile }
+    return { profile: toProfileResponse(profile) }
   }
 
   /**
@@ -62,6 +63,6 @@ export class ProfileController {
     @CurrentUserId() followerId: string
   ): Promise<ProfileResponse> {
     const profile = await this.unfollowUser.execute({ username, followerId })
-    return { profile }
+    return { profile: toProfileResponse(profile) }
   }
 }

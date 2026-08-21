@@ -1,11 +1,11 @@
 import { Inject, Injectable } from '@nestjs/common'
-import type { Article } from '@repo/shared'
 import { ArticleNotFoundError } from '../../domain/article/article.errors'
 import { ARTICLE_QUERY, type ArticleQueryPort } from '../../domain/article/ports/article-query.port'
 import {
   ARTICLE_REPOSITORY,
   type ArticleRepository,
 } from '../../domain/article/ports/article-repository.port'
+import type { ArticleView } from '../../domain/article/ports/article-view'
 import {
   FAVORITE_REPOSITORY,
   type FavoriteRepository,
@@ -42,7 +42,7 @@ export class FavoriteArticleUseCase {
     @Inject(ARTICLE_QUERY) private readonly query: ArticleQueryPort
   ) {}
 
-  async execute(input: FavoriteArticleInput): Promise<Article> {
+  async execute(input: FavoriteArticleInput): Promise<ArticleView> {
     const slug = Slug.fromPersisted(input.slug)
 
     // La résolution sert à obtenir l'identifiant interne — la table des favoris

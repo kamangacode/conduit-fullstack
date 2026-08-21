@@ -13,7 +13,7 @@ elle porte la mécanique : gabarit, numérotation, statuts, vérification.
 
 | N° | Décision | Statut | Date |
 |---|---|---|---|
-| [001](001-topologie-monorepo-modele-partage.md) | Topologie monorepo et partage du modèle | Accepted | 2026-08-04 |
+| [001](001-topologie-monorepo-modele-partage.md) | Topologie monorepo et partage du modèle | Accepted (amendé par 031) | 2026-08-04 |
 | [002](002-modele-donnees-prisma.md) | Modèle de données Conduit (Prisma / PostgreSQL) | Accepted (amendé par 004) | 2026-08-04 |
 | [003](003-mises-a-jour-dependances-dependabot.md) | Mises à jour de dépendances : Dependabot | Accepted | 2026-08-04 |
 | [004](004-persistance-alignee-sur-le-contrat.md) | Persistance alignée sur le contrat (id de commentaire, bio nullable) | Accepted | 2026-08-04 |
@@ -23,13 +23,13 @@ elle porte la mécanique : gabarit, numérotation, statuts, vérification.
 | [008](008-permission-manquante-403.md) | Permission manquante : 403 conforme au contrat, plutôt que 404 | Accepted | 2026-08-05 |
 | [009](009-conflit-unicite-409.md) | Violation d'unicité : 409 Conflict plutôt que 422 | Accepted | 2026-08-05 |
 | [010](010-unicite-du-slug-article.md) | Unicité du slug d'article : suffixe incrémental résolu par la contrainte | Accepted | 2026-08-05 |
-| [011](011-lecture-des-listes-port-dedie.md) | Lecture des listes d'articles : port de lecture dédié, séparé de l'écriture | Accepted | 2026-08-05 |
+| [011](011-lecture-des-listes-port-dedie.md) | Lecture des listes d'articles : port de lecture dédié, séparé de l'écriture | Accepted (amendé par 031) | 2026-08-05 |
 | [012](012-rendu-hybride-et-session-client.md) | Rendu hybride et session portée par le client | Accepted | 2026-08-05 |
 | [013](013-rendu-markdown-sur-par-construction.md) | Rendu Markdown sûr par construction, sans assainissement à appeler | Accepted | 2026-08-05 |
 | [014](014-conformite-au-contrat-de-selecteurs-e2e.md) | Conformité au contrat de sélecteurs E2E : jeton seul persisté, session réhydratée par l'API | Accepted | 2026-08-05 |
 | [015](015-prefetch-serveur-et-hydratation-des-listes.md) | Listes publiques : préchargement serveur et hydratation du cache client | Accepted | 2026-08-05 |
 | [016](016-suite-de-conformite-vendoree.md) | Suite de conformité RealWorld vendorée, avec contrôle de dérive | Accepted | 2026-08-05 |
-| [017](017-messages-du-contrat-dans-shared.md) | Les messages d'erreur du contrat vivent dans `packages/shared` | Accepted (amende 004) | 2026-08-05 |
+| [017](017-messages-du-contrat-dans-shared.md) | Les messages d'erreur du contrat vivent dans `packages/shared` | Accepted (amende 004, amendé par 031) | 2026-08-05 |
 | [018](018-conformite-e2e-suite-officielle-vendoree.md) | Conformité e2e du front : suite Playwright officielle vendorée, en rapport avant d'être un gate | Accepted (étend 016) | 2026-08-06 |
 | [019](019-alignement-de-l-hote-d-api-pour-la-suite-e2e.md) | Aligner l'hôte d'API du navigateur sur celui que la suite e2e intercepte, et le résoudre vers l'API du run | Accepted (précise 018) | 2026-08-06 |
 | [020](020-chargement-client-des-pages-de-contenu.md) | Charger l'article, le profil et l'éditeur depuis le navigateur, et non plus au rendu serveur | Accepted (amende 012 et 015) | 2026-08-06 |
@@ -43,6 +43,7 @@ elle porte la mécanique : gabarit, numérotation, statuts, vérification.
 | [028](028-changelog-et-release-via-release-please.md) | CHANGELOG et release dérivés de `main` par release-please | Accepted | 2026-08-11 |
 | [029](029-sujet-conventionnel-verrou-partage.md) | Sujet conventionnel : un verrou partagé entre le hook et la CI | Accepted | 2026-08-11 |
 | [030](030-auto-merge-arme-jamais-decide.md) | L'auto-merge arme, il ne décide pas, et n'alimente jamais `main` | Accepted | 2026-08-11 |
+| [031](031-le-contrat-partage-s-arrete-a-la-frontiere-http.md) | Le contrat partagé s'arrête à la frontière HTTP | Accepted (amende 001 et 011) | 2026-08-21 |
 
 ## Écrire un ADR
 

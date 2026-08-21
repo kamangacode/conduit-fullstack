@@ -1,82 +1,65 @@
-import type { Article, ArticleSummary } from '@repo/shared'
+import type { ViewerId } from '../../shared/viewer-id'
 import type { Slug } from '../slug'
+import type { ArticleListPage, ArticleView } from './article-view'
 
 /**
- * Identité du lecteur, dont dépendent `favorited` et `author.following`
- * (règle R-5).
+ * Filtres de listing d'articles (R-3), déjà normalisés à la frontière HTTP.
  *
- * `null` est l'appelant anonyme, et il est explicite dans la signature plutôt
- * qu'implicite dans un paramètre optionnel : sur un endpoint à authentification
- * facultative, oublier de transmettre le lecteur produit une réponse
- * parfaitement valide où tout vaut `false`. Rendre le paramètre obligatoire
- * force à écrire `null`, donc à décider.
+ * Le port ne connaît pas la route qui les produit. Il décrit ce sur quoi une
+ * lecture d'articles peut être restreinte, et rien de plus.
  */
-export type ViewerId = string | null
-
-/** Filtres de `GET /api/articles` (R-3), déjà validés par `@repo/shared`. */
 export interface ArticleFilters {
   readonly tag?: string
-  /** Username de l'auteur — la forme publique, jamais un identifiant interne. */
+  /** Username de l'auteur. */
   readonly author?: string
-  /** Username de celui qui a favorisé — à ne pas confondre avec `author`. */
+  /** Username de celui qui a favorisé, à ne pas confondre avec `author`. */
   readonly favoritedBy?: string
   readonly limit: number
   readonly offset: number
 }
 
-/** Pagination de `/feed`, qui n'accepte aucun filtre (R-4). */
+/** Pagination d'un flux, qui n'accepte aucun filtre (R-4). */
 export interface FeedPagination {
   readonly limit: number
   readonly offset: number
 }
 
 /**
- * Une page d'articles et le total **avant** pagination.
+ * Port de **lecture** des articles.
  *
- * Les deux champs sont séparés parce qu'ils ne mesurent pas la même chose :
- * `total` alimente `articlesCount` et sert au front à calculer son nombre de
- * pages, tandis que `items.length` n'est que la taille de la tranche. Les deux
- * coïncident tant qu'on teste avec moins d'articles qu'une page — c'est
- * exactement ce qui rend la confusion invisible en développement
- * (REQ-ARTICLE-007 AC-3).
- */
-export interface ArticlePage {
-  readonly items: readonly ArticleSummary[]
-  readonly total: number
-}
-
-/**
- * Port de **lecture** des articles (`docs/adr/011-lecture-des-listes-port-dedie.md`).
+ * Il vit dans `domain/`, comme tous les ports de ce dépôt : c'est le domaine qui
+ * déclare ce dont il a besoin, l'infrastructure qui s'y conforme (Dependency
+ * Inversion). Ce que l'[ADR 031](../../../../../docs/adr/031-le-contrat-partage-s-arrete-a-la-frontiere-http.md)
+ * a changé n'est pas *où* le port vit, mais **ce qu'il parle** : il renvoyait
+ * `Article` et `ArticleSummary` de `@repo/shared`, c'est-à-dire les projections
+ * du contrat HTTP, ce qui faisait dépendre le domaine du transport.
  *
- * Il renvoie directement les projections du contrat partagé — `Article` à
- * l'unité, `ArticleSummary` en liste, cette dernière sans `body` (R-7) — et non
- * des entités de domaine. Deux conséquences voulues :
- *
- * - le format §8 est produit par le type même du port, donc un écart casse la
- *   compilation au lieu d'être découvert par la suite de conformité ;
- * - les champs relatifs au lecteur sont résolus **en une requête**, là où une
- *   recomposition en use-case interrogerait la base une fois par article.
+ * Il renvoie donc des read models possédés par le dépôt (`article-view.ts`). La
+ * séparation lecture / écriture décidée par l'ADR 011 est conservée telle
+ * quelle, avec son motif principal :
+ * les champs relatifs au lecteur sont résolus **en une requête**, là où une
+ * recomposition en use-case interrogerait la base une fois par article.
  *
  * Le lecteur est un paramètre de chaque méthode, jamais un état du port : deux
  * lecteurs obtiennent deux réponses différentes pour la même ressource, et un
  * port qui mémoriserait le lecteur ne pourrait pas être un singleton.
  *
  * Repère pour choisir : **« j'affiche »** prend ce port, **« je modifie »**
- * prend `ArticleRepository`.
+ * prend `ArticleRepository`, qui manipule l'agrégat porteur des invariants.
  */
 export interface ArticleQueryPort {
   /** `null` si aucun article ne porte ce slug — le 404 est décidé par le use-case. */
-  findBySlug(slug: Slug, viewer: ViewerId): Promise<Article | null>
+  findBySlug(slug: Slug, viewer: ViewerId): Promise<ArticleView | null>
 
   /** Listing global filtré et paginé (REQ-ARTICLE-007). Tri par date décroissante (R-2). */
-  list(filters: ArticleFilters, viewer: ViewerId): Promise<ArticlePage>
+  list(filters: ArticleFilters, viewer: ViewerId): Promise<ArticleListPage>
 
   /**
    * Flux personnel (REQ-ARTICLE-008). Le lecteur est ici **obligatoire** : sans
    * lui le flux n'a pas de définition, ce que le type dit à la place d'un
    * commentaire (R-4).
    */
-  feed(pagination: FeedPagination, viewer: string): Promise<ArticlePage>
+  feed(pagination: FeedPagination, viewer: string): Promise<ArticleListPage>
 }
 
 /** Jeton d'injection — voir la note de `user-repository.port.ts`. */

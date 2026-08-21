@@ -1,24 +1,40 @@
 #!/usr/bin/env bash
 # Vérifie que la cohérence front/back est bien une DÉPENDANCE DE COMPILATION,
-# et pas seulement une intention (REQ-ARCH-001, ADR 001).
+# et pas seulement une intention (REQ-ARCH-001, ADR 001 amendé par ADR 031).
 #
-# C'est la thèse du dépôt : le modèle Conduit est écrit une seule fois dans
-# `packages/shared`, donc un changement de modèle doit casser `apps/api` ET
+# C'est la thèse du dépôt : le **contrat** Conduit est écrit une seule fois dans
+# `packages/shared`, donc un changement de contrat doit casser `apps/api` ET
 # `apps/web` avant le runtime. Jusqu'ici cette propriété était affirmée dans un
 # ADR et dans le README. Une affirmation ne se vérifie pas en la relisant.
 #
-# Ce script la teste **activement** : il casse volontairement le modèle partagé,
+# Ce script la teste **activement** : il casse volontairement le contrat partagé,
 # lance le typecheck, et assert que les DEUX applications refusent de compiler.
 # Si une seule tombait, la frontière ne serait typée que d'un côté — situation
 # pire que pas de garantie du tout, puisqu'on s'y fierait.
 #
+# PORTÉE, depuis l'ADR 031 (2026-08-21). `packages/shared` porte le contrat HTTP,
+# pas le modèle métier : seuls `apps/web` et `apps/api/src/interface/` ont le
+# droit de le connaître. La propriété vérifiée est donc **bidirectionnelle**, et
+# c'est ce qui la rend démonstrative :
+#
+#   - moitié POSITIVE : casser un champ du contrat casse ses consommateurs, et
+#     côté API l'erreur cite `src/interface/` ;
+#   - moitié NÉGATIVE : ça ne touche NI `src/domain/` NI `src/application/`.
+#
+# Une thèse qui casse partout ne prouve rien. Avant l'ADR 031, ce script
+# constatait que `apps/api` **dans son ensemble** cessait de compiler — un dépôt
+# qui aurait correctement isolé son domaine aurait donc échoué à sa propre
+# vérification.
+#
 # Le champ saboté est `favoritesCount` : il est réellement consommé des deux
-# côtés (use cases d'article côté API, aperçu d'article côté web). Saboter un
-# champ que seul `shared` utilise prouverait uniquement que `shared` compile.
+# côtés (chemin de lecture d'article côté API, aperçu d'article côté web).
+# Saboter un champ que seul `shared` utilise prouverait uniquement que `shared`
+# compile.
 #
 # 3 phases :
 #   1. État sain      : le typecheck passe sur les trois workspaces
-#   2. Modèle cassé   : api ET web échouent, et leurs erreurs citent leurs fichiers
+#   2. Contrat cassé  : api ET web échouent ; côté api l'erreur cite interface/
+#                       et JAMAIS domain/ ni application/
 #   3. Restauration   : le typecheck repasse, aucun résidu
 #
 # La restauration passe par un `trap EXIT` : une vérification qui laisse le dépôt
@@ -46,7 +62,7 @@ LOCK_DIR="${TMPDIR:-/tmp}/verify-type-boundary.lock"
 # `mktemp` **crée** le fichier immédiatement, vide. Tester `[ -f "$BACKUP" ]`
 # dans le cleanup était donc vrai avant même que la sauvegarde n'existe : un
 # signal reçu entre la création du nom et la copie réelle faisait écraser le
-# modèle partagé par un fichier de zéro octet — une perte de données sur la
+# contrat partagé par un fichier de zéro octet — une perte de données sur la
 # source de vérité du dépôt, provoquée par la vérification censée la protéger.
 # Le drapeau ne passe à `true` qu'après une copie réussie.
 BACKUP_READY=false
@@ -123,7 +139,7 @@ if [ -z "${VERIFY_TYPE_BOUNDARY_FORCE_FAILURE:-}" ]; then
 fi
 
 if [ ! -f "$MODEL_ABS" ]; then
-  echo "ERROR: modèle partagé introuvable : $MODEL_REL" >&2
+  echo "ERROR: contrat partagé introuvable : $MODEL_REL" >&2
   exit 1
 fi
 
@@ -157,13 +173,13 @@ BOUNDARY_BEFORE="$(cat "$MODEL_ABS")"
 VERIFY_TYPE_BOUNDARY_FORCE_FAILURE=1 bash "$0" > /dev/null 2>&1 || true
 
 if [ "$(cat "$MODEL_ABS")" != "$BOUNDARY_BEFORE" ]; then
-  echo "ERROR: après un échec en cours de route, le modèle partagé n'a PAS été restauré." >&2
+  echo "ERROR: après un échec en cours de route, le contrat partagé n'a PAS été restauré." >&2
   echo "       Le trap de nettoyage ne tient pas sa promesse (REQ-ARCH-001 AC-4)." >&2
   exit 1
 fi
-echo "ok phase 0 : le modèle est intact après un échec provoqué."
+echo "ok phase 0 : le contrat est intact après un échec provoqué."
 
-# it AC-3: le modèle intact laisse compiler les trois workspaces
+# it AC-3: le contrat intact laisse compiler les trois workspaces
 echo "phase 1 — état sain : le typecheck doit passer"
 if ! pnpm typecheck > "$TYPECHECK_LOG" 2>&1; then
   echo "ERROR: le typecheck échoue AVANT le sabotage. Rien à conclure de ce script." >&2
@@ -174,7 +190,7 @@ echo "ok phase 1 : les trois workspaces compilent."
 
 # it AC-1: un champ renommé fait échouer apps/api ET apps/web
 # it AC-2: chaque application cite ses propres fichiers dans l'erreur
-echo "phase 2 — modèle cassé : api ET web doivent échouer"
+echo "phase 2 — contrat cassé : api ET web doivent échouer"
 # Renommage du champ dans le schéma partagé. `sed -i ''` est la forme BSD/macOS ;
 # la forme GNU s'écrit `sed -i`. On passe par un fichier temporaire pour rester
 # portable entre les deux (le runner CI est Linux, le poste de dev macOS).
@@ -189,7 +205,7 @@ fi
 # elles continueraient de lire les anciennes déclarations et compileraient — le
 # script conclurait à l'absence de frontière alors qu'il n'aurait rien cassé.
 if ! pnpm --filter @repo/shared build > "$TYPECHECK_LOG" 2>&1; then
-  echo "ERROR: le modèle partagé ne compile plus après renommage." >&2
+  echo "ERROR: le contrat partagé ne compile plus après renommage." >&2
   echo "       Le sabotage doit rester valide en TypeScript pour que le test ait un sens." >&2
   tail -20 "$TYPECHECK_LOG" >&2
   exit 1
@@ -209,7 +225,7 @@ assert_fails() {
   pnpm --filter "$workspace" typecheck > "$TYPECHECK_LOG" 2>&1 || status=$?
 
   if [ "$status" -eq 0 ]; then
-    echo "ERROR: $label compile malgré un modèle partagé cassé." >&2
+    echo "ERROR: $label compile malgré un contrat partagé cassé." >&2
     echo "       La frontière n'est pas une dépendance de compilation de ce côté." >&2
     tail -30 "$TYPECHECK_LOG" >&2
     exit 1
@@ -235,10 +251,43 @@ assert_fails() {
   echo "  ok $label — $first_error"
 }
 
+# it AC-5: la rupture s'arrête à la frontière HTTP de l'API
+#
+# Les deux assertions ci-dessous lisent le log de `assert_fails "@repo/api"`,
+# qui est écrasé au prochain appel. Elles doivent donc rester **entre** les deux
+# `assert_fails`, et pas être regroupées plus bas par souci de lisibilité.
+assert_cites() {
+  local layer="$1"
+  if ! grep -qE "^${layer}" "$TYPECHECK_LOG"; then
+    echo "ERROR: aucune erreur de apps/api ne cite ${layer}." >&2
+    echo "       Le contrat n'est donc plus consommé là où il devrait l'être," >&2
+    echo "       ou la vérification a cessé de mesurer ce qu'elle croit mesurer." >&2
+    tail -30 "$TYPECHECK_LOG" >&2
+    exit 1
+  fi
+  echo "  ok apps/api casse bien dans ${layer}"
+}
+
+assert_untouched() {
+  local layer="$1"
+  if grep -qE "^${layer}" "$TYPECHECK_LOG"; then
+    echo "ERROR: le contrat a fui dans ${layer} (ADR 031)." >&2
+    echo "       Renommer un champ du contrat ne doit rien casser sous interface/ :" >&2
+    echo "       une couche qui tombe ici en dépend, donc elle le connaît." >&2
+    grep -E "^${layer}" "$TYPECHECK_LOG" | head -10 >&2
+    exit 1
+  fi
+  echo "  ok ${layer} ne bouge pas"
+}
+
 assert_fails "@repo/api" "apps/api"
+assert_cites "src/interface/"
+assert_untouched "src/domain/"
+assert_untouched "src/application/"
+
 assert_fails "@repo/web" "apps/web"
 
-echo "ok phase 2 : les deux applications échouent, chacune en citant ses propres fichiers."
+echo "ok phase 2 : les deux applications échouent, et côté api la rupture s'arrête à interface/."
 
 echo "phase 3 — restauration : le typecheck doit repasser"
 cp "$BACKUP" "$MODEL_ABS"
@@ -249,6 +298,6 @@ if ! pnpm typecheck > "$TYPECHECK_LOG" 2>&1; then
   tail -20 "$TYPECHECK_LOG" >&2
   exit 1
 fi
-echo "ok phase 3 : modèle restauré, les trois workspaces compilent."
+echo "ok phase 3 : contrat restauré, les trois workspaces compilent."
 
-echo "ok: la cohérence front/back est une dépendance de compilation (REQ-ARCH-001)."
+echo "ok: la cohérence front/back est une dépendance de compilation (REQ-ARCH-001, ADR 031)."
