@@ -1,7 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common'
-import type { Article } from '@repo/shared'
 import { ArticleNotFoundError } from '../../domain/article/article.errors'
-import { ARTICLE_QUERY, type ArticleQueryPort } from '../../domain/article/ports/article-query.port'
 import {
   ARTICLE_REPOSITORY,
   type ArticleRepository,
@@ -11,6 +9,8 @@ import {
   type FavoriteRepository,
 } from '../../domain/article/ports/favorite-repository.port'
 import { Slug } from '../../domain/article/slug'
+import { ARTICLE_QUERY, type ArticleQueryPort } from './ports/article-query.port'
+import type { ArticleView } from './ports/article-view'
 
 export interface UnfavoriteArticleInput {
   readonly slug: string
@@ -41,7 +41,7 @@ export class UnfavoriteArticleUseCase {
     @Inject(ARTICLE_QUERY) private readonly query: ArticleQueryPort
   ) {}
 
-  async execute(input: UnfavoriteArticleInput): Promise<Article> {
+  async execute(input: UnfavoriteArticleInput): Promise<ArticleView> {
     const slug = Slug.fromPersisted(input.slug)
 
     const target = await this.articles.findBySlug(slug)

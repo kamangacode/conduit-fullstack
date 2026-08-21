@@ -45,6 +45,7 @@ import { CurrentUserId, OptionalCurrentUserId } from '../auth/current-user.decor
 import { IdempotencyInterceptor } from '../idempotency/idempotency.interceptor'
 import { Idempotent } from '../idempotency/idempotent.decorator'
 import { zodEnvelope, zodQuery } from '../pipes/zod-validation.pipe'
+import { toArticle, toArticlesResponse } from './article.mapper'
 
 /**
  * Identifiant de commentaire, refusé en **422** plutôt qu'en 400.
@@ -103,7 +104,7 @@ export class ArticleController {
     @Query(zodQuery(listArticlesQuerySchema)) query: ListArticlesQuery,
     @OptionalCurrentUserId() viewer: string | null
   ): Promise<ArticlesResponse> {
-    return this.listArticles.execute({
+    const page = await this.listArticles.execute({
       filters: {
         ...(query.tag === undefined ? {} : { tag: query.tag }),
         ...(query.author === undefined ? {} : { author: query.author }),
@@ -116,6 +117,7 @@ export class ArticleController {
       },
       viewer,
     })
+    return toArticlesResponse(page)
   }
 
   /**
@@ -128,10 +130,11 @@ export class ArticleController {
     @Query(zodQuery(listArticlesQuerySchema)) query: ListArticlesQuery,
     @CurrentUserId() viewer: string
   ): Promise<ArticlesResponse> {
-    return this.getFeed.execute({
+    const page = await this.getFeed.execute({
       pagination: { limit: query.limit, offset: query.offset },
       viewer,
     })
+    return toArticlesResponse(page)
   }
 
   /** Consultation unitaire (REQ-ARTICLE-004). Authentification optionnelle (R-5). */
@@ -142,7 +145,7 @@ export class ArticleController {
     @OptionalCurrentUserId() viewer: string | null
   ): Promise<ArticleResponse> {
     const article = await this.getArticle.execute({ slug, viewer })
-    return { article }
+    return { article: toArticle(article) }
   }
 
   /** Publication (REQ-ARTICLE-003). 201, conformément à `openapi.yml`. */
@@ -154,7 +157,7 @@ export class ArticleController {
     @CurrentUserId() authorId: string
   ): Promise<ArticleResponse> {
     const article = await this.createArticle.execute({ ...dto, authorId })
-    return { article }
+    return { article: toArticle(article) }
   }
 
   /** Modification (REQ-ARTICLE-005). Réservée à l'auteur (R-6). */
@@ -177,7 +180,7 @@ export class ArticleController {
     }
 
     const article = await this.updateArticle.execute({ slug, userId, changes })
-    return { article }
+    return { article: toArticle(article) }
   }
 
   /** Suppression (REQ-ARTICLE-006). **204 sans corps**, contrairement au favori. */
@@ -197,7 +200,7 @@ export class ArticleController {
     @CurrentUserId() userId: string
   ): Promise<ArticleResponse> {
     const article = await this.favoriteArticle.execute({ slug, userId })
-    return { article }
+    return { article: toArticle(article) }
   }
 
   /** Défavoriser (REQ-ARTICLE-009). 200 également : le contrat renvoie l'article. */
@@ -209,7 +212,7 @@ export class ArticleController {
     @CurrentUserId() userId: string
   ): Promise<ArticleResponse> {
     const article = await this.unfavoriteArticle.execute({ slug, userId })
-    return { article }
+    return { article: toArticle(article) }
   }
 
   /** Commenter (REQ-COMMENT-002). 201. */

@@ -1,5 +1,3 @@
-import type { Comment } from '@repo/shared'
-import type { ViewerId } from '../../article/ports/article-query.port'
 import type { CommentEntity } from '../comment'
 
 /**
@@ -19,7 +17,13 @@ export interface NewComment {
 }
 
 /**
- * Port d'**écriture** des commentaires (rule 12).
+ * Port d'**écriture** des commentaires.
+ *
+ * Il manipule `CommentEntity`, l'agrégat porteur de la règle d'appartenance
+ * (R-6), et c'est ce qui le fait vivre dans `domain/` : un port vit là où vit ce
+ * qu'il protège (ADR 031). Son jumeau de lecture,
+ * `application/comment/ports/comment-query.port.ts`, ne protège rien et sert un
+ * affichage.
  *
  * Aucune méthode de mise à jour : le contrat RealWorld n'expose pas d'édition de
  * commentaire, et le port ne propose pas ce que l'API ne fait pas.
@@ -42,27 +46,5 @@ export interface CommentRepository {
   delete(id: number, authorId: string): Promise<void>
 }
 
-/**
- * Port de **lecture** des commentaires, symétrique de `ArticleQueryPort`
- * (`docs/adr/011-lecture-des-listes-port-dedie.md`).
- *
- * Il renvoie des `Comment` du contrat partagé, auteur résolu en `Profile` avec
- * son `following` relatif au lecteur (R-5). Le port existe séparément de
- * l'écriture pour la même raison que côté article : chaque commentaire porte une
- * relation au lecteur, et la résoudre en boucle produirait une requête par
- * commentaire.
- *
- * La liste n'est **ni paginée ni comptée** — le contrat ne le prévoit pas
- * (REQ-COMMENT-003 AC-1), et l'ajouter ferait dévier ce dépôt de la suite de
- * conformité qui compare les implémentations Conduit.
- */
-export interface CommentQueryPort {
-  listByArticle(articleId: string, viewer: ViewerId): Promise<readonly Comment[]>
-
-  /** Relecture d'un commentaire pour produire la réponse de création. */
-  findById(id: number, viewer: ViewerId): Promise<Comment | null>
-}
-
-/** Jetons d'injection — voir la note de `user-repository.port.ts`. */
+/** Jeton d'injection — voir la note de `user-repository.port.ts`. */
 export const COMMENT_REPOSITORY = Symbol('CommentRepository')
-export const COMMENT_QUERY = Symbol('CommentQueryPort')

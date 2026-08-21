@@ -8,11 +8,10 @@ import {
 import { Slug } from '../../domain/article/slug'
 import { CommentNotFoundError } from '../../domain/comment/comment.errors'
 import {
-  COMMENT_QUERY,
   COMMENT_REPOSITORY,
-  type CommentQueryPort,
   type CommentRepository,
 } from '../../domain/comment/ports/comment-repository.port'
+import { COMMENT_QUERY, type CommentQueryPort } from './ports/comment-query.port'
 
 export interface AddCommentInput {
   /** Slug de l'article commenté, tel qu'il apparaît dans l'URL. */

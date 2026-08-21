@@ -1,12 +1,12 @@
 import { Injectable } from '@nestjs/common'
 import { Prisma } from '@prisma/client'
 import type { Comment } from '@repo/shared'
+import type { CommentQueryPort } from '../../application/comment/ports/comment-query.port'
+import type { ViewerId } from '../../application/shared/viewer-id'
 import { ArticleNotFoundError } from '../../domain/article/article.errors'
-import type { ViewerId } from '../../domain/article/ports/article-query.port'
 import { CommentEntity } from '../../domain/comment/comment'
 import { CommentNotFoundError } from '../../domain/comment/comment.errors'
 import type {
-  CommentQueryPort,
   CommentRepository,
   NewComment,
 } from '../../domain/comment/ports/comment-repository.port'

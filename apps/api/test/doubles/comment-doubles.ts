@@ -1,12 +1,9 @@
 import type { Comment, Tag } from '@repo/shared'
-import type { ViewerId } from '@/domain/article/ports/article-query.port'
+import type { CommentQueryPort } from '@/application/comment/ports/comment-query.port'
+import type { ViewerId } from '@/application/shared/viewer-id'
 import { CommentEntity, type CommentProps } from '@/domain/comment/comment'
 import { CommentNotFoundError } from '@/domain/comment/comment.errors'
-import type {
-  CommentQueryPort,
-  CommentRepository,
-  NewComment,
-} from '@/domain/comment/ports/comment-repository.port'
+import type { CommentRepository, NewComment } from '@/domain/comment/ports/comment-repository.port'
 import type { TagQueryPort } from '@/domain/tag/ports/tag-query.port'
 
 /**

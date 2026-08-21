@@ -1,16 +1,13 @@
 import { Inject, Injectable } from '@nestjs/common'
 import type { CommentsResponse } from '@repo/shared'
 import { ArticleNotFoundError } from '../../domain/article/article.errors'
-import type { ViewerId } from '../../domain/article/ports/article-query.port'
 import {
   ARTICLE_REPOSITORY,
   type ArticleRepository,
 } from '../../domain/article/ports/article-repository.port'
 import { Slug } from '../../domain/article/slug'
-import {
-  COMMENT_QUERY,
-  type CommentQueryPort,
-} from '../../domain/comment/ports/comment-repository.port'
+import type { ViewerId } from '../shared/viewer-id'
+import { COMMENT_QUERY, type CommentQueryPort } from './ports/comment-query.port'
 
 export interface ListCommentsInput {
   readonly slug: string
