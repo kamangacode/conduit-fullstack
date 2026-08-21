@@ -5,10 +5,10 @@ type: non-functional
 domain: architecture
 status: implemented
 priority: must
-source: "architecture §6 (frontière typée bout-en-bout) ; ADR 001 (package partagé comme source de vérité unique)"
+source: "architecture §6 (frontière typée bout-en-bout) ; ADR 001 (package partagé comme source de vérité unique), amendé par ADR 031 (le contrat s'arrête à la frontière HTTP)"
 acceptance_criteria:
   - id: AC-1
-    given: "un champ du modèle partagé renommé de façon incompatible"
+    given: "un champ du contrat partagé renommé de façon incompatible"
     when: "le typecheck du dépôt s'exécute"
     then: "`apps/api` **et** `apps/web` échouent tous les deux — pas l'un ou l'autre"
   - id: AC-2
@@ -16,7 +16,7 @@ acceptance_criteria:
     when: "on examine les erreurs remontées"
     then: "elles désignent des fichiers de chaque application, ce qui prouve que la rupture traverse réellement la frontière"
   - id: AC-3
-    given: "le modèle partagé intact"
+    given: "le contrat partagé intact"
     when: "le typecheck s'exécute"
     then: "les trois workspaces compilent — la vérification ne laisse aucun résidu"
   - id: AC-4
@@ -63,6 +63,32 @@ AC-4 n'est pas une précaution de confort : une vérification qui laisse le dép
 modifié après un échec transforme un diagnostic en incident, et sera désactivée à
 la première occurrence.
 
+## Amendement du 2026-08-21 (ADR 031)
+
+Cette exigence parlait du « modèle partagé ». `packages/shared` n'a jamais porté
+un modèle métier : ce sont les enveloppes de réponse, les DTOs d'entrée et la
+table `CONDUIT_ERROR_STATUS`, c'est-à-dire le **contrat HTTP**. La formulation a
+été alignée sur ce que le package est réellement.
+
+La conséquence sur le fond est plus lourde que le vocabulaire. Telle qu'écrite,
+l'exigence demandait que `apps/api` **dans son ensemble** cesse de compiler quand
+le contrat change. C'était une exigence de couplage : elle garantissait que le
+contrat traverse toutes les couches de l'API, `domain/` compris. Un dépôt qui
+aurait correctement isolé son domaine aurait donc **échoué** à cette exigence.
+
+La propriété visée devient bidirectionnelle :
+
+- moitié **positive**, déjà couverte par AC-1 et AC-2 : casser un champ du
+  contrat casse ses consommateurs légitimes ;
+- moitié **négative**, pas encore couverte : ça ne doit toucher ni `src/domain/`
+  ni `src/application/`.
+
+La moitié négative n'est pas ajoutée ici parce qu'elle est **fausse à cette
+date** : huit fichiers de `domain/` importent encore le contrat. Elle arrivera
+avec un AC-5 et son marqueur `# it AC-5`, une fois les quatre contextes migrés
+(lot T8). Écrire une exigence connue pour être violée, en la marquant
+`implemented`, est exactement le mode d'échec que l'ADR 031 corrige.
+
 ## Règles
 
 - La vérification est **active** : elle produit la rupture et observe le
@@ -74,7 +100,10 @@ la première occurrence.
 
 ## Hors périmètre
 
-- Le choix de la frontière lui-même, tranché par l'[ADR 001](../../../adr/001-topologie-monorepo-modele-partage.md).
+- Le choix de la frontière lui-même, tranché par l'[ADR 001](../../../adr/001-topologie-monorepo-modele-partage.md)
+  et borné par l'[ADR 031](../../../adr/031-le-contrat-partage-s-arrete-a-la-frontiere-http.md).
+- La moitié négative de la propriété (« le domaine ne bouge pas »), qui demande
+  d'abord que ce soit vrai. Voir l'amendement ci-dessus.
 - La conformité du contrat externe à la spec RealWorld, qui relève de la suite
   Hurl et de la suite Playwright (item F7).
 - La détection d'un type recopié à la main : ce contrôle prouve qu'un changement

@@ -69,7 +69,17 @@ contente de reformuler les assertions positives pour qu'elles visent `apps/web` 
 - **AC-3** : l'ADR 001 ne contient plus l'expression « source de vérité unique du modèle
   Conduit ». Il renvoie à l'ADR 031 pour la portée exacte du partage.
 - **AC-4** : `bash scripts/verify-type-boundary.sh` sort en 0 sur le dépôt **non modifié par les
-  lots suivants**, et ses assertions citent `apps/web` et `apps/api/src/interface/`.
+  lots suivants**, et son en-tête énonce la portée de l'ADR 031 ainsi que la moitié de propriété
+  qu'il ne couvre pas encore.
+
+  > **Correction du 2026-08-21, à l'implémentation.** Cet AC exigeait d'abord que les assertions
+  > du script « citent `apps/web` et `apps/api/src/interface/` ». C'était faux : à cette date, un
+  > renommage de `favoritesCount` fait échouer l'API dans `infrastructure/persistence/prisma-article.query.ts`,
+  > pas dans `interface/`, puisque c'est l'adapter qui fabrique la projection du contrat. La
+  > citation de `interface/` ne devient vraie qu'après T4. L'assertion de couche part donc en T8
+  > avec l'assertion négative, et T1 se limite à aligner le vocabulaire et à documenter la portée.
+  > Écrire une assertion connue pour être fausse serait reproduire exactement le défaut que l'ADR
+  > 031 corrige.
 - **AC-5** : `pnpm requirements:validate` sort en 0 (REQ-ARCH-001 reste valide après réécriture).
 - **AC-6** : `pnpm lint` et `pnpm typecheck` sortent en 0.
 
