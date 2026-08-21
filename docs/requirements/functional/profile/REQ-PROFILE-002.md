@@ -25,11 +25,13 @@ acceptance_criteria:
     then: "elle ne contient que username, bio, image et following — ni email, ni condensat, ni identifiant interne"
 implementation:
   files:
-    - apps/api/src/domain/user/user.ts
+    - apps/api/src/application/profile/ports/profile-view.ts
     - apps/api/src/application/profile/get-profile.use-case.ts
+    - apps/api/src/interface/profile/profile.mapper.ts
     - apps/api/src/interface/profile/profile.controller.ts
   tests:
-    - apps/api/src/domain/user/user.spec.ts
+    - apps/api/src/application/profile/ports/profile-view.spec.ts
+    - apps/api/src/interface/profile/profile.mapper.spec.ts
     - apps/api/src/application/profile/get-profile.use-case.spec.ts
     - apps/api/test/integration/auth-http.integration.spec.ts
 related:
