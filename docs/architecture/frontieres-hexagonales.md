@@ -139,15 +139,34 @@ d'eux est l'absence de cycles et d'orphelins.
 
 ## Ce que la frontière donne, mesuré
 
-Renommer un champ du contrat dans `packages/shared` :
+Renommer `favoritesCount` dans `packages/shared`, et compter les erreurs de compilation de
+`apps/api` par couche. Mesuré des deux côtés le 2026-08-21 :
 
 | Couche | Avant l'ADR 031 | Après |
 |---|---|---|
+| `src/infrastructure/` | **52 erreurs** | 0 |
+| `test/` (intégration, doublures) | **11 erreurs** | 0 |
+| `src/application/` | **2 erreurs** | 0 |
+| `src/interface/` | **0** | **1 erreur** |
+| `src/domain/` | 0 | 0 |
 | `apps/web` | casse | casse |
-| `apps/api/src/interface/` | casse | casse |
-| `apps/api/src/application/` | **cassait** | ne bouge pas |
-| `apps/api/src/domain/` | cassait | ne bouge pas |
 
-`scripts/verify-type-boundary.sh` vérifie les quatre lignes de ce tableau à chaque pre-push, en
-provoquant réellement le renommage. C'est la forme exécutable de l'ADR 031, et une propriété plus
-forte que celle d'origine : une thèse qui casse partout ne prouve rien.
+La lecture n'est pas « ça cassait, ça ne casse plus ». C'est **où** ça casse. Avant, la rupture
+touchait 65 endroits dans trois zones, dont aucune n'était la couche censée connaître le contrat :
+l'adapter Prisma fabriquait la projection HTTP, et les doublures de test imitaient la forme du fil.
+Après, elle touche **un seul endroit**, dans `interface/`, le mapper. `apps/web` est le témoin : il
+doit continuer de casser, sans quoi le découplage aurait tué la thèse de l'ADR 001 au lieu de la
+borner.
+
+**Un mot sur la ligne `domain/`, qui est à 0 des deux côtés.** Cette sonde ne mesure qu'un champ.
+Le domaine importait bel et bien le contrat avant l'ADR 031, mais ce qu'il en importait
+(`Profile`, `User`, `Comment`, `Tag`, `ErrorResponse`) ne porte pas `favoritesCount`, et
+`ArticleQueryPort` se contentait de déclarer des types sans jamais construire de littéral. Son
+couplage était réel et invisible à cet instrument. C'est `dependency-cruiser` qui le voyait, en
+comptant 8 modules. **Deux instruments, deux propriétés :** le script prouve que la rupture est
+localisée, la règle depcruise prouve qu'aucune dépendance n'existe. Confondre les deux, c'est
+croire qu'un contrôle vert en couvre un autre.
+
+`scripts/verify-type-boundary.sh` vérifie ces lignes à chaque pre-push, en provoquant réellement le
+renommage. C'est la forme exécutable de l'ADR 031, et une propriété plus forte que celle d'origine :
+une thèse qui casse partout ne prouve rien.

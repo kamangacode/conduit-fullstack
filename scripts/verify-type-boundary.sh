@@ -284,6 +284,10 @@ assert_fails "@repo/api" "apps/api"
 assert_cites "src/interface/"
 assert_untouched "src/domain/"
 assert_untouched "src/application/"
+# `infrastructure/` porte l'écart le plus large : avant l'ADR 031, ce même
+# renommage y produisait 52 erreurs, parce que l'adapter Prisma fabriquait
+# directement la projection du contrat. Il n'était asserté nulle part.
+assert_untouched "src/infrastructure/"
 
 assert_fails "@repo/web" "apps/web"
 

@@ -26,7 +26,7 @@ acceptance_criteria:
   - id: AC-5
     given: "un champ du contrat partagé renommé de façon incompatible"
     when: "on examine les erreurs de `apps/api`"
-    then: "elles citent `src/interface/` et **aucune** ne cite `src/domain/` ni `src/application/` — la rupture s'arrête à la frontière HTTP (ADR 031)"
+    then: "elles citent `src/interface/` et **aucune** ne cite `src/domain/`, `src/application/` ni `src/infrastructure/` — la rupture s'arrête à la frontière HTTP (ADR 031)"
 implementation:
   files:
     - packages/shared/src/model/article.ts
@@ -94,11 +94,19 @@ fichiers de `domain/` importaient encore le contrat, et déclarer `implemented`
 une exigence connue pour être violée est exactement le mode d'échec que l'ADR
 031 corrige.
 
-Mesure du 2026-08-21, avant et après. Avant, le renommage de `favoritesCount`
-faisait tomber `apps/api` dans `src/application/article/favorite-article.use-case.spec.ts` :
-la couche applicative connaissait le fil. Après, il le fait tomber dans
-`src/interface/article/article.mapper.ts`, et ni `domain/` ni `application/` ne
-bougent.
+Mesure du 2026-08-21, avant et après, en comptant les erreurs de `apps/api` par
+couche. Avant : 52 dans `src/infrastructure/`, 11 dans `test/`, 2 dans
+`src/application/`, **aucune dans `src/interface/`**. La rupture touchait 65
+endroits, et pas la couche censée porter le contrat. Après : **une seule**, dans
+`src/interface/article/article.mapper.ts`.
+
+`src/domain/` est à zéro des deux côtés, et ce n'est pas une contradiction : la
+sonde ne casse qu'un champ, `favoritesCount`, que les types importés par le
+domaine (`Profile`, `User`, `Comment`, `Tag`, `ErrorResponse`) ne portent pas.
+Le couplage du domaine était réel mais invisible à cet instrument ; c'est
+`dependency-cruiser` qui le comptait, à 8 modules. AC-5 garde donc une valeur de
+**non-régression** sur `domain/`, et une valeur de mesure sur `application/` et
+`infrastructure/`.
 
 ## Règles
 
