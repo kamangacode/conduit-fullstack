@@ -1,3 +1,5 @@
+import type { AuthorView } from '../../shared/author-view'
+
 /**
  * Read models de la lecture d'articles.
  *
@@ -7,32 +9,17 @@
  * une chaîne ISO 8601. La sérialisation est le travail du mapper de
  * `interface/`.
  *
+ * `AuthorView` vit dans `application/shared/` et non ici : il est partagé par la
+ * lecture d'articles et celle de commentaires, exactement comme `ViewerId`. Le
+ * déclarer dans ce fichier recréait à l'étage applicatif l'arête inter-contextes
+ * que le déplacement de `ViewerId` venait de supprimer au domaine.
+ *
  * Avant l'ADR 031, le port renvoyait directement `Article` et `ArticleSummary`
  * de `@repo/shared`. Le raccourci avait un mérite — le format §8 était produit
  * par le type même du port — et un coût qui a fini par dominer : le domaine, où
  * ce port vivait alors, dépendait du contrat HTTP. Renommer un champ de réponse
  * faisait bouger le coeur métier.
  */
-
-/**
- * Auteur d'un article ou d'un commentaire, tel qu'une requête de lecture le
- * résout.
- *
- * `following` est relatif au lecteur, pas un attribut de l'auteur : deux
- * lecteurs obtiennent deux valeurs pour le même auteur (R-5).
- *
- * Distinct de `ProfileView` du contexte `profile` malgré une forme identique.
- * Les deux ne répondent pas à la même question : celui-ci décrit l'auteur d'un
- * contenu résolu au passage d'une requête de liste, l'autre est le résultat du
- * cas d'usage « consulter un profil ». Les fusionner coupleraient deux contextes
- * bornés pour la seule raison qu'ils ont aujourd'hui les mêmes champs.
- */
-export interface AuthorView {
-  readonly username: string
-  readonly bio: string | null
-  readonly image: string | null
-  readonly following: boolean
-}
 
 /**
  * Article complet destiné à l'affichage, `body` inclus.
