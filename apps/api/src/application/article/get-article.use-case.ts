@@ -1,9 +1,9 @@
 import { Inject, Injectable } from '@nestjs/common'
 import { ArticleNotFoundError } from '../../domain/article/article.errors'
+import { ARTICLE_QUERY, type ArticleQueryPort } from '../../domain/article/ports/article-query.port'
+import type { ArticleView } from '../../domain/article/ports/article-view'
 import { Slug } from '../../domain/article/slug'
-import type { ViewerId } from '../shared/viewer-id'
-import { ARTICLE_QUERY, type ArticleQueryPort } from './ports/article-query.port'
-import type { ArticleView } from './ports/article-view'
+import type { ViewerId } from '../../domain/shared/viewer-id'
 
 export interface GetArticleInput {
   readonly slug: string

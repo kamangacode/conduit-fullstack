@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common'
-import type { TagName, TagQueryPort } from '../../application/tag/ports/tag-query.port'
+import type { TagName, TagQueryPort } from '../../domain/tag/ports/tag-query.port'
 import { PrismaService } from '../prisma/prisma.service'
 
 /**

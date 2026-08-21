@@ -6,8 +6,8 @@ import { UserEntity, type UserProps } from './user'
  * TypeScript pur, donc tout ce qu'elle promet est vérifiable sans infrastructure.
  *
  * Les projections publique et privée du compte ont quitté l'entité avec l'ADR
- * 031. Leurs tests les ont suivies : `application/profile/ports/profile-view.spec.ts`
- * et `application/user/ports/account-view.spec.ts`. Ce fichier ne garde que ce
+ * 031. Leurs tests les ont suivies : `application/profile/profile-view.spec.ts`
+ * et `application/user/account-view.spec.ts`. Ce fichier ne garde que ce
  * que l'entité décide encore, c'est-à-dire ses règles de mise à jour.
  */
 

@@ -1,5 +1,5 @@
 import type { User } from '@repo/shared'
-import type { AccountView } from '../../application/user/ports/account-view'
+import type { AccountView } from '../../application/user/account-view'
 
 /**
  * Traduction du read model de compte vers le contrat HTTP.

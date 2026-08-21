@@ -6,12 +6,12 @@ import {
 } from '../../domain/article/ports/article-repository.port'
 import { Slug } from '../../domain/article/slug'
 import { CommentNotFoundError } from '../../domain/comment/comment.errors'
+import { COMMENT_QUERY, type CommentQueryPort } from '../../domain/comment/ports/comment-query.port'
 import {
   COMMENT_REPOSITORY,
   type CommentRepository,
 } from '../../domain/comment/ports/comment-repository.port'
-import { COMMENT_QUERY, type CommentQueryPort } from './ports/comment-query.port'
-import type { CommentView } from './ports/comment-view'
+import type { CommentView } from '../../domain/comment/ports/comment-view'
 
 export interface AddCommentInput {
   /** Slug de l'article commenté, tel qu'il apparaît dans l'URL. */

@@ -3,8 +3,8 @@ import type {
   ArticleListPage,
   ArticleSummaryView,
   ArticleView,
-} from '../../application/article/ports/article-view'
-import type { AuthorView } from '../../application/shared/author-view'
+} from '../../domain/article/ports/article-view'
+import type { AuthorView } from '../../domain/shared/author-view'
 
 /**
  * Traduction des read models d'article vers le contrat HTTP.

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { UserEntity, type UserProps } from '../../../domain/user/user'
+import { UserEntity, type UserProps } from '../../domain/user/user'
 import { toProfileView } from './profile-view'
 
 /**

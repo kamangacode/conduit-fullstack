@@ -1,19 +1,19 @@
+import { ArticleEntity, type ArticleProps } from '@/domain/article/article'
+import { ArticleNotFoundError } from '@/domain/article/article.errors'
 import type {
   ArticleFilters,
   ArticleQueryPort,
   FeedPagination,
-} from '@/application/article/ports/article-query.port'
+} from '@/domain/article/ports/article-query.port'
+import type { ArticleRepository, NewArticle } from '@/domain/article/ports/article-repository.port'
 import type {
   ArticleListPage,
   ArticleSummaryView,
   ArticleView,
-} from '@/application/article/ports/article-view'
-import type { ViewerId } from '@/application/shared/viewer-id'
-import { ArticleEntity, type ArticleProps } from '@/domain/article/article'
-import { ArticleNotFoundError } from '@/domain/article/article.errors'
-import type { ArticleRepository, NewArticle } from '@/domain/article/ports/article-repository.port'
+} from '@/domain/article/ports/article-view'
 import type { FavoriteRepository } from '@/domain/article/ports/favorite-repository.port'
 import { Slug } from '@/domain/article/slug'
+import type { ViewerId } from '@/domain/shared/viewer-id'
 
 /**
  * Doublures des ports du contexte `article`, pour la lane **unit** (rule 16).

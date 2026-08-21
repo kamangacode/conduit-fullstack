@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { ArticleView } from '../../application/article/ports/article-view'
+import type { ArticleView } from '../../domain/article/ports/article-view'
 import { toArticle, toArticleSummary, toArticlesResponse } from './article.mapper'
 
 /**

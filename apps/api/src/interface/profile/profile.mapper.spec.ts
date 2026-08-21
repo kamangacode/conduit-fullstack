@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { ProfileView } from '../../application/profile/ports/profile-view'
+import type { ProfileView } from '../../application/profile/profile-view'
 import { toProfileResponse } from './profile.mapper'
 
 /**

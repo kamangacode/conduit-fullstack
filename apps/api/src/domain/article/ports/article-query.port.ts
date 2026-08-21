@@ -1,5 +1,5 @@
-import type { Slug } from '../../../domain/article/slug'
 import type { ViewerId } from '../../shared/viewer-id'
+import type { Slug } from '../slug'
 import type { ArticleListPage, ArticleView } from './article-view'
 
 /**
@@ -27,16 +27,16 @@ export interface FeedPagination {
 /**
  * Port de **lecture** des articles.
  *
- * Il vit dans `application/` et non dans `domain/`, et c'est le coeur de
- * l'[ADR 031](../../../../../docs/adr/031-le-contrat-partage-s-arrete-a-la-frontiere-http.md) :
- * un port vit là où vit ce qu'il protège. Celui-ci ne protège aucun invariant.
- * Il sert un cas d'usage d'affichage, dont le résultat dépend du lecteur et non
- * du métier. Le placer dans `domain/` était une conséquence de la convention
- * « les ports vivent dans domain/ », et c'est cette convention qui était fausse.
+ * Il vit dans `domain/`, comme tous les ports de ce dépôt : c'est le domaine qui
+ * déclare ce dont il a besoin, l'infrastructure qui s'y conforme (Dependency
+ * Inversion). Ce que l'[ADR 031](../../../../../docs/adr/031-le-contrat-partage-s-arrete-a-la-frontiere-http.md)
+ * a changé n'est pas *où* le port vit, mais **ce qu'il parle** : il renvoyait
+ * `Article` et `ArticleSummary` de `@repo/shared`, c'est-à-dire les projections
+ * du contrat HTTP, ce qui faisait dépendre le domaine du transport.
  *
- * Il renvoie des read models possédés par le dépôt (`article-view.ts`), pas les
- * projections du contrat partagé. La séparation lecture / écriture décidée par
- * l'ADR 011 est en revanche conservée telle quelle, avec son motif principal :
+ * Il renvoie donc des read models possédés par le dépôt (`article-view.ts`). La
+ * séparation lecture / écriture décidée par l'ADR 011 est conservée telle
+ * quelle, avec son motif principal :
  * les champs relatifs au lecteur sont résolus **en une requête**, là où une
  * recomposition en use-case interrogerait la base une fois par article.
  *
@@ -45,8 +45,7 @@ export interface FeedPagination {
  * port qui mémoriserait le lecteur ne pourrait pas être un singleton.
  *
  * Repère pour choisir : **« j'affiche »** prend ce port, **« je modifie »**
- * prend `ArticleRepository`, qui reste dans `domain/` parce qu'il manipule un
- * agrégat porteur d'invariants.
+ * prend `ArticleRepository`, qui manipule l'agrégat porteur des invariants.
  */
 export interface ArticleQueryPort {
   /** `null` si aucun article ne porte ce slug — le 404 est décidé par le use-case. */

@@ -9,16 +9,15 @@ import type { AuthorView } from '../../shared/author-view'
  * une chaîne ISO 8601. La sérialisation est le travail du mapper de
  * `interface/`.
  *
- * `AuthorView` vit dans `application/shared/` et non ici : il est partagé par la
+ * `AuthorView` vit dans `domain/shared/` et non ici : il est partagé par la
  * lecture d'articles et celle de commentaires, exactement comme `ViewerId`. Le
- * déclarer dans ce fichier recréait à l'étage applicatif l'arête inter-contextes
- * que le déplacement de `ViewerId` venait de supprimer au domaine.
+ * déclarer dans ce fichier recréerait l'arête `comment -> article`.
  *
  * Avant l'ADR 031, le port renvoyait directement `Article` et `ArticleSummary`
  * de `@repo/shared`. Le raccourci avait un mérite — le format §8 était produit
- * par le type même du port — et un coût qui a fini par dominer : le domaine, où
- * ce port vivait alors, dépendait du contrat HTTP. Renommer un champ de réponse
- * faisait bouger le coeur métier.
+ * par le type même du port — et un coût qui a fini par dominer : le domaine
+ * dépendait du contrat HTTP. Renommer un champ de réponse faisait bouger le
+ * coeur métier, sans qu'aucune règle métier n'ait changé.
  */
 
 /**

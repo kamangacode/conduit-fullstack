@@ -20,10 +20,9 @@ export interface NewComment {
  * Port d'**écriture** des commentaires.
  *
  * Il manipule `CommentEntity`, l'agrégat porteur de la règle d'appartenance
- * (R-6), et c'est ce qui le fait vivre dans `domain/` : un port vit là où vit ce
- * qu'il protège (ADR 031). Son jumeau de lecture,
- * `application/comment/ports/comment-query.port.ts`, ne protège rien et sert un
- * affichage.
+ * (R-6). Son jumeau de lecture, `comment-query.port.ts`, produit une vue
+ * dépendante du lecteur et ne porte aucun invariant : deux objets différents,
+ * donc deux ports (ADR 011).
  *
  * Aucune méthode de mise à jour : le contrat RealWorld n'expose pas d'édition de
  * commentaire, et le port ne propose pas ce que l'API ne fait pas.

@@ -17,10 +17,9 @@ export type TagName = string
 /**
  * Port de lecture des tags (REQ-TAG-002).
  *
- * Il vit dans `application/` (ADR 031). Le contexte `tag` n'avait ni agrégat, ni
- * invariant, ni entité : `domain/tag/` ne contenait que ce port. Un dossier de
- * domaine dont le seul contenu est un port de lecture n'est pas un contexte
- * borné, c'est un cas d'usage — le dossier a donc disparu avec le déplacement.
+ * Le contexte `tag` n'a ni agrégat, ni invariant, ni entité : ce dossier ne
+ * contient que ce port. C'est un contexte pauvre, et il l'est parce que la spec
+ * RealWorld ne demande rien de plus qu'une liste de noms (REQ-TAG-002).
  *
  * Une seule méthode, et son nom porte la règle : `listUsed`, pas `listAll`. Le
  * schéma persiste les tags dans une table propre (ADR 002), et rien ne les

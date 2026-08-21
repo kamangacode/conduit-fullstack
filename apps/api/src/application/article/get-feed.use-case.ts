@@ -3,8 +3,8 @@ import {
   ARTICLE_QUERY,
   type ArticleQueryPort,
   type FeedPagination,
-} from './ports/article-query.port'
-import type { ArticleListPage } from './ports/article-view'
+} from '../../domain/article/ports/article-query.port'
+import type { ArticleListPage } from '../../domain/article/ports/article-view'
 
 export interface GetFeedInput {
   readonly pagination: FeedPagination

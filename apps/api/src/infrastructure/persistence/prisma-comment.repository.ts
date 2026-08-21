@@ -1,15 +1,15 @@
 import { Injectable } from '@nestjs/common'
 import { Prisma } from '@prisma/client'
-import type { CommentQueryPort } from '../../application/comment/ports/comment-query.port'
-import type { CommentView } from '../../application/comment/ports/comment-view'
-import type { ViewerId } from '../../application/shared/viewer-id'
 import { ArticleNotFoundError } from '../../domain/article/article.errors'
 import { CommentEntity } from '../../domain/comment/comment'
 import { CommentNotFoundError } from '../../domain/comment/comment.errors'
+import type { CommentQueryPort } from '../../domain/comment/ports/comment-query.port'
 import type {
   CommentRepository,
   NewComment,
 } from '../../domain/comment/ports/comment-repository.port'
+import type { CommentView } from '../../domain/comment/ports/comment-view'
+import type { ViewerId } from '../../domain/shared/viewer-id'
 import { PrismaService } from '../prisma/prisma.service'
 
 /** Enregistrement absent lors d'un `delete`. */

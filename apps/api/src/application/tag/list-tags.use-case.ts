@@ -1,5 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common'
-import { TAG_QUERY, type TagName, type TagQueryPort } from './ports/tag-query.port'
+import { TAG_QUERY, type TagName, type TagQueryPort } from '../../domain/tag/ports/tag-query.port'
 
 /**
  * Lister les tags disponibles (REQ-TAG-002, `GET /api/tags`).

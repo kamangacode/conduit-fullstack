@@ -1,10 +1,10 @@
-import type { CommentQueryPort } from '@/application/comment/ports/comment-query.port'
-import type { CommentView } from '@/application/comment/ports/comment-view'
-import type { ViewerId } from '@/application/shared/viewer-id'
-import type { TagName, TagQueryPort } from '@/application/tag/ports/tag-query.port'
 import { CommentEntity, type CommentProps } from '@/domain/comment/comment'
 import { CommentNotFoundError } from '@/domain/comment/comment.errors'
+import type { CommentQueryPort } from '@/domain/comment/ports/comment-query.port'
 import type { CommentRepository, NewComment } from '@/domain/comment/ports/comment-repository.port'
+import type { CommentView } from '@/domain/comment/ports/comment-view'
+import type { ViewerId } from '@/domain/shared/viewer-id'
+import type { TagName, TagQueryPort } from '@/domain/tag/ports/tag-query.port'
 
 /**
  * Doublures des ports des contextes `comment` et `tag`, pour la lane **unit**

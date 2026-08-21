@@ -1,5 +1,5 @@
 import type { Profile } from '@repo/shared'
-import type { ProfileView } from '../../application/profile/ports/profile-view'
+import type { ProfileView } from '../../application/profile/profile-view'
 
 /**
  * Traduction du read model de profil vers le contrat HTTP.

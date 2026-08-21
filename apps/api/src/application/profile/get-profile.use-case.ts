@@ -5,7 +5,7 @@ import {
 } from '../../domain/profile/ports/follow-repository.port'
 import { USER_REPOSITORY, type UserRepository } from '../../domain/user/ports/user-repository.port'
 import { UserNotFoundError } from '../../domain/user/user.errors'
-import { type ProfileView, toProfileView } from './ports/profile-view'
+import { type ProfileView, toProfileView } from './profile-view'
 
 export interface GetProfileInput {
   readonly username: string

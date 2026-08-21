@@ -1,4 +1,4 @@
-import type { UserEntity } from '../../../domain/user/user'
+import type { UserEntity } from '../../domain/user/user'
 
 /**
  * Projection **privée** d'un compte, réservée aux endpoints d'authentification
@@ -16,9 +16,11 @@ import type { UserEntity } from '../../../domain/user/user'
  * commentaire de la méthode le reconnaissait lui-même, en notant que le jeton
  * « n'appartient pas au compte » (ADR 031).
  *
- * Le jeton est ici légitime : `AccountView` est un type **applicatif**, et c'est
- * le use case qui l'émet via `TokenService`. Ce qui a changé, c'est que le
- * domaine n'y touche plus.
+ * Le jeton est ici légitime : `AccountView` est un type **applicatif** — aucun
+ * port ne le renvoie, c'est le use case qui le compose, à partir de l'entité et
+ * d'un jeton qu'il vient d'émettre via `TokenService`. C'est ce qui le distingue
+ * des read models de `domain/<contexte>/ports/`, produits par un port. Ce qui a changé,
+ * c'est que le domaine n'y touche plus.
  */
 export interface AccountView {
   readonly email: string

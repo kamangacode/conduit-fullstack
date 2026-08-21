@@ -50,7 +50,7 @@ export interface UserChanges {
  * méthodes `toProfile(following)` et `toUser(token)` qui fabriquaient les corps
  * de réponse du contrat ; la seconde prenait un JWT en paramètre, c'est-à-dire
  * une valeur sans existence métier. Les projections vivent désormais dans
- * `application/user/ports/account-view.ts`, et leur forme HTTP dans les mappers
+ * `application/user/account-view.ts`, et leur forme HTTP dans les mappers
  * de `interface/` (ADR 031). L'entité expose ses champs, elle ne décide plus de
  * ce qu'un client en voit.
  */

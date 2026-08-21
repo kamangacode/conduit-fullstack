@@ -1,11 +1,11 @@
 import { Inject, Injectable } from '@nestjs/common'
-import type { ViewerId } from '../shared/viewer-id'
 import {
   ARTICLE_QUERY,
   type ArticleFilters,
   type ArticleQueryPort,
-} from './ports/article-query.port'
-import type { ArticleListPage } from './ports/article-view'
+} from '../../domain/article/ports/article-query.port'
+import type { ArticleListPage } from '../../domain/article/ports/article-view'
+import type { ViewerId } from '../../domain/shared/viewer-id'
 
 export interface ListArticlesInput {
   readonly filters: ArticleFilters

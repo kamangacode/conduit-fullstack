@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { CommentView } from '../../application/comment/ports/comment-view'
+import type { CommentView } from '../../domain/comment/ports/comment-view'
 import { toComment, toCommentsResponse } from './comment.mapper'
 
 /**

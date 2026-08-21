@@ -18,8 +18,8 @@ Les dépendances pointent **toujours vers l'intérieur**. Le coeur ne connaît r
 |---|---|---|
 | `interface/` | Controllers NestJS, guards, pipes, intercepteurs, filtres d'exception, **mappers** | tout le reste, plus `@repo/shared` |
 | `infrastructure/` | Adapters (Prisma, argon2id, jose), services techniques | `domain/`, `application/` |
-| `application/` | Use cases. `@nestjs/common` toléré pour `@Injectable` et `@Inject` | `domain/` |
-| `domain/` | TypeScript pur : entités, value objects, ports d'écriture, erreurs métier | rien |
+| `application/` | Use cases, et les vues qu'ils composent eux-mêmes | `domain/` |
+| `domain/` | TypeScript pur : entités, value objects, **tous les ports**, read models, erreurs métier | rien |
 
 ## La règle qui a manqué : `@repo/shared` s'arrête à `interface/`
 
@@ -50,24 +50,33 @@ Concrètement :
   de la spec RealWorld, pas un concept métier. L'enveloppe est fabriquée par un mapper de
   `interface/`.
 
-## Où placer un port
+## Où placer un port, et où placer une vue
 
-Le critère n'est **pas** « un port vit dans `domain/` ». C'est :
+**Tous les ports vivent dans `domain/*/ports/`**, écriture comme lecture. Une seule règle, sans
+exception : le domaine déclare ce dont il a besoin, l'infrastructure s'y conforme.
 
-> **Un port vit là où vit ce qu'il protège.**
+L'objection existe et mérite d'être connue : `ArticleQueryPort` ne porte aucun invariant, il sert un
+affichage, et une lecture CQRS le placerait en `application/`. Ce dépôt a implémenté ce déplacement
+puis l'a annulé (option E de l'[ADR 031](../adr/031-le-contrat-partage-s-arrete-a-la-frontiere-http.md)) :
+le découplage du contrat ne l'exigeait pas, et une démonstration publique d'architecture hexagonale
+gagne à tenir sa règle sans variante à expliquer avant même que la règle soit vue.
 
-| Type de port | Emplacement | Pourquoi |
-|---|---|---|
-| Écriture (`ArticleRepository`, `UserRepository`, `FollowRepository`, `CommentRepository`) | `domain/*/ports/` | Il manipule un agrégat porteur d'invariants. C'est le domaine qui décide de sa forme, l'adapter s'y conforme. |
-| Lecture (`ArticleQueryPort`, `CommentQueryPort`, `TagQueryPort`) | `application/*/ports/` | Il sert un cas d'usage d'affichage. Aucune règle métier, aucun invariant : la vue qu'il produit dépend du lecteur, pas du métier. |
-
-La séparation lecture / écriture elle-même vient de l'[ADR 011](../adr/011-lecture-des-listes-port-dedie.md)
+La séparation lecture / écriture, elle, vient de l'[ADR 011](../adr/011-lecture-des-listes-port-dedie.md)
 et reste en vigueur : une page d'articles est résolue en **une** requête, avec `following`,
 `favorited` et `favoritesCount` calculés en base. Le N+1 n'est pas évité par discipline, il est
-structurellement absent.
+structurellement absent. Repère pratique : **« j'affiche »** prend le port de lecture, **« je
+modifie »** prend le repository.
 
-Repère pratique : **« j'affiche »** prend le port de lecture, **« je modifie »** prend le
-repository.
+Pour les **vues**, le critère est différent et il est mécanique :
+
+| Vue | Emplacement | Pourquoi |
+|---|---|---|
+| `ArticleView`, `ArticleListPage`, `CommentView`, `AuthorView`, `ViewerId` | `domain/` | Un port les renvoie ou les prend en paramètre. Un type qu'un port parle vit avec le port, sinon `domain/` importerait `application/`. |
+| `AccountView`, `ProfileView` | `application/` | Aucun port ne les renvoie. Le use case les **compose** : `AccountView` à partir de l'entité et d'un jeton qu'il vient d'émettre, `ProfileView` à partir de l'entité et d'une relation de suivi résolue par un autre port. |
+
+`AuthorView` et `ViewerId` vivent dans `domain/shared/` et non dans le contexte article : ils sont
+partagés par la lecture d'articles et celle de commentaires, et les déclarer dans l'un des deux
+créerait une arête `comment -> article` que rien ne justifie.
 
 ## Ce qui a raté, et pourquoi c'est écrit ici
 

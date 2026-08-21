@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { AccountView } from '../../application/user/ports/account-view'
+import type { AccountView } from '../../application/user/account-view'
 import { toUserResponse } from './user.mapper'
 
 /**

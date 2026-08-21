@@ -4,14 +4,14 @@ import type {
   ArticleFilters,
   ArticleQueryPort,
   FeedPagination,
-} from '../../application/article/ports/article-query.port'
+} from '../../domain/article/ports/article-query.port'
 import type {
   ArticleListPage,
   ArticleSummaryView,
   ArticleView,
-} from '../../application/article/ports/article-view'
-import type { ViewerId } from '../../application/shared/viewer-id'
+} from '../../domain/article/ports/article-view'
 import type { Slug } from '../../domain/article/slug'
+import type { ViewerId } from '../../domain/shared/viewer-id'
 import { PrismaService } from '../prisma/prisma.service'
 
 /**
@@ -66,7 +66,7 @@ type ArticleRow = Prisma.ArticleGetPayload<{ include: ReturnType<typeof articleI
  * Adapter Prisma du port de lecture des articles
  * (`docs/adr/011-lecture-des-listes-port-dedie.md`).
  *
- * Il remplit les read models de `application/article/ports/article-view.ts`, et
+ * Il remplit les read models de `domain/article/ports/article-view.ts`, et
  * non les projections du contrat : la forme du fil est produite plus haut, par
  * le mapper de `interface/` (ADR 031). Aucune requête brute : tout passe par le
  * query builder, donc paramétré (rule 19).

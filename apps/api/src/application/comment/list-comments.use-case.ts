@@ -5,9 +5,9 @@ import {
   type ArticleRepository,
 } from '../../domain/article/ports/article-repository.port'
 import { Slug } from '../../domain/article/slug'
-import type { ViewerId } from '../shared/viewer-id'
-import { COMMENT_QUERY, type CommentQueryPort } from './ports/comment-query.port'
-import type { CommentView } from './ports/comment-view'
+import { COMMENT_QUERY, type CommentQueryPort } from '../../domain/comment/ports/comment-query.port'
+import type { CommentView } from '../../domain/comment/ports/comment-view'
+import type { ViewerId } from '../../domain/shared/viewer-id'
 
 export interface ListCommentsInput {
   readonly slug: string

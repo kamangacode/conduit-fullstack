@@ -3,7 +3,7 @@ import { PASSWORD_HASHER, type PasswordHasher } from '../../domain/user/ports/pa
 import { TOKEN_SERVICE, type TokenService } from '../../domain/user/ports/token-service.port'
 import { USER_REPOSITORY, type UserRepository } from '../../domain/user/ports/user-repository.port'
 import { InvalidCredentialsError } from '../../domain/user/user.errors'
-import { type AccountView, toAccountView } from './ports/account-view'
+import { type AccountView, toAccountView } from './account-view'
 
 /**
  * Condensat servant de leurre quand l'email est inconnu.

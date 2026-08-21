@@ -1,4 +1,4 @@
-import type { UserEntity } from '../../../domain/user/user'
+import type { UserEntity } from '../../domain/user/user'
 
 /**
  * Projection **publique** d'un compte (PRD §8, REQ-PROFILE-002).

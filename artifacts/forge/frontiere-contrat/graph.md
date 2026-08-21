@@ -70,6 +70,31 @@ casse partout, y compris là où ça ne devrait pas. Après ce lot, la propriét
 bidirectionnelle et vérifiable : renommer un champ doit casser `apps/web` et
 `apps/api/src/interface/`, et **ne doit pas** toucher `domain/` ni `application/`.
 
+## Révision du 2026-08-21 : les ports de lecture restent dans le domaine
+
+Les lots T4, T5 et T7 ont d'abord **descendu** `ArticleQueryPort`, `CommentQueryPort` et
+`TagQueryPort` en `application/*/ports/`, au motif qu'un port vit là où vit ce qu'il protège et
+qu'un port de lecture ne protège aucun invariant. C'était la réponse littérale à l'objection de la
+revue publique.
+
+Ce déplacement a été **annulé** après arbitrage. Deux raisons, et la seconde est celle qui décide :
+
+1. Le découplage du contrat ne l'exigeait pas. Avec un read model possédé par le dépôt, le domaine
+   est pur que le port soit dans `domain/` ou dans `application/` : `depcruise`, la propriété
+   bidirectionnelle et la conformité sont identiques dans les deux cas.
+2. Ce dépôt est une **démonstration publique d'architecture hexagonale**. Y introduire une exception
+   à « les ports vivent dans le domaine » demanderait au lecteur d'accepter une variante avant
+   d'avoir vu la règle. Une seule règle tenue sans exception vaut mieux qu'un critère plus fin que
+   personne n'a demandé.
+
+Les read models que ces ports parlent (`ArticleView`, `CommentView`, `AuthorView`, `ViewerId`) sont
+donc dans `domain/`, avec les ports. Ceux qu'un use case **compose** lui-même (`AccountView`,
+`ProfileView`) restent dans `application/` : aucun port ne les renvoie.
+
+L'option est tracée en E dans l'[ADR 031](../../../docs/adr/031-le-contrat-partage-s-arrete-a-la-frontiere-http.md),
+et l'ADR 011 revient de `Superseded` à `Accepted (amendé par 031)` : il n'est plus remplacé, il est
+amendé sur un seul point, le type que le port renvoie.
+
 ## Découpage : par contexte borné, pas par classe de défaut
 
 Le découpage naturel serait par symptôme (erreurs, entités, ports, enveloppes). Il est écarté :

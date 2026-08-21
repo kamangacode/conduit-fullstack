@@ -3,8 +3,9 @@
 ## Status
 
 Accepted — 2026-08-21. Amende [001 — Topologie monorepo et partage du modèle](001-topologie-monorepo-modele-partage.md)
-sur la portée du partage. Remplace [011 — Lecture des listes : port de lecture dédié](011-lecture-des-listes-port-dedie.md)
-sur l'emplacement des ports de lecture et sur le type qu'ils renvoient.
+sur la portée du partage, et [011 — Lecture des listes : port de lecture dédié](011-lecture-des-listes-port-dedie.md)
+sur le **type que le port de lecture renvoie**. L'emplacement des ports, lui, ne change pas : ils
+restent tous dans `domain/`.
 
 ## Context
 
@@ -52,6 +53,7 @@ propriété est vérifiée et pas seulement annoncée, l'écart est l'endroit ex
 | B. Déplacer les ports de lecture sans découpler les types | Répond littéralement à la revue, à peu de frais. Écartée : `application/` importerait toujours le contrat, l'inversion de dépendance resterait entière, et la correction serait cosmétique. |
 | C. Scinder `packages/shared` en `kernel` et `contract` | Le domaine importerait `kernel`, le transport `contract`. Écartée pour ce dépôt : Conduit n'a pas de vocabulaire métier réellement partagé entre le front et le back (pas d'énumération, pas de calcul commun). Le `kernel` serait vide, et le découpage un décor. |
 | D. Ne rien changer, documenter l'arbitrage | Assumer le couplage comme un choix. Écartée : l'ADR 011 le prétend déjà, en s'appuyant sur une vérification mécanique qui n'existe pas. Documenter une propriété fausse est ce qui a produit la situation. |
+| E. A + descendre les ports de lecture en `application/` | Répond littéralement à l'objection de la revue (« ce port appartient-il au domaine ? ») et donne un critère de placement qui se raisonne plutôt qu'une convention à mémoriser : un port vit là où vit ce qu'il protège, et un port de lecture ne protège aucun invariant. C'est la lecture CQRS, où le côté lecture n'est pas le modèle de domaine. **Écartée** : le découplage du contrat ne l'exige pas — avec un read model possédé par le dépôt, le domaine est pur que le port soit ici ou là. Ce dépôt est une démonstration publique d'architecture hexagonale ; y introduire une exception à « les ports vivent dans le domaine » demanderait au lecteur d'accepter une variante avant d'avoir vu la règle. Une seule règle, sans exception, vaut mieux qu'un critère plus fin que personne n'a demandé. |
 
 ## Decision
 
@@ -68,15 +70,20 @@ et non le corps `{ errors: … }`, une entité n'a pas de méthode qui prend un 
 read model, jamais l'enveloppe du contrat : `articlesCount` est un nom de la spec RealWorld, pas un
 concept métier. L'enveloppe est fabriquée par un mapper de `interface/`.
 
-Le critère de placement d'un port change. Il n'est plus « un port vit dans `domain/` » mais **« un
-port vit là où vit ce qu'il protège »** :
+**L'emplacement des ports ne change pas.** Tous vivent dans `domain/*/ports/`, écriture comme
+lecture, conformément à la règle de dépendance : le domaine déclare ce dont il a besoin,
+l'infrastructure s'y conforme. Ce qui change est **ce que le port de lecture parle** : il renvoyait
+`Article` et `ArticleSummary` de `@repo/shared`, il renvoie désormais des read models possédés par
+le dépôt (`article-view.ts`, `comment-view.ts`).
 
-- les ports d'**écriture** (`ArticleRepository`, `UserRepository`, `FollowRepository`,
-  `CommentRepository`) manipulent des agrégats porteurs d'invariants et restent dans
-  `domain/*/ports/` ;
-- les ports de **lecture** (`ArticleQueryPort`, `CommentQueryPort`, `TagQueryPort`) servent un cas
-  d'usage d'affichage, ne portent aucune règle métier et aucun invariant, et vivent dans
-  `application/*/ports/`.
+C'est la correction minimale et suffisante : le défaut n'était pas l'emplacement du port mais sa
+dépendance au contrat. Déplacer les ports de lecture vers `application/` a été envisagé, et écarté
+(option E ci-dessous).
+
+Les types que les ports parlent vivent **avec eux**, dans `domain/`. Ceux qu'un use case compose
+lui-même vivent dans `application/` : `AccountView` est fabriqué à partir de l'entité et d'un jeton
+que le use case vient d'émettre, `ProfileView` à partir de l'entité et d'une relation de suivi
+résolue par un autre port. Aucun port ne les renvoie, ils n'ont donc rien à faire dans `domain/`.
 
 La séparation lecture / écriture décidée par l'ADR 011 est **conservée**, y compris son motif
 principal : l'adapter Prisma continue de résoudre une page en une requête, avec `following`,
@@ -105,8 +112,8 @@ dépôt et non dans `.claude/rules/`, qui n'est pas publié.
   porte, et un import de `@repo/shared` dans `domain/`, `application/` ou `infrastructure/` échoue.
 - La thèse du dépôt devient démontrable dans les deux sens, ce qui est un meilleur argument que la
   version d'origine.
-- Le placement des ports cesse d'être une convention à mémoriser et devient un critère qui se
-  raisonne : où vit ce que le port protège.
+- La règle de placement reste **unique et sans exception** : les ports vivent dans le domaine. Le
+  dépôt gagne un découplage sans payer une variante à expliquer.
 
 ### Negative
 
@@ -117,9 +124,13 @@ dépôt et non dans `.claude/rules/`, qui n'est pas publié.
   reste doublée par le harnais de contrat de l'[ADR 026](026-tests-de-contrat-assertion-symetrique-et-intercepteur.md),
   qui asserte la forme sur toutes les routes et ne bouge pas, mais le filet de compilation est
   moins immédiat qu'auparavant.
-- Des types de forme identique coexistent volontairement (`AuthorView` côté article, `ProfileView`
-  côté profile). C'est la contrepartie assumée du refus de coupler deux contextes bornés, et un
-  lecteur pressé y verra une duplication.
+- Des types de forme identique coexistent volontairement (`AuthorView` dans `domain/shared/`,
+  `ProfileView` dans `application/profile/`). C'est la contrepartie assumée du refus de coupler
+  deux contextes bornés, et un lecteur pressé y verra une duplication.
+- L'objection de la revue publique reste **partiellement ouverte** : `ArticleQueryPort` ne porte
+  toujours aucun invariant et vit toujours dans `domain/`. La réponse de cet ADR est que son
+  couplage au contrat était le vrai défaut, et qu'il est corrigé ; son emplacement relève d'une
+  convention que ce dépôt assume de tenir sans exception. C'est un arbitrage, pas une réfutation.
 - Le coût de la correction est réel : huit lots, dont un F-full, sur quatre contextes.
 
 ### Neutral
@@ -137,3 +148,6 @@ dépôt et non dans `.claude/rules/`, qui n'est pas publié.
   source unique des libellés, lue désormais par le mapper d'erreurs de `interface/`.
 - L'option C (scinder `shared` en kernel et contract) reste ouverte si un vocabulaire métier
   réellement partagé apparaissait. Rien ne l'exige aujourd'hui.
+- L'option E (ports de lecture en `application/`) a été implémentée puis **annulée** au cours du
+  même lot, la trace en est dans l'historique. Elle reste défendable et se rejouerait sans coût :
+  les read models étant déjà possédés par le dépôt, seul l'emplacement des fichiers changerait.

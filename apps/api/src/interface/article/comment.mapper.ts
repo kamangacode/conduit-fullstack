@@ -1,5 +1,5 @@
 import type { Comment, CommentsResponse } from '@repo/shared'
-import type { CommentView } from '../../application/comment/ports/comment-view'
+import type { CommentView } from '../../domain/comment/ports/comment-view'
 import { toProfile } from './article.mapper'
 
 /**

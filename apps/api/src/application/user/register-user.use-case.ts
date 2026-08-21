@@ -2,7 +2,7 @@ import { Inject, Injectable } from '@nestjs/common'
 import { PASSWORD_HASHER, type PasswordHasher } from '../../domain/user/ports/password-hasher.port'
 import { TOKEN_SERVICE, type TokenService } from '../../domain/user/ports/token-service.port'
 import { USER_REPOSITORY, type UserRepository } from '../../domain/user/ports/user-repository.port'
-import { type AccountView, toAccountView } from './ports/account-view'
+import { type AccountView, toAccountView } from './account-view'
 
 /**
  * Input **owned par le use-case** (rule 12) : il ne réutilise pas le DTO de la

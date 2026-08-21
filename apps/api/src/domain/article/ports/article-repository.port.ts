@@ -25,7 +25,7 @@ export interface NewArticle {
  *
  * Il ne sert qu'aux opérations qui modifient l'état, et il parle `ArticleEntity`
  * — l'agrégat porteur des invariants. Toute **lecture destinée à l'affichage**
- * passe par `ArticleQueryPort`, qui renvoie la projection du contrat : les deux
+ * passe par `ArticleQueryPort`, qui renvoie un read model (`ArticleView`) : les deux
  * n'ont ni la même forme de retour ni le même objet, et les fusionner
  * obligerait l'entité à porter `favorited`, un champ qui dépend du lecteur et
  * non de l'article (`docs/adr/011-lecture-des-listes-port-dedie.md`).

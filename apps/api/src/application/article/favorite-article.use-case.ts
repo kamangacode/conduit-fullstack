@@ -1,16 +1,16 @@
 import { Inject, Injectable } from '@nestjs/common'
 import { ArticleNotFoundError } from '../../domain/article/article.errors'
+import { ARTICLE_QUERY, type ArticleQueryPort } from '../../domain/article/ports/article-query.port'
 import {
   ARTICLE_REPOSITORY,
   type ArticleRepository,
 } from '../../domain/article/ports/article-repository.port'
+import type { ArticleView } from '../../domain/article/ports/article-view'
 import {
   FAVORITE_REPOSITORY,
   type FavoriteRepository,
 } from '../../domain/article/ports/favorite-repository.port'
 import { Slug } from '../../domain/article/slug'
-import { ARTICLE_QUERY, type ArticleQueryPort } from './ports/article-query.port'
-import type { ArticleView } from './ports/article-view'
 
 export interface FavoriteArticleInput {
   readonly slug: string

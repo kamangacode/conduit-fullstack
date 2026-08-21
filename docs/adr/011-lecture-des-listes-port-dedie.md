@@ -2,14 +2,15 @@
 
 ## Status
 
-Superseded — 2026-08-21, par [031 — Le contrat partagé s'arrête à la frontière HTTP](031-le-contrat-partage-s-arrete-a-la-frontiere-http.md).
+Accepted — 2026-08-05. Amendé le 2026-08-21 par
+[031 — Le contrat partagé s'arrête à la frontière HTTP](031-le-contrat-partage-s-arrete-a-la-frontiere-http.md)
+sur **un seul point** : le type que le port de lecture renvoie, qui devient un read model possédé
+par le dépôt (`ArticleView`) au lieu de la projection du contrat partagé.
 
-Accepted — 2026-08-05 à l'origine. **Ce qui reste en vigueur** : la séparation de la lecture et de
-l'écriture en deux ports distincts, et sa justification (une page résolue en une requête, le N+1
-structurellement absent, les règles de domaine non diluées dans des champs relatifs au lecteur).
-**Ce que l'ADR 031 remplace** : l'emplacement des ports de lecture, qui descendent en
-`application/*/ports/`, et le type qu'ils renvoient, qui devient un read model possédé par le dépôt
-au lieu de la projection du contrat partagé.
+Tout le reste tient : la séparation de la lecture et de l'écriture en deux ports distincts, leur
+emplacement dans `domain/*/ports/`, et la justification de la séparation (une page résolue en une
+requête, le N+1 structurellement absent, les règles de domaine non diluées dans des champs relatifs
+au lecteur).
 
 ## Context
 
