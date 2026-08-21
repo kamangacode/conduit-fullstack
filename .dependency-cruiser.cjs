@@ -6,7 +6,9 @@
  * vers l'intérieur ; le domaine ne connaît rien de l'extérieur) en contrôle
  * exécutable, lancé en pre-push et en CI plutôt qu'en revue humaine seule.
  *
- * Voir .claude/rules/12-backend-hexagonal.md et docs/adr/001.
+ * Règle de placement, quatre couches et critère de placement d'un port :
+ * docs/architecture/frontieres-hexagonales.md. Décisions : docs/adr/001 (topologie)
+ * et docs/adr/031 (portée du contrat partagé).
  *
  * Lancement : `pnpm depcruise`. Le script se place dans apps/api avant de
  * cruiser `src`, pour que la résolution du tsconfig (extends, include) parte du
@@ -65,7 +67,9 @@ module.exports = {
         '(ArticlesResponse, articlesCount) est fabriquée par un mapper de interface/, pas par le ' +
         'use case : `articlesCount` est un nom de la spec RealWorld, pas un concept métier. ' +
         'Voir docs/adr/031 et docs/architecture/frontieres-hexagonales.md. ' +
-        'EN warn LE TEMPS DE LA MIGRATION : 17 modules legacy la violent au 2026-08-21.',
+        'EN warn LE TEMPS DE LA MIGRATION : 18 modules legacy la violent au 2026-08-21 (les 17 ' +
+        "use cases plus une spec ; les specs ne sont pas exclues de l'analyse, une spec qui " +
+        'importe le contrat porte le même couplage que sa source).',
       from: { path: '^src/application/' },
       to: { path: '(^|/)packages/shared/' },
     },
