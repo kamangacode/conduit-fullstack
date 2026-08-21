@@ -1,9 +1,9 @@
 import { Inject, Injectable } from '@nestjs/common'
-import type { User } from '@repo/shared'
 import { PASSWORD_HASHER, type PasswordHasher } from '../../domain/user/ports/password-hasher.port'
 import { TOKEN_SERVICE, type TokenService } from '../../domain/user/ports/token-service.port'
 import { USER_REPOSITORY, type UserRepository } from '../../domain/user/ports/user-repository.port'
 import { InvalidCredentialsError } from '../../domain/user/user.errors'
+import { type AccountView, toAccountView } from './ports/account-view'
 
 /**
  * Condensat servant de leurre quand l'email est inconnu.
@@ -62,7 +62,7 @@ export class LoginUserUseCase {
     @Inject(TOKEN_SERVICE) private readonly tokens: TokenService
   ) {}
 
-  async execute(input: LoginUserInput): Promise<User> {
+  async execute(input: LoginUserInput): Promise<AccountView> {
     const user = await this.users.findByEmail(input.email)
 
     const matches = await this.passwords.verify(
@@ -78,6 +78,6 @@ export class LoginUserUseCase {
     }
 
     const token = await this.tokens.issue(user.id)
-    return user.toUser(token)
+    return toAccountView(user, token)
   }
 }

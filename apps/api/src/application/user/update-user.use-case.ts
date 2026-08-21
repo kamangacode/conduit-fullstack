@@ -1,9 +1,9 @@
 import { Inject, Injectable } from '@nestjs/common'
-import type { User } from '@repo/shared'
 import { PASSWORD_HASHER, type PasswordHasher } from '../../domain/user/ports/password-hasher.port'
 import { TOKEN_SERVICE, type TokenService } from '../../domain/user/ports/token-service.port'
 import { USER_REPOSITORY, type UserRepository } from '../../domain/user/ports/user-repository.port'
 import type { UserChanges } from '../../domain/user/user'
+import { type AccountView, toAccountView } from './ports/account-view'
 
 /**
  * Champs modifiables. Chacun est optionnel, et `bio`/`image` acceptent `null` :
@@ -54,7 +54,7 @@ export class UpdateUserUseCase {
     @Inject(TOKEN_SERVICE) private readonly tokens: TokenService
   ) {}
 
-  async execute(input: UpdateUserInput): Promise<User> {
+  async execute(input: UpdateUserInput): Promise<AccountView> {
     const changes: UserChanges = {
       ...(input.email !== undefined && { email: input.email }),
       ...(input.username !== undefined && { username: input.username }),
@@ -67,6 +67,6 @@ export class UpdateUserUseCase {
 
     const user = await this.users.update(input.userId, changes)
     const token = await this.tokens.issue(user.id)
-    return user.toUser(token)
+    return toAccountView(user, token)
   }
 }

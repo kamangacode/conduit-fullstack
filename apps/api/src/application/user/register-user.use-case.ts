@@ -1,8 +1,8 @@
 import { Inject, Injectable } from '@nestjs/common'
-import type { User } from '@repo/shared'
 import { PASSWORD_HASHER, type PasswordHasher } from '../../domain/user/ports/password-hasher.port'
 import { TOKEN_SERVICE, type TokenService } from '../../domain/user/ports/token-service.port'
 import { USER_REPOSITORY, type UserRepository } from '../../domain/user/ports/user-repository.port'
+import { type AccountView, toAccountView } from './ports/account-view'
 
 /**
  * Input **owned par le use-case** (rule 12) : il ne réutilise pas le DTO de la
@@ -38,7 +38,7 @@ export class RegisterUserUseCase {
     @Inject(TOKEN_SERVICE) private readonly tokens: TokenService
   ) {}
 
-  async execute(input: RegisterUserInput): Promise<User> {
+  async execute(input: RegisterUserInput): Promise<AccountView> {
     // Le mot de passe en clair ne dépasse pas cette ligne : ce qui entre dans le
     // dépôt est déjà un condensat (R-9).
     const passwordHash = await this.passwords.hash(input.password)
@@ -50,6 +50,6 @@ export class RegisterUserUseCase {
     })
 
     const token = await this.tokens.issue(user.id)
-    return user.toUser(token)
+    return toAccountView(user, token)
   }
 }

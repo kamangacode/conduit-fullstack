@@ -1,11 +1,11 @@
 import { Inject, Injectable } from '@nestjs/common'
-import type { Profile } from '@repo/shared'
 import {
   FOLLOW_REPOSITORY,
   type FollowRepository,
 } from '../../domain/profile/ports/follow-repository.port'
 import { USER_REPOSITORY, type UserRepository } from '../../domain/user/ports/user-repository.port'
 import { UserNotFoundError } from '../../domain/user/user.errors'
+import { type ProfileView, toProfileView } from './ports/profile-view'
 
 export interface FollowUserInput {
   /** Username de la cible, tel qu'il apparaît dans l'URL. */
@@ -38,13 +38,13 @@ export class FollowUserUseCase {
     @Inject(FOLLOW_REPOSITORY) private readonly follows: FollowRepository
   ) {}
 
-  async execute(input: FollowUserInput): Promise<Profile> {
+  async execute(input: FollowUserInput): Promise<ProfileView> {
     const target = await this.users.findByUsername(input.username)
     if (!target) {
       throw new UserNotFoundError()
     }
 
     await this.follows.follow(input.followerId, target.id)
-    return target.toProfile(true)
+    return toProfileView(target, true)
   }
 }

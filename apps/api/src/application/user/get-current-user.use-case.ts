@@ -1,8 +1,8 @@
 import { Inject, Injectable } from '@nestjs/common'
-import type { User } from '@repo/shared'
 import { TOKEN_SERVICE, type TokenService } from '../../domain/user/ports/token-service.port'
 import { USER_REPOSITORY, type UserRepository } from '../../domain/user/ports/user-repository.port'
 import { AuthenticatedUserNotFoundError } from '../../domain/user/user.errors'
+import { type AccountView, toAccountView } from './ports/account-view'
 
 export interface GetCurrentUserInput {
   /** Identité **dérivée du jeton vérifié**, jamais lue dans la requête (rule 19). */
@@ -39,13 +39,13 @@ export class GetCurrentUserUseCase {
     @Inject(TOKEN_SERVICE) private readonly tokens: TokenService
   ) {}
 
-  async execute(input: GetCurrentUserInput): Promise<User> {
+  async execute(input: GetCurrentUserInput): Promise<AccountView> {
     const user = await this.users.findById(input.userId)
     if (!user) {
       throw new AuthenticatedUserNotFoundError()
     }
 
     const token = await this.tokens.issue(user.id)
-    return user.toUser(token)
+    return toAccountView(user, token)
   }
 }
