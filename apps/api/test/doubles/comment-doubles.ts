@@ -1,5 +1,6 @@
-import type { Comment, Tag } from '@repo/shared'
+import type { Tag } from '@repo/shared'
 import type { CommentQueryPort } from '@/application/comment/ports/comment-query.port'
+import type { CommentView } from '@/application/comment/ports/comment-view'
 import type { ViewerId } from '@/application/shared/viewer-id'
 import { CommentEntity, type CommentProps } from '@/domain/comment/comment'
 import { CommentNotFoundError } from '@/domain/comment/comment.errors'
@@ -88,10 +89,10 @@ export class InMemoryCommentRepository implements CommentRepository {
 }
 
 /** Commentaire de contrat minimal, pour poser une réponse de lecture. */
-export const aCommentResponse = (overrides: Partial<Comment> = {}): Comment => ({
+export const aCommentResponse = (overrides: Partial<CommentView> = {}): CommentView => ({
   id: 1,
-  createdAt: '2016-02-18T03:22:56.637Z',
-  updatedAt: '2016-02-18T03:22:56.637Z',
+  createdAt: new Date('2016-02-18T03:22:56.637Z'),
+  updatedAt: new Date('2016-02-18T03:22:56.637Z'),
   body: 'His name was my name too.',
   author: { username: 'jake', bio: null, image: null, following: false },
   ...overrides,
@@ -106,16 +107,16 @@ export class RecordingCommentQuery implements CommentQueryPort {
   readonly findCalls: Array<{ id: number; viewer: ViewerId }> = []
 
   constructor(
-    private readonly comments: readonly Comment[] = [],
-    private readonly single: Comment | null = aCommentResponse()
+    private readonly comments: readonly CommentView[] = [],
+    private readonly single: CommentView | null = aCommentResponse()
   ) {}
 
-  async listByArticle(articleId: string, viewer: ViewerId): Promise<readonly Comment[]> {
+  async listByArticle(articleId: string, viewer: ViewerId): Promise<readonly CommentView[]> {
     this.listCalls.push({ articleId, viewer })
     return this.comments
   }
 
-  async findById(id: number, viewer: ViewerId): Promise<Comment | null> {
+  async findById(id: number, viewer: ViewerId): Promise<CommentView | null> {
     this.findCalls.push({ id, viewer })
     return this.single ? { ...this.single, id } : null
   }

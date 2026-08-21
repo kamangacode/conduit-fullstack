@@ -46,6 +46,7 @@ import { IdempotencyInterceptor } from '../idempotency/idempotency.interceptor'
 import { Idempotent } from '../idempotency/idempotent.decorator'
 import { zodEnvelope, zodQuery } from '../pipes/zod-validation.pipe'
 import { toArticle, toArticlesResponse } from './article.mapper'
+import { toComment, toCommentsResponse } from './comment.mapper'
 
 /**
  * Identifiant de commentaire, refusé en **422** plutôt qu'en 400.
@@ -225,7 +226,7 @@ export class ArticleController {
     @CurrentUserId() authorId: string
   ): Promise<CommentResponse> {
     const comment = await this.addComment.execute({ slug, body: dto.body, authorId })
-    return { comment }
+    return { comment: toComment(comment) }
   }
 
   /** Lire la conversation (REQ-COMMENT-003). Authentification optionnelle. */
@@ -235,7 +236,8 @@ export class ArticleController {
     @Param('slug') slug: string,
     @OptionalCurrentUserId() viewer: string | null
   ): Promise<CommentsResponse> {
-    return this.listComments.execute({ slug, viewer })
+    const comments = await this.listComments.execute({ slug, viewer })
+    return toCommentsResponse(comments)
   }
 
   /**

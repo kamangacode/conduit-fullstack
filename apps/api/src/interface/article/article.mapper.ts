@@ -25,7 +25,7 @@ import type {
  */
 
 /** Auteur : même forme que `Profile`, mais ce n'en est pas un tant qu'on ne l'a pas dit. */
-const toProfile = (author: AuthorView): Profile => ({
+export const toProfile = (author: AuthorView): Profile => ({
   username: author.username,
   bio: author.bio,
   image: author.image,

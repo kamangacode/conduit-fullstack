@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common'
 import { Prisma } from '@prisma/client'
-import type { Comment } from '@repo/shared'
 import type { CommentQueryPort } from '../../application/comment/ports/comment-query.port'
+import type { CommentView } from '../../application/comment/ports/comment-view'
 import type { ViewerId } from '../../application/shared/viewer-id'
 import { ArticleNotFoundError } from '../../domain/article/article.errors'
 import { CommentEntity } from '../../domain/comment/comment'
@@ -76,7 +76,7 @@ export class PrismaCommentRepository implements CommentRepository {
 export class PrismaCommentQuery implements CommentQueryPort {
   constructor(private readonly prisma: PrismaService) {}
 
-  async listByArticle(articleId: string, viewer: ViewerId): Promise<readonly Comment[]> {
+  async listByArticle(articleId: string, viewer: ViewerId): Promise<readonly CommentView[]> {
     const rows = await this.prisma.comment.findMany({
       where: { articleId },
       // Le contrat n'impose aucun ordre ; le chronologique est stable et
@@ -87,7 +87,7 @@ export class PrismaCommentQuery implements CommentQueryPort {
     return rows.map(toComment)
   }
 
-  async findById(id: number, viewer: ViewerId): Promise<Comment | null> {
+  async findById(id: number, viewer: ViewerId): Promise<CommentView | null> {
     const row = await this.prisma.comment.findUnique({
       where: { id },
       include: commentInclude(viewer),
@@ -127,15 +127,18 @@ function toEntity(row: {
 }
 
 /**
- * Projection §8 « Single Comment », écrite champ par champ : un étalement
- * emporterait `articleId` et `authorId`, des identifiants internes qui ne
- * sortent pas de l'API.
+ * Read model d'un commentaire, écrit champ par champ : un étalement emporterait
+ * `articleId` et `authorId`, des identifiants internes que le read model ne
+ * déclare pas — donc un étalement ne compilerait même plus.
+ *
+ * Les horodatages restent des `Date` : la sérialisation ISO est le travail du
+ * mapper de `interface/`, pas celui de la persistance (ADR 031).
  */
-function toComment(row: CommentRow): Comment {
+function toComment(row: CommentRow): CommentView {
   return {
     id: row.id,
-    createdAt: row.createdAt.toISOString(),
-    updatedAt: row.updatedAt.toISOString(),
+    createdAt: row.createdAt,
+    updatedAt: row.updatedAt,
     body: row.body,
     author: {
       username: row.author.username,

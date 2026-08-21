@@ -1,5 +1,5 @@
-import type { Comment } from '@repo/shared'
 import type { ViewerId } from '../../shared/viewer-id'
+import type { CommentView } from './comment-view'
 
 /**
  * Port de **lecture** des commentaires, symétrique de `ArticleQueryPort`.
@@ -14,21 +14,19 @@ import type { ViewerId } from '../../shared/viewer-id'
  * moitié lecture importait `Comment` de `@repo/shared`. Le fichier documentait
  * lui-même la séparation ; seul l'emplacement du second était faux.
  *
- * Il renvoie encore les projections du contrat partagé. C'est un état
- * **transitoire** : le déplacement a été fait ici parce que `ViewerId` est
- * descendu en `application/shared/` avec le port d'article, et qu'un port de
- * `domain/` ne peut pas importer `application/`. Le passage au read model
- * (`CommentView`) et le mapper associé sont le lot suivant.
+ * Il renvoie un read model possédé par le dépôt (`comment-view.ts`), et non la
+ * projection du contrat. La forme du fil est produite par
+ * `interface/article/comment.mapper.ts`.
  *
  * La liste n'est **ni paginée ni comptée** : le contrat ne le prévoit pas
  * (REQ-COMMENT-003 AC-1), et l'ajouter ferait dévier ce dépôt de la suite de
  * conformité qui compare les implémentations Conduit.
  */
 export interface CommentQueryPort {
-  listByArticle(articleId: string, viewer: ViewerId): Promise<readonly Comment[]>
+  listByArticle(articleId: string, viewer: ViewerId): Promise<readonly CommentView[]>
 
   /** Relecture d'un commentaire pour produire la réponse de création. */
-  findById(id: number, viewer: ViewerId): Promise<Comment | null>
+  findById(id: number, viewer: ViewerId): Promise<CommentView | null>
 }
 
 /** Jeton d'injection — voir la note de `user-repository.port.ts`. */

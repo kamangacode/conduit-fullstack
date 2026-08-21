@@ -1,5 +1,4 @@
 import { Inject, Injectable } from '@nestjs/common'
-import type { CommentsResponse } from '@repo/shared'
 import { ArticleNotFoundError } from '../../domain/article/article.errors'
 import {
   ARTICLE_REPOSITORY,
@@ -8,6 +7,7 @@ import {
 import { Slug } from '../../domain/article/slug'
 import type { ViewerId } from '../shared/viewer-id'
 import { COMMENT_QUERY, type CommentQueryPort } from './ports/comment-query.port'
+import type { CommentView } from './ports/comment-view'
 
 export interface ListCommentsInput {
   readonly slug: string
@@ -36,13 +36,13 @@ export class ListCommentsUseCase {
     @Inject(COMMENT_QUERY) private readonly query: CommentQueryPort
   ) {}
 
-  async execute(input: ListCommentsInput): Promise<CommentsResponse> {
+  async execute(input: ListCommentsInput): Promise<readonly CommentView[]> {
     const article = await this.articles.findBySlug(Slug.fromPersisted(input.slug))
     if (!article) {
       throw new ArticleNotFoundError()
     }
 
     const comments = await this.query.listByArticle(article.id, input.viewer)
-    return { comments: [...comments] }
+    return comments
   }
 }

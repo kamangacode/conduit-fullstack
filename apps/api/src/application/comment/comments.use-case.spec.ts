@@ -104,14 +104,16 @@ describe('REQ-COMMENT-003 — lister les commentaires d’un article', () => {
     return { useCase: new ListCommentsUseCase(articles, query), query }
   }
 
-  it('AC-1: renvoie l’enveloppe sans compteur ni pagination', async () => {
-    const { useCase } = build([aCommentResponse()])
+  it('AC-1: rend la liste telle que le port la produit, sans la recomposer', async () => {
+    const comment = aCommentResponse()
+    const { useCase } = build([comment])
 
     const response = await useCase.execute({ slug: article.slug.value, viewer: null })
 
-    // Le contrat ne prévoit ni `commentsCount` ni `limit` : ajouter l'un des
-    // deux ferait dévier ce dépôt de la suite de conformité.
-    expect(Object.keys(response)).toEqual(['comments'])
+    // Le use-case oriente et autorise, il ne transforme pas. L'absence de
+    // `commentsCount` et de pagination dans l'enveloppe est vérifiée là où
+    // l'enveloppe est produite : `interface/article/comment.mapper.spec.ts`.
+    expect(response).toEqual([comment])
   })
 
   it('AC-2: renvoie une liste vide sur un article sans commentaire', async () => {
@@ -119,7 +121,9 @@ describe('REQ-COMMENT-003 — lister les commentaires d’un article', () => {
 
     const response = await useCase.execute({ slug: article.slug.value, viewer: null })
 
-    expect(response.comments).toEqual([])
+    // L'enveloppe `{ comments: [...] }` est vérifiée là où elle est désormais
+    // produite : `interface/article/comment.mapper.spec.ts`.
+    expect(response).toEqual([])
   })
 
   it('AC-4: distingue l’article absent de la conversation vide', async () => {
