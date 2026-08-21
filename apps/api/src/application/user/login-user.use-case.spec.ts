@@ -85,9 +85,13 @@ describe('REQ-USER-003 — connexion', () => {
       useCase.execute({ email: 'jake@jake.jake', password: 'mauvais' })
     )
 
-    // Comparaison du corps ET du code : c'est ce que le client observe, et la
-    // moindre différence rétablirait l'oracle d'existence de compte.
-    expect(fromUnknownEmail.response).toEqual(fromWrongPassword.response)
+    // Comparaison de la raison ET du code. Le corps §10 n'est plus porté par
+    // l'erreur depuis l'ADR 031 : il est dérivé de la raison par le mapper de
+    // `interface/`. Comparer les raisons est donc **plus fort** que comparer les
+    // corps — deux raisons identiques ne peuvent pas produire deux corps
+    // différents, alors que deux corps égaux pouvaient masquer deux raisons
+    // distinctes, dont une future divergence.
+    expect(fromUnknownEmail.reason).toBe(fromWrongPassword.reason)
     expect(fromUnknownEmail.errorCode).toBe(fromWrongPassword.errorCode)
   })
 

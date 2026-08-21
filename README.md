@@ -215,10 +215,12 @@ de la base.
 
 Dans ce repo, quatre couches :
 
-1. [`domain/`](apps/api/src/domain) : entités, value objects, ports, erreurs. TypeScript pur.
-2. [`application/`](apps/api/src/application) : un use case par action, dépendant seulement de ports ([`create-article.use-case.ts`](apps/api/src/application/article/create-article.use-case.ts), [`favorite-article.use-case.ts`](apps/api/src/application/article/favorite-article.use-case.ts)).
-3. [`infrastructure/`](apps/api/src/infrastructure) : adapters, et la traduction erreur de domaine vers code HTTP dans [`domain-exception.filter.ts`](apps/api/src/infrastructure/filters/domain-exception.filter.ts). L'infra traduit, le domaine reste pur.
-4. [`interface/`](apps/api/src/interface) : controllers NestJS qui valident (Zod), mappent et délèguent, sans logique métier.
+1. [`domain/`](apps/api/src/domain) : entités, value objects, ports d'écriture, erreurs. TypeScript pur, et **il ne connaît pas non plus le contrat HTTP** ([ADR 031](docs/adr/031-le-contrat-partage-s-arrete-a-la-frontiere-http.md)).
+2. [`application/`](apps/api/src/application) : un use case par action, dépendant seulement de ports ([`create-article.use-case.ts`](apps/api/src/application/article/create-article.use-case.ts), [`favorite-article.use-case.ts`](apps/api/src/application/article/favorite-article.use-case.ts)). Les ports de **lecture** vivent ici : ils servent un affichage, pas un invariant.
+3. [`infrastructure/`](apps/api/src/infrastructure) : adapters. Elle implémente les ports, elle ne connaît ni NestJS-HTTP ni la forme du fil.
+4. [`interface/`](apps/api/src/interface) : controllers NestJS qui valident (Zod), mappent et délèguent, sans logique métier. C'est la **seule** couche qui consomme `@repo/shared`, et c'est là que vit la traduction d'une erreur de domaine en réponse HTTP ([`domain-exception.filter.ts`](apps/api/src/interface/filters/domain-exception.filter.ts) et [`domain-error.mapper.ts`](apps/api/src/interface/filters/domain-error.mapper.ts)).
+
+La règle de placement complète, et le critère qui décide où vit un port, sont dans [`docs/architecture/frontieres-hexagonales.md`](docs/architecture/frontieres-hexagonales.md).
 
 À lire : [Clean Architecture, les 3 règles qui comptent](https://www.kamanga.fr/fr/architecture-craft/clean-architecture-3-regles).
 

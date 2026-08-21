@@ -1,13 +1,11 @@
-import { CONTRACT_MESSAGES, type ErrorResponse, fieldErrors } from '@repo/shared'
 import { DomainError } from '../shared/errors/domain.error'
 
 /**
  * Erreurs métier du contexte `article`.
  *
- * Même parti pris que le contexte `user` : chaque classe fixe le code métier
- * (donc le statut, via la table partagée) et le corps §10, et les messages
- * viennent de `CONTRACT_MESSAGES` — seul endroit où l'assertion officielle qui
- * les impose peut être citée (ADR 017).
+ * Même parti pris que le contexte `user` : chaque classe fixe un code métier et
+ * une raison, et rien du transport. Le statut HTTP et le corps §10 sont produits
+ * par `interface/filters/domain-error.mapper.ts` (ADR 031).
  */
 
 /**
@@ -20,7 +18,7 @@ import { DomainError } from '../shared/errors/domain.error'
  */
 export class ArticleNotFoundError extends DomainError {
   readonly errorCode = 'not_found' as const
-  readonly response: ErrorResponse = fieldErrors('article', CONTRACT_MESSAGES.notFound)
+  readonly reason = 'article_not_found' as const
 
   constructor() {
     super('article not found')
@@ -40,13 +38,13 @@ export class ArticleNotFoundError extends DomainError {
  * l'appartenance reste filtrée dans la requête elle-même, et non par une lecture
  * suivie d'une comparaison en mémoire (rule 19).
  *
- * Le message est `forbidden`, identique à celui du commentaire — c'est ce
- * qu'assert `errors_authorization.hurl`. Notre libellé d'origine (« is not
- * yours to modify ») était plus explicite et hors contrat.
+ * Le libellé rendu au client est identique à celui du commentaire, et il est
+ * fixé par le mapper, pas ici : ce qui identifie la ressource dans le corps §10
+ * est la clé, pas le message (`errors_authorization.hurl`).
  */
 export class ArticleNotOwnedError extends DomainError {
   readonly errorCode = 'forbidden' as const
-  readonly response: ErrorResponse = fieldErrors('article', CONTRACT_MESSAGES.forbidden)
+  readonly reason = 'article_not_owned' as const
 
   constructor() {
     super('article does not belong to the current user')

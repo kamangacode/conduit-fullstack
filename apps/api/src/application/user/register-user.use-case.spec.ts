@@ -86,14 +86,17 @@ describe('REQ-USER-002 — inscription', () => {
     expect(users.size).toBe(1)
   })
 
-  it('AC-2: porte le champ fautif dans le corps d’erreur du contrat', async () => {
+  it('AC-2: désigne le champ fautif par la raison levée', async () => {
     const { useCase } = buildUseCase([aUserProps({ email: 'jacob@jake.jake' })])
 
-    // Le corps §10 est une décision métier portée par l'erreur elle-même : le
-    // filtre HTTP n'a plus qu'à choisir le statut.
+    // Ce qui compte ici est que le conflit d'email ne soit pas confondu avec le
+    // conflit de username : les deux portent `conflict`, seule la raison les
+    // sépare, et c'est elle qui décidera de la clé du corps §10.
+    // Le corps lui-même est produit par `interface/` depuis l'ADR 031, et
+    // asserté par `domain-error.mapper.spec.ts`.
     await expect(useCase.execute(validInput)).rejects.toMatchObject({
       errorCode: 'conflict',
-      response: { errors: { email: ['has already been taken'] } },
+      reason: 'email_already_taken',
     })
   })
 })
