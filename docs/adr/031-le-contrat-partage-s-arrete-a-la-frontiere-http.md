@@ -91,10 +91,9 @@ toucher `domain/` ni `application/`. C'est la forme exécutable de la présente 
 `scripts/verify-type-boundary.sh` et par la règle `shared-stays-at-the-http-boundary` de
 `.dependency-cruiser.cjs`.
 
-La règle projet correspondante est écrite dans `docs/architecture/frontieres-hexagonales.md`, dans
-le dépôt et non dans `.claude/rules/`, qui n'est pas publié. Elle est posée par le lot suivant, en
-même temps que le garde-fou `dependency-cruiser` qu'elle décrit ; la citation reste donc en clair
-ici, le contrôle de liens du dépôt refusant à juste titre un lien vers un fichier absent.
+La règle projet correspondante est écrite dans
+[`docs/architecture/frontieres-hexagonales.md`](../architecture/frontieres-hexagonales.md), dans le
+dépôt et non dans `.claude/rules/`, qui n'est pas publié.
 
 ## Consequences
 

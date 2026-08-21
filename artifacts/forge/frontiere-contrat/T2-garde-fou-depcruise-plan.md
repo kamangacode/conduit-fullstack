@@ -78,7 +78,14 @@ sens. Elle va en T8.
   (`domain/shared/errors/domain.error.ts`, `article.errors.ts`, `comment.errors.ts`,
   `user.errors.ts`), les 3 ports (`article-query.port.ts`, `comment-repository.port.ts`,
   `tag-query.port.ts`) et `domain/user/user.ts`.
-- **AC-3** : la sortie nomme **17 modules** sous `application-owns-its-io`.
+- **AC-3** : la sortie nomme **18 modules** sous `application-owns-its-io`.
+
+  > **Correction du 2026-08-21, à l'implémentation.** L'AC annonçait 17, chiffre tiré d'un `grep`
+  > sur les imports de sources. La règle en compte 18 : `get-current-user.use-case.spec.ts` est
+  > lui aussi un module de `application/` qui importe le contrat. Les specs ne sont pas exclues de
+  > l'analyse dans ce dépôt, contrairement au réglage de crmcoaching. C'est le bon comportement et
+  > il est conservé : une spec qui importe le contrat dans `application/` porte exactement le même
+  > couplage que la source.
 - **AC-4** : le commentaire de chaque règle cite l'ADR 031 et le lien vers
   `docs/architecture/frontieres-hexagonales.md`.
 - **AC-5** : `docs/architecture/frontieres-hexagonales.md` énonce la règle de placement des ports

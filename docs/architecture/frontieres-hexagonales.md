@@ -1,0 +1,115 @@
+# Frontières hexagonales de `apps/api`
+
+Cette page est la règle de placement du code backend. Elle est **exécutable** : ce qu'elle énonce
+est vérifié par [`.dependency-cruiser.cjs`](../../.dependency-cruiser.cjs), lancé en pre-push
+(`lefthook.yml`) et dans le job CI `Quality`. Une règle d'architecture qu'aucun outil ne lit se
+dégrade en intention, et ce dépôt en a fait l'expérience (voir la section « Ce qui a raté » plus
+bas).
+
+Décisions de référence : [ADR 001](../adr/001-topologie-monorepo-modele-partage.md) pour la
+topologie du monorepo, [ADR 031](../adr/031-le-contrat-partage-s-arrete-a-la-frontiere-http.md) pour
+la portée du contrat partagé.
+
+## Les quatre couches
+
+Les dépendances pointent **toujours vers l'intérieur**. Le coeur ne connaît rien de l'extérieur.
+
+| Couche | Contenu | Peut dépendre de |
+|---|---|---|
+| `interface/` | Controllers NestJS, guards, pipes, intercepteurs, filtres d'exception, **mappers** | tout le reste, plus `@repo/shared` |
+| `infrastructure/` | Adapters (Prisma, argon2id, jose), services techniques | `domain/`, `application/` |
+| `application/` | Use cases. `@nestjs/common` toléré pour `@Injectable` et `@Inject` | `domain/` |
+| `domain/` | TypeScript pur : entités, value objects, ports d'écriture, erreurs métier | rien |
+
+## La règle qui a manqué : `@repo/shared` s'arrête à `interface/`
+
+`packages/shared` **n'est pas un modèle métier**. C'est le contrat HTTP : enveloppes de réponse
+(`{ article: … }`, `{ articles, articlesCount }`), DTOs d'entrée, messages du contrat, et la table
+`CONDUIT_ERROR_STATUS` qui associe un code métier à un statut HTTP. En vocabulaire DDD, c'est un
+**Published Language**, pas un Shared Kernel.
+
+Ses consommateurs légitimes sont exactement deux : `apps/web`, et `apps/api/src/interface/`.
+
+```
+packages/shared          contrat HTTP
+        |                          |
+   apps/web              apps/api/src/interface/
+                                   |
+                          application/     entrée et sortie owned par le use case
+                                   |
+                          domain/          modèle métier propre
+```
+
+Concrètement :
+
+- un type du domaine n'a pas à ressembler au fil : `createdAt` y est une `Date`, pas une chaîne
+  ISO 8601 ;
+- une erreur métier porte un **code** et une **raison**, jamais le corps `{ errors: … }` ;
+- une entité n'a pas de méthode qui prend un jeton JWT en paramètre ;
+- un use case renvoie un **read model**, jamais l'enveloppe du contrat. `articlesCount` est un nom
+  de la spec RealWorld, pas un concept métier. L'enveloppe est fabriquée par un mapper de
+  `interface/`.
+
+## Où placer un port
+
+Le critère n'est **pas** « un port vit dans `domain/` ». C'est :
+
+> **Un port vit là où vit ce qu'il protège.**
+
+| Type de port | Emplacement | Pourquoi |
+|---|---|---|
+| Écriture (`ArticleRepository`, `UserRepository`, `FollowRepository`, `CommentRepository`) | `domain/*/ports/` | Il manipule un agrégat porteur d'invariants. C'est le domaine qui décide de sa forme, l'adapter s'y conforme. |
+| Lecture (`ArticleQueryPort`, `CommentQueryPort`, `TagQueryPort`) | `application/*/ports/` | Il sert un cas d'usage d'affichage. Aucune règle métier, aucun invariant : la vue qu'il produit dépend du lecteur, pas du métier. |
+
+La séparation lecture / écriture elle-même vient de l'[ADR 011](../adr/011-lecture-des-listes-port-dedie.md)
+et reste en vigueur : une page d'articles est résolue en **une** requête, avec `following`,
+`favorited` et `favoritesCount` calculés en base. Le N+1 n'est pas évité par discipline, il est
+structurellement absent.
+
+Repère pratique : **« j'affiche »** prend le port de lecture, **« je modifie »** prend le
+repository.
+
+## Ce qui a raté, et pourquoi c'est écrit ici
+
+Jusqu'au 2026-08-21, la règle `domain-stays-pure` de `.dependency-cruiser.cjs` interdisait au
+domaine deux choses : les couches externes et les frameworks (`@nestjs`, `@prisma`, `rxjs`,
+`express`). `@repo/shared` n'y figurait pas.
+
+`pnpm depcruise` sortait donc **vert** sur 109 modules pendant que huit des dix-sept fichiers de
+`domain/` importaient le contrat HTTP. L'ADR 011 affirmait même que la pureté du domaine était
+« vérifiée mécaniquement ». Le défaut a été relevé par une revue externe, pas par l'outillage.
+
+L'erreur de raisonnement, en amont de l'erreur de configuration : « ne dépend d'aucun framework » a
+été pris pour « appartient au domaine ». `@repo/shared` est effectivement du TypeScript sans
+dépendance technique, et c'est pourtant du transport. **La pureté technique n'est pas
+l'appartenance au domaine.**
+
+Deux leçons qui valent au-delà de ce dépôt :
+
+1. Une règle d'architecture doit nommer ce qu'elle interdit, pas ce qu'elle suppose. `domain-stays-pure`
+   décrivait une intention ; elle listait une poignée de packages.
+2. Un garde-fou vert n'est une preuve que si l'on a vérifié qu'il peut rougir. La bascule
+   `warn` vers `error` de la règle de frontière s'accompagne d'un test actif : on ajoute un import
+   interdit, on constate l'échec, on annule.
+
+## Vérifier
+
+```bash
+pnpm depcruise      # frontières et cycles, 0 erreur exigée
+pnpm typecheck      # les trois workspaces
+bash scripts/verify-type-boundary.sh   # la frontière est-elle une dépendance de compilation
+```
+
+## État de la migration
+
+La règle de frontière est posée en `warn` le temps que la dette existante soit résorbée, sur le
+modèle de ce qui se fait ailleurs dans l'écosystème : nommer la dette, la compter, la faire
+descendre. Elle passe en `error` quand les deux compteurs sont à zéro.
+
+| Règle | Sévérité | Modules en violation au 2026-08-21 |
+|---|---|---|
+| `domain-owns-its-model` | `warn` | 8 |
+| `application-owns-its-io` | `warn` | 18 (dont 1 spec) |
+
+Le plan de résorption vit dans `artifacts/forge/frontiere-contrat/`. Ces violations ne sont **pas
+un précédent** : tout nouveau code doit respecter la règle dès maintenant.
