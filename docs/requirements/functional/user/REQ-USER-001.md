@@ -30,11 +30,11 @@ acceptance_criteria:
 implementation:
   files:
     - packages/shared/src/model/user.ts
-    - apps/api/src/application/user/ports/account-view.ts
+    - apps/api/src/application/user/account-view.ts
     - apps/api/src/interface/user/user.mapper.ts
   tests:
     - packages/shared/src/model/user.spec.ts
-    - apps/api/src/application/user/ports/account-view.spec.ts
+    - apps/api/src/application/user/account-view.spec.ts
     - apps/api/src/interface/user/user.mapper.spec.ts
 related:
   issues: [4]
